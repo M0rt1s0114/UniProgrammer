@@ -19,7 +19,7 @@ export interface LogEntry {
   id: number
   time: string
   message: string
-  level: 'info' | 'warn' | 'error' | 'success'
+  level: 'info' | 'warn' | 'error' | 'success' | 'functionTest'
 }
 
 export type OperationStatus = 'idle' | 'running' | 'success' | 'error'

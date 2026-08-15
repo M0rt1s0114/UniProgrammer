@@ -24,6 +24,7 @@ function levelClass(level: LogEntry['level']) {
     warn: 'log-warn',
     error: 'log-error',
     success: 'log-success',
+    functionTest: 'log-function-test',
   }[level]
 }
 </script>
@@ -50,6 +51,7 @@ function levelClass(level: LogEntry['level']) {
         :class="levelClass(entry.level)"
       >
         <span class="log-time">{{ entry.time }}</span>
+        <span v-if="entry.level === 'functionTest'" class="log-level-test">[FunctionTest]</span>
         <span class="log-msg">{{ entry.message }}</span>
       </div>
       <div ref="bottomRef" />
@@ -138,11 +140,21 @@ function levelClass(level: LogEntry['level']) {
   word-break: break-all;
 }
 
+.log-level-test {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  color: #c792ea;
+}
+
 .log-info  { }
 .log-warn  { border-left-color: var(--color-warn);   }
 .log-warn .log-msg    { color: var(--color-warn); }
 .log-error { border-left-color: var(--color-danger); }
 .log-error .log-msg   { color: var(--color-danger); }
 .log-success { border-left-color: var(--accent); }
+.log-function-test { border-left-color: #c792ea; }
+.log-function-test .log-msg { color: #c792ea; }
 .log-success .log-msg { color: var(--accent); }
 </style>

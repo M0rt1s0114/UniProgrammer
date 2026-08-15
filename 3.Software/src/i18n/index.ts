@@ -93,9 +93,9 @@ const zh: MessageRecord = {
   'vcc.changePhraseHint': '请输入 {0} 以确认',
   'vcc.apply': '应用',
   'vcc.wrongPhrase': '输入不匹配，操作已取消',
-  'vcc.enabledLog': 'VCC 输出已开启',
-  'vcc.disabledLog': 'VCC 输出已关闭',
-  'vcc.changedLog': 'VCC 目标电压已更改',
+  'vcc.testEnabled': '电压控制已启用，电压已选择：{0}V',
+  'vcc.testDisabled': '电压控制已关闭',
+  'vcc.testChanged': '电压已选择：{1}V（原 {0}V）',
   'vcc.voltageUnit': 'V',
 
   // Erase confirm modal
@@ -218,9 +218,9 @@ const en: MessageRecord = {
   'vcc.changePhraseHint': 'Type {0} to confirm',
   'vcc.apply': 'Apply',
   'vcc.wrongPhrase': 'Input does not match, operation cancelled',
-  'vcc.enabledLog': 'VCC output enabled',
-  'vcc.disabledLog': 'VCC output disabled',
-  'vcc.changedLog': 'VCC target voltage changed',
+  'vcc.testEnabled': 'Voltage control enabled, voltage selected: {0}V',
+  'vcc.testDisabled': 'Voltage control disabled',
+  'vcc.testChanged': 'Voltage selected: {1}V (was {0}V)',
   'vcc.voltageUnit': 'V',
 
   // Erase confirm modal

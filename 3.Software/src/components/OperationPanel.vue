@@ -71,12 +71,12 @@ function confirmVccEnable() {
   }
   vccModal.value = null
   store.vccOutputEnabled = true
-  store.addLog(`${t('vcc.enabledLog')}: ${voltageLabel.value} ${t('vcc.voltageUnit')}`, 'warn')
+  store.addLog(t('vcc.testEnabled').replace('{0}', voltageLabel.value), 'functionTest')
 }
 
 function disableVccOutput() {
   store.vccOutputEnabled = false
-  store.addLog(t('vcc.disabledLog'), 'warn')
+  store.addLog(t('vcc.testDisabled'), 'functionTest')
 }
 
 function requestVccTarget(mv: number) {
@@ -97,7 +97,7 @@ function confirmVccTarget() {
   const old = voltageLabel.value
   vccModal.value = null
   store.vccTargetMv = target
-  store.addLog(`${t('vcc.changedLog')}: ${old} -> ${expected} ${t('vcc.voltageUnit')}`, 'warn')
+  store.addLog(t('vcc.testChanged').replace('{0}', old).replace('{1}', expected), 'functionTest')
 }
 
 function closeVccModal() {
