@@ -8,9 +8,7 @@ const store = useProgStore()
 const spiNor = useSpiNor()
 
 // Toolbar icons supplied by the project owner.
-// read / erase / verify: Font Awesome Free 7.3.1 (CC BY 4.0).
-// write: Font Awesome Pro 7.3.1 asset — keep it out of public releases
-// unless the project holds a redistribution license for it.
+// All four operation icons are Font Awesome Free 7.3.1 (CC BY 4.0).
 
 const showEraseConfirm = ref(false)
 
