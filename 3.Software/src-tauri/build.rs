@@ -1,6 +1,17 @@
 use std::env;
 
 fn main() {
+    // CH34X.DLL 是可选资源：本地 Windows 打包需要它，但仓库/CI 中没有它。
+    // 不存在时通过 TAURI_CONFIG 把它从 bundle.resources 里去掉，否则
+    // tauri-build 会因资源路径不存在而失败。
+    let has_dll = std::path::Path::new("CH34X.DLL").exists();
+    if !has_dll {
+        let override_config = r#"{"bundle":{"resources":["chiplib.bin","chiplib.xml"]}}"#;
+        env::set_var("TAURI_CONFIG", override_config);
+        println!("cargo:rustc-env=TAURI_CONFIG={}", override_config);
+    }
+    println!("cargo:rerun-if-changed=CH34X.DLL");
+
     tauri_build::build();
 
     // ── HAL backend selection (build-menu equivalent for Cargo) ─────────────
