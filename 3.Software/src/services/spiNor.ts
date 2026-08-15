@@ -105,8 +105,34 @@ export function useSpiNor() {
     return runNandRawRead('read_nand_param_page', '读取 NAND 参数页')
   }
 
-  function readNandBbmLut() {
-    return runNandRawRead('read_nand_bbm_lut', '读取 NAND BBM 映射表')
+  async function readNandBbmLut() {
+    if (store.selectedType !== 'SPI_NAND' || !store.canOperate) {
+      store.addLog('读取 BBM 映射表仅支持已连接的 SPI NAND 芯片', 'warn')
+      return
+    }
+    store.isRunning = true
+    store.currentOp = '读取 NAND BBM 映射表'
+    try {
+      const result = (await invoke('read_nand_bbm_lut')) as {
+        length: number
+        hex: string
+        entries: { index: number; lba: number; pba: number; free: boolean; valid: boolean }[]
+      }
+      store.addLog(`BBM 映射表读取完成（${result.length} 字节，实验性）`, 'success')
+      for (const e of result.entries) {
+        const status = e.free ? '空闲' : e.valid ? '有效替换' : '失效/保留'
+        store.addLog(
+          `第${e.index + 1}组 | LBA=0x${(e.lba & 0x3fff).toString(16)} | PBA=0x${e.pba.toString(16)} | ${status}`,
+          'info',
+        )
+      }
+      store.addLog(result.hex, 'info')
+    } catch (e: unknown) {
+      store.addLog(`BBM 映射表读取失败: ${String(e)}`, 'error')
+    } finally {
+      store.isRunning = false
+      store.currentOp = ''
+    }
   }
 
   async function setNandEcc(enable: boolean) {

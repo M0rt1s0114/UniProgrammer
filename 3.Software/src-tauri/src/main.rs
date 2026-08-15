@@ -76,6 +76,13 @@ struct RawBytesResult {
     bytes: Vec<u8>,
 }
 
+#[derive(Serialize)]
+struct BbmLutResult {
+    length: usize,
+    hex: String,
+    entries: Vec<protocols::BbmLutEntry>,
+}
+
 fn raw_bytes_result(bytes: Vec<u8>) -> RawBytesResult {
     let hex: String = bytes
         .iter()
@@ -279,6 +286,19 @@ fn scan_nand_bad_blocks_for_mode(
     })
 }
 
+fn prepare_bypass_if_needed(
+    dev: &Ch34xDevice,
+    info: &chiplib::ChipInfo,
+    mode: protocols::NandBadBlockMode,
+    bad_blocks: &[u32],
+) -> Result<Vec<(u16, u16)>, String> {
+    if mode != protocols::NandBadBlockMode::Bypass || bad_blocks.is_empty() {
+        return Ok(Vec::new());
+    }
+    let params = protocols::ChipParams::from_info(info);
+    protocols::nand_prepare_bypass_lut(dev, &params, info.size, bad_blocks)
+}
+
 // ═══════════════════════════════ serprog helpers ═════════════════════════════
 
 fn serprog_wait_ready(ser: &mut serprog::Serprog, timeout_ms: u64) -> Result<(), String> {
@@ -470,11 +490,17 @@ fn read_nand_param_page(state: State<'_, Mutex<AppState>>) -> Result<RawBytesRes
 }
 
 #[tauri::command]
-fn read_nand_bbm_lut(state: State<'_, Mutex<AppState>>) -> Result<RawBytesResult, String> {
+fn read_nand_bbm_lut(state: State<'_, Mutex<AppState>>) -> Result<BbmLutResult, String> {
     let s = state.lock().map_err(|e| e.to_string())?;
     require_nand_ch34x(&s)?;
     let dev = open_ch34x_mode(&s, DeviceMode::Spi)?;
-    Ok(raw_bytes_result(protocols::nand_read_bbm_lut(&dev)?))
+    let (entries, raw) = protocols::nand_read_bbm_lut(&dev)?;
+    let result = raw_bytes_result(raw);
+    Ok(BbmLutResult {
+        length: result.length,
+        hex: result.hex,
+        entries,
+    })
 }
 
 #[tauri::command]
@@ -561,12 +587,20 @@ fn chip_erase(
                 let dev = open_ch34x_mode(&s, bus)?;
                 let params = protocols::ChipParams::from_info(&info);
                 let mode = parse_nand_bad_block_mode(bad_block_mode.as_deref());
-                let bad_blocks = if s.ch34x.is_some() {
-                    scan_nand_bad_blocks_for_mode(&dev, &info, &app, mode)?
-                } else {
+                let bad_blocks = scan_nand_bad_blocks_for_mode(&dev, &info, &app, mode)?;
+                let links = prepare_bypass_if_needed(&dev, &info, mode, &bad_blocks)?;
+                let op_bad = if mode == protocols::NandBadBlockMode::Bypass {
                     Vec::new()
+                } else {
+                    bad_blocks
                 };
-                protocols::nand_erase(&dev, &params, info.size, &bad_blocks)?;
+                protocols::nand_erase(&dev, &params, info.size, &op_bad)?;
+                if !links.is_empty() {
+                    return Ok(format!(
+                        "全片擦除完成（已写入 {} 条 BBM 坏块映射）",
+                        links.len()
+                    ));
+                }
             }
             "I2C" | "I2C_F-RAM" | "I2C_SPD" => {
                 let dev = open_ch34x_mode(&s, bus)?;
@@ -689,16 +723,16 @@ fn read_chip(
                 let params = protocols::ChipParams::from_info(info);
                 let mode = parse_nand_bad_block_mode(bad_block_mode.as_deref());
                 let bad_blocks = scan_nand_bad_blocks_for_mode(&dev, info, &app, mode)?;
-                return protocols::nand_read(
-                    &dev,
-                    &params,
-                    size,
-                    &bad_blocks,
-                    &mut |done, total| {
-                        app.emit("read_progress", ReadProgressEvent { done, total })
-                            .ok();
-                    },
-                );
+                prepare_bypass_if_needed(&dev, info, mode, &bad_blocks)?;
+                let op_bad = if mode == protocols::NandBadBlockMode::Bypass {
+                    Vec::new()
+                } else {
+                    bad_blocks
+                };
+                return protocols::nand_read(&dev, &params, size, &op_bad, &mut |done, total| {
+                    app.emit("read_progress", ReadProgressEvent { done, total })
+                        .ok();
+                });
             }
             "I2C" | "I2C_F-RAM" | "I2C_SPD" => {
                 let dev = open_ch34x_mode(&s, bus)?;
@@ -886,20 +920,33 @@ fn write_chip(
                 let params = protocols::ChipParams::from_info(info);
                 let mode = parse_nand_bad_block_mode(bad_block_mode.as_deref());
                 let bad_blocks = scan_nand_bad_blocks_for_mode(&dev, info, &app, mode)?;
-                return protocols::nand_write(
+                let links = prepare_bypass_if_needed(&dev, info, mode, &bad_blocks)?;
+                let op_bad = if mode == protocols::NandBadBlockMode::Bypass {
+                    Vec::new()
+                } else {
+                    bad_blocks
+                };
+                protocols::nand_write(
                     &dev,
                     &params,
                     &data,
                     info.size,
-                    &bad_blocks,
+                    &op_bad,
                     mode,
                     force_segmented.unwrap_or(false),
                     &mut |done, total| {
                         app.emit("write_progress", WriteProgressEvent { done, total })
                             .ok();
                     },
-                )
-                .map(|_| format!("写入完成，共 {} 字节", total));
+                )?;
+                if links.is_empty() {
+                    return Ok(format!("写入完成，共 {} 字节", total));
+                }
+                return Ok(format!(
+                    "写入完成，共 {} 字节（已写入 {} 条 BBM 坏块映射）",
+                    total,
+                    links.len()
+                ));
             }
             "I2C" | "I2C_F-RAM" | "I2C_SPD" => {
                 let dev = open_ch34x_mode(&s, bus)?;
@@ -1079,7 +1126,13 @@ fn verify_chip(
                 let dev = open_ch34x_mode(&s, bus)?;
                 let mode = parse_nand_bad_block_mode(bad_block_mode.as_deref());
                 let bad_blocks = scan_nand_bad_blocks_for_mode(&dev, info, &app, mode)?;
-                protocols::nand_read(&dev, &params, total, &bad_blocks, &mut |_, _| {})?
+                prepare_bypass_if_needed(&dev, info, mode, &bad_blocks)?;
+                let op_bad = if mode == protocols::NandBadBlockMode::Bypass {
+                    Vec::new()
+                } else {
+                    bad_blocks
+                };
+                protocols::nand_read(&dev, &params, total, &op_bad, &mut |_, _| {})?
             }
             "I2C" | "I2C_F-RAM" | "I2C_SPD" => {
                 let dev = open_ch34x_mode(&s, bus)?;

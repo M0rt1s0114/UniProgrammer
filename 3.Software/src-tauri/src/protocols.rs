@@ -6,6 +6,7 @@
 
 use crate::ch34x::{Ch34xDevice, DeviceMode};
 use crate::chiplib::ChipInfo;
+use serde::Serialize;
 use std::time::{Duration, Instant};
 
 pub struct ChipParams {
@@ -520,16 +521,116 @@ pub fn nand_read_param_page(dev: &Ch34xDevice) -> Result<Vec<u8>, String> {
     Ok(out)
 }
 
-/// Read the 80-byte internal BBM LUT through the A1h command
-/// (experimental, hardware validation pending).
-pub fn nand_read_bbm_lut(dev: &Ch34xDevice) -> Result<Vec<u8>, String> {
+/// One BBM LUT link. LBA[15:14] encode status: 00 free, 10 valid, 11 invalid.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+pub struct BbmLutEntry {
+    pub index: u8,
+    pub lba: u16,
+    pub pba: u16,
+    pub free: bool,
+    pub valid: bool,
+}
+
+fn parse_bbm_lut(raw: &[u8]) -> Vec<BbmLutEntry> {
+    let mut entries = Vec::new();
+    for (index, chunk) in raw.chunks_exact(4).enumerate().take(20) {
+        let lba = u16::from_le_bytes([chunk[0], chunk[1]]);
+        let pba = u16::from_le_bytes([chunk[2], chunk[3]]);
+        let status = lba >> 14;
+        entries.push(BbmLutEntry {
+            index: index as u8,
+            lba,
+            pba,
+            free: status == 0b00,
+            valid: status == 0b10,
+        });
+    }
+    entries
+}
+
+/// Read the 80-byte internal BBM LUT through the A5h command
+/// (experimental, hardware validation pending). Each link is 4 bytes:
+/// LBA[15:0] then PBA[15:0].
+pub fn nand_read_bbm_lut(dev: &Ch34xDevice) -> Result<(Vec<BbmLutEntry>, Vec<u8>), String> {
     nand_wait_ready(dev, 200)?;
-    let mut out = vec![0xFFu8; 80];
+    let mut raw = vec![0xFFu8; 80];
     dev.cs_low()?;
-    dev.spi_tx(&[0xA1])?;
-    dev.spi_rx(&mut out)?;
+    dev.spi_tx(&[0xA5])?;
+    dev.spi_rx(&mut raw)?;
     dev.cs_high()?;
-    Ok(out)
+    Ok((parse_bbm_lut(&raw), raw))
+}
+
+/// Create one LBA->PBA block swap with the A1h command. Write enable must
+/// be issued first, as required by Winbond-family SPI NAND.
+pub fn nand_write_bbm_swap(dev: &Ch34xDevice, lba: u16, pba: u16) -> Result<(), String> {
+    nand_wait_ready(dev, 200)?;
+    nand_write_enable(dev)?;
+    let lba_word = 0x8000 | lba; // LBA[15:14] = 10: valid link
+    dev.cs_low()?;
+    dev.spi_tx(&[
+        0xA1,
+        (lba_word & 0xFF) as u8,
+        ((lba_word >> 8) & 0xFF) as u8,
+        (pba & 0xFF) as u8,
+        ((pba >> 8) & 0xFF) as u8,
+    ])?;
+    dev.cs_high()?;
+    nand_wait_ready(dev, 500)
+}
+
+/// Prepare Bypass mode: scan results are written into the chip's internal
+/// BBM LUT so hardware remaps bad logical blocks to reserved spare blocks.
+/// Returns the newly created links.
+pub fn nand_prepare_bypass_lut(
+    dev: &Ch34xDevice,
+    params: &ChipParams,
+    size: u64,
+    bad_blocks: &[u32],
+) -> Result<Vec<(u16, u16)>, String> {
+    let block_size = (params.block as u64).max(params.page.max(1) as u64);
+    let total_blocks = size.div_ceil(block_size).min(u16::MAX as u64) as u16;
+    let reserved = (total_blocks as u32 / 50).clamp(1, 20) as u16;
+    let spare_start = total_blocks.saturating_sub(reserved);
+
+    let mut lut = nand_read_bbm_lut(dev)?.0;
+    let mut used_pbas: std::collections::HashSet<u16> =
+        lut.iter().filter(|e| e.valid).map(|e| e.pba).collect();
+    let valid_count = lut.iter().filter(|e| e.valid).count();
+    let mut new_links = Vec::new();
+
+    for block in bad_blocks {
+        let lba = (*block).min(u16::MAX as u32) as u16;
+        if lut.iter().any(|e| e.valid && (e.lba & 0x3FFF) == lba) {
+            continue; // already mapped
+        }
+        if valid_count + new_links.len() >= 20 {
+            return Err("BBM LUT 已满（最多 20 条映射）".into());
+        }
+        let spare = (spare_start..total_blocks).find(|pba| {
+            let pba = *pba;
+            !bad_blocks.contains(&(pba as u32))
+                && !used_pbas.contains(&pba)
+                && !new_links.iter().any(|(_, used)| *used == pba)
+        });
+        let Some(spare) = spare else {
+            return Err(format!(
+                "没有可用的备用块用于坏块 0x{:X}（备用区从块 {} 开始）",
+                lba, spare_start
+            ));
+        };
+        nand_write_bbm_swap(dev, lba, spare)?;
+        used_pbas.insert(spare);
+        new_links.push((lba, spare));
+        lut.push(BbmLutEntry {
+            index: 0,
+            lba: 0x8000 | lba,
+            pba: spare,
+            free: false,
+            valid: true,
+        });
+    }
+    Ok(new_links)
 }
 
 /// Read configuration register B0h through Get Feature (0Fh).
