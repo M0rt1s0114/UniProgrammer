@@ -242,7 +242,7 @@ async function fitWindowToSidebar() {
 .titlebar-title {
   font-size: 13px;
   font-weight: 600;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.01em;
   color: var(--text-primary);
 }
 .titlebar-version {
@@ -345,7 +345,7 @@ async function fitWindowToSidebar() {
 .pane-bar-title {
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.07em;
+  letter-spacing: 0.01em;
   text-transform: uppercase;
   color: var(--text-secondary);
 }

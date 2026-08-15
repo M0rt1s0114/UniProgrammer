@@ -492,7 +492,7 @@ onUnmounted(() => {
   border-bottom: 1px solid var(--border);
   font-size: 10px;
   font-weight: 600;
-  letter-spacing: 0.06em;
+  letter-spacing: 0;
   text-transform: uppercase;
   color: var(--text-muted);
   flex-shrink: 0;
@@ -629,7 +629,6 @@ onUnmounted(() => {
   justify-content: center;
   text-align: center;
   color: var(--text-primary);
-  letter-spacing: 0.02em;
   cursor: crosshair;
   border-radius: 2px;
 }
@@ -673,7 +672,7 @@ onUnmounted(() => {
   padding-left: 12px;
   border-left: 1px solid var(--border);
   color: var(--accent-dim);
-  letter-spacing: 0.05em;
+  letter-spacing: 0;
   white-space: pre;
   overflow: hidden;
   flex-shrink: 0;

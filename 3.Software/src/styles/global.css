@@ -5,6 +5,14 @@
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
 
+/* 本地打包 Maple Mono CN：中文统一使用 Maple Mono，英文保持现有字体 */
+@font-face {
+  font-family: 'Maple Mono CN';
+  src: url('../assets/fonts/MapleMono-CN-subset.woff2') format('woff2');
+  font-weight: 100 900;
+  font-display: swap;
+}
+
 /* ---- Design Tokens ---- */
 :root {
   /* Background layers */
@@ -37,8 +45,8 @@
   --border-focus: rgba(0, 229, 160, 0.6);
 
   /* Typography */
-  --font-sans: 'Inter', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  --font-sans: 'Inter', 'Maple Mono CN', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Maple Mono CN', 'Fira Code', 'Consolas', monospace;
 
   /* Spacing */
   --radius-sm: 4px;
@@ -78,6 +86,7 @@ body {
   color: var(--text-primary);
   font-family: var(--font-sans);
   font-size: 13px;
+  font-weight: 500;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   user-select: none;
@@ -260,7 +269,7 @@ select.input {
   border-bottom: 1px solid var(--border);
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.02em;
   text-transform: uppercase;
   color: var(--text-secondary);
 }
