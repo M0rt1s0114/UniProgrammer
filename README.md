@@ -3,6 +3,9 @@
 > A cross-platform NAND/NOR SPI flash programmer with a pluggable hardware abstraction layer.
 
 [![License: GPL v3+](https://img.shields.io/badge/License-GPLv3+-blue.svg)](LICENSE)
+[![standard-readme compliant](https://img.shields.io/badge/readme%20style-standard-brightgreen.svg?style=flat-square)](https://github.com/RichardLitt/standard-readme)
+
+[中文文档](README_CN.md)
 
 > **Alpha software warning** — this project has not been validated on real
 > hardware yet. Do not use it on chips whose contents you cannot afford to lose.
