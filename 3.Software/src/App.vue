@@ -4,6 +4,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window'
 import { useProgStore } from '@/stores/prog'
 import { locale, setLocale, t } from '@/i18n'
 import OperationPanel from '@/components/OperationPanel.vue'
+import ToolBar from '@/components/ToolBar.vue'
 import HexViewer from '@/components/HexViewer.vue'
 import LogConsole from '@/components/LogConsole.vue'
 import StatusBar from '@/components/StatusBar.vue'
@@ -102,6 +103,8 @@ onMounted(() => {
         </button>
       </div>
     </header>
+
+    <ToolBar />
 
     <div class="app-body">
       <aside class="sidebar">

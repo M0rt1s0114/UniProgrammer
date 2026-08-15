@@ -118,33 +118,6 @@ function closeVccModal() {
   vccModal.value = null
 }
 
-const fileInput = ref<HTMLInputElement | null>(null)
-
-function openFileDialog() {
-  // 原生对话框（Windows IFileDialog）；隐藏 <input> 仅作兜底保留
-  store.openFileViaDialog()
-}
-
-async function onFileSelected(event: Event) {
-  const input = event.target as HTMLInputElement
-  if (input.files && input.files.length > 0) {
-    const file = input.files[0]
-    await store.loadFile(file)
-  }
-  if (input) input.value = ''
-}
-
-const showEraseConfirm = ref(false)
-
-function requestErase() {
-  showEraseConfirm.value = true
-}
-
-async function confirmErase() {
-  showEraseConfirm.value = false
-  await spiNor.eraseChip()
-}
-
 async function connect() {
   if (
     programmerType.value === 'ch341' ||
@@ -263,36 +236,6 @@ onMounted(async () => {
       >
         转换芯片库 (XML→BIN)
       </button>
-    </section>
-
-    <div class="divider" />
-
-    <!-- ── 文件 ── -->
-    <section class="panel-section">
-      <div class="section-label">{{ t('section.file') }}</div>
-      <input ref="fileInput" type="file" style="display: none" @change="onFileSelected" />
-      <button class="btn btn-secondary w-full" @click="openFileDialog">
-        {{ t('action.openFile') }}
-      </button>
-      <div style="display: flex; gap: 8px">
-        <button
-          class="btn btn-ghost btn-sm"
-          style="flex: 1"
-          :disabled="!store.hexData"
-          @click="spiNor.saveFileNative('bin')"
-        >
-          {{ t('action.saveBin') }}
-        </button>
-        <button
-          class="btn btn-ghost btn-sm"
-          style="flex: 1"
-          :disabled="!store.hexData"
-          @click="spiNor.saveFileNative('hex')"
-        >
-          {{ t('action.saveHex') }}
-        </button>
-      </div>
-      <div v-if="store.filePath" class="file-badge">{{ store.filePath }}</div>
     </section>
 
     <div class="divider" />
@@ -458,45 +401,6 @@ onMounted(async () => {
       <div v-if="!store.vccOutputEnabled" class="vcc-hint">{{ t('vcc.offHint') }}</div>
     </section>
 
-    <div class="divider" />
-
-    <!-- ── 操作 ── -->
-    <section class="panel-section">
-      <div class="section-label">{{ t('section.operations') }}</div>
-
-      <button
-        class="btn btn-secondary w-full op-btn"
-        :disabled="!store.canOperate"
-        @click="spiNor.readChip()"
-      >
-        <span class="op-label">{{ t('action.read') }}</span>
-      </button>
-
-      <button
-        class="btn btn-secondary w-full op-btn"
-        :disabled="!store.canOperate"
-        @click="spiNor.writeChip()"
-      >
-        <span class="op-label">{{ t('action.write') }}</span>
-      </button>
-
-      <button
-        class="btn btn-danger w-full op-btn"
-        :disabled="!store.canOperate"
-        @click="requestErase()"
-      >
-        <span class="op-label">{{ t('action.erase') }}</span>
-      </button>
-
-      <button
-        class="btn btn-secondary w-full op-btn"
-        :disabled="!store.canOperate"
-        @click="spiNor.verifyChip()"
-      >
-        <span class="op-label">{{ t('action.verify') }}</span>
-      </button>
-    </section>
-
     <!-- 运行状态条 -->
     <Transition name="slide-up">
       <div v-if="store.isRunning" class="running-bar">
@@ -540,25 +444,6 @@ onMounted(async () => {
             @click="vccModal === 'enable' ? confirmVccEnable() : confirmVccTarget()"
           >
             {{ vccModal === 'enable' ? t('vcc.connectPower') : t('vcc.apply') }}
-          </button>
-        </div>
-      </div>
-    </div>
-  </Transition>
-
-  <!-- 擦除确认弹窗 -->
-  <Transition name="fade">
-    <div v-if="showEraseConfirm" class="modal-backdrop" @click.self="showEraseConfirm = false">
-      <div class="modal">
-        <div class="modal-icon">⚠️</div>
-        <h3 class="modal-title">{{ t('modal.eraseTitle') }}</h3>
-        <p class="modal-body">{{ t('modal.eraseBody') }}</p>
-        <div class="modal-actions">
-          <button class="btn btn-secondary" @click="showEraseConfirm = false">
-            {{ t('action.cancel') }}
-          </button>
-          <button class="btn btn-danger" @click="confirmErase">
-            {{ t('action.confirmErase') }}
           </button>
         </div>
       </div>
@@ -635,61 +520,6 @@ onMounted(async () => {
   align-items: center;
   gap: 5px;
   color: var(--color-danger);
-}
-
-.file-badge {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  background: var(--accent-subtle);
-  border: 1px solid var(--border-accent);
-  border-radius: var(--radius-sm);
-  padding: 4px 8px;
-  color: var(--accent);
-}
-
-.file-badge-name {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.op-btn {
-  display: grid !important;
-  grid-template-columns: 20px 1fr auto;
-  align-items: center;
-  gap: 8px;
-  text-align: left;
-  padding: 8px 12px !important;
-}
-
-.op-icon {
-  display: flex;
-  align-items: center;
-}
-.op-label {
-  font-weight: 500;
-  font-size: 13px;
-}
-.op-desc {
-  font-size: 10px;
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-}
-
-.read-icon {
-  color: var(--color-info);
-}
-.write-icon {
-  color: var(--accent);
-}
-.erase-icon {
-  color: var(--color-danger);
-}
-.verify-icon {
-  color: var(--color-warn);
 }
 
 .toggle-row {
@@ -802,61 +632,5 @@ onMounted(async () => {
 
 .vcc-modal .modal-icon {
   color: var(--color-warn);
-}
-
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.7);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 200;
-  backdrop-filter: blur(4px);
-}
-
-.modal {
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: 28px 24px 20px;
-  max-width: 340px;
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  text-align: center;
-}
-
-.modal-icon {
-  color: var(--color-danger);
-  margin: 0 auto;
-}
-.modal-title {
-  font-size: 16px;
-  font-weight: 600;
-}
-
-.modal-body {
-  font-size: 13px;
-  color: var(--text-secondary);
-  line-height: 1.6;
-  font-family: var(--font-sans);
-  white-space: pre-line;
-}
-
-.modal-body strong {
-  color: var(--text-primary);
-}
-
-.modal-actions {
-  display: flex;
-  gap: 8px;
-  justify-content: center;
-  margin-top: 8px;
-}
-
-.modal-actions .btn {
-  min-width: 96px;
 }
 </style>
