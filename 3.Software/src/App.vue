@@ -92,7 +92,7 @@ async function fitWindowToSidebar() {
         </svg>
       </div>
       <span class="titlebar-title">{{ t('app.title') }}</span>
-      <span class="titlebar-version text-muted">v0.1.0</span>
+      <span class="titlebar-version text-muted">v0.1.0-alpha.2</span>
       <div class="titlebar-spacer" />
       <button class="locale-btn" :title="t('app.switchLocale')" @click="toggleLocale">
         {{ localeLabel }}

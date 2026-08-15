@@ -49,7 +49,7 @@ between chip commands and the USB/serial transport underneath.
 
 ### Prebuilt artifacts
 
-Alpha builds are attached to GitHub Releases starting at `v0.1.0-alpha.1`.
+Alpha builds are attached to GitHub Releases starting at `v0.1.0-alpha.2`.
 
 - Windows: portable build (libusb backend) produced by CI.
   The official `CH34X.DLL` is not distributed with the source tree for
