@@ -69,6 +69,26 @@ struct BadBlockScanResult {
     bad_count: u32,
 }
 
+#[derive(Serialize)]
+struct RawBytesResult {
+    length: usize,
+    hex: String,
+    bytes: Vec<u8>,
+}
+
+fn raw_bytes_result(bytes: Vec<u8>) -> RawBytesResult {
+    let hex: String = bytes
+        .iter()
+        .map(|b| format!("{:02X}", b))
+        .collect::<Vec<_>>()
+        .join(" ");
+    RawBytesResult {
+        length: bytes.len(),
+        hex,
+        bytes,
+    }
+}
+
 struct AppState {
     ch34x: Option<Ch34xSettings>,
     serprog: Option<serprog::Serprog>,
@@ -431,6 +451,61 @@ fn scan_bad_blocks(
         bad_blocks,
         bad_count,
     })
+}
+
+#[tauri::command]
+fn read_nand_uid(state: State<'_, Mutex<AppState>>) -> Result<RawBytesResult, String> {
+    let s = state.lock().map_err(|e| e.to_string())?;
+    require_nand_ch34x(&s)?;
+    let dev = open_ch34x_mode(&s, DeviceMode::Spi)?;
+    Ok(raw_bytes_result(protocols::nand_read_uid(&dev, 64)?))
+}
+
+#[tauri::command]
+fn read_nand_param_page(state: State<'_, Mutex<AppState>>) -> Result<RawBytesResult, String> {
+    let s = state.lock().map_err(|e| e.to_string())?;
+    require_nand_ch34x(&s)?;
+    let dev = open_ch34x_mode(&s, DeviceMode::Spi)?;
+    Ok(raw_bytes_result(protocols::nand_read_param_page(&dev)?))
+}
+
+#[tauri::command]
+fn read_nand_bbm_lut(state: State<'_, Mutex<AppState>>) -> Result<RawBytesResult, String> {
+    let s = state.lock().map_err(|e| e.to_string())?;
+    require_nand_ch34x(&s)?;
+    let dev = open_ch34x_mode(&s, DeviceMode::Spi)?;
+    Ok(raw_bytes_result(protocols::nand_read_bbm_lut(&dev)?))
+}
+
+#[tauri::command]
+fn get_nand_ecc(state: State<'_, Mutex<AppState>>) -> Result<bool, String> {
+    let s = state.lock().map_err(|e| e.to_string())?;
+    require_nand_ch34x(&s)?;
+    let dev = open_ch34x_mode(&s, DeviceMode::Spi)?;
+    protocols::nand_get_ecc(&dev)
+}
+
+#[tauri::command]
+fn set_nand_ecc(state: State<'_, Mutex<AppState>>, enable: bool) -> Result<bool, String> {
+    let s = state.lock().map_err(|e| e.to_string())?;
+    require_nand_ch34x(&s)?;
+    let dev = open_ch34x_mode(&s, DeviceMode::Spi)?;
+    protocols::nand_set_ecc(&dev, enable)?;
+    protocols::nand_get_ecc(&dev)
+}
+
+fn require_nand_ch34x(state: &AppState) -> Result<(), String> {
+    let info = state
+        .detected
+        .as_ref()
+        .ok_or("请先检测或选择 SPI NAND 芯片")?;
+    if info.protocol != "SPI_NAND" {
+        return Err("当前芯片不是 SPI NAND".into());
+    }
+    if state.ch34x.is_none() {
+        return Err("此功能目前仅支持 CH34X 后端".into());
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -1267,6 +1342,11 @@ fn main() {
             connect_serprog,
             detect_chip,
             scan_bad_blocks,
+            read_nand_uid,
+            read_nand_param_page,
+            read_nand_bbm_lut,
+            get_nand_ecc,
+            set_nand_ecc,
             chip_erase,
             read_chip,
             write_chip,

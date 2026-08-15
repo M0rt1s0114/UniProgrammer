@@ -74,6 +74,59 @@ export function useSpiNor() {
     }
   }
 
+  // ── NAND 高级只读命令（实验性，真机验证前谨慎对待）────────────────────────
+  async function runNandRawRead(
+    command: 'read_nand_uid' | 'read_nand_param_page' | 'read_nand_bbm_lut',
+    label: string,
+  ) {
+    if (store.selectedType !== 'SPI_NAND' || !store.canOperate) {
+      store.addLog(`${label} 仅支持已连接的 SPI NAND 芯片`, 'warn')
+      return
+    }
+    store.isRunning = true
+    store.currentOp = label
+    try {
+      const result = (await invoke(command)) as { length: number; hex: string }
+      store.addLog(`${label} 完成（${result.length} 字节，实验性命令，需真机验证）`, 'success')
+      store.addLog(result.hex, 'info')
+    } catch (e: unknown) {
+      store.addLog(`${label} 失败: ${String(e)}`, 'error')
+    } finally {
+      store.isRunning = false
+      store.currentOp = ''
+    }
+  }
+
+  function readNandUid() {
+    return runNandRawRead('read_nand_uid', '读取 NAND UID')
+  }
+
+  function readNandParamPage() {
+    return runNandRawRead('read_nand_param_page', '读取 NAND 参数页')
+  }
+
+  function readNandBbmLut() {
+    return runNandRawRead('read_nand_bbm_lut', '读取 NAND BBM 映射表')
+  }
+
+  async function setNandEcc(enable: boolean) {
+    if (store.selectedType !== 'SPI_NAND' || !store.canOperate) {
+      store.addLog('ECC 设置仅支持已连接的 SPI NAND 芯片', 'warn')
+      return
+    }
+    store.isRunning = true
+    store.currentOp = enable ? '开启硬件 ECC' : '关闭硬件 ECC'
+    try {
+      const enabled = (await invoke('set_nand_ecc', { enable })) as boolean
+      store.addLog(`芯片内置 ECC 已${enabled ? '开启' : '关闭'}（实验性，需真机验证）`, 'success')
+    } catch (e: unknown) {
+      store.addLog(`ECC 设置失败: ${String(e)}`, 'error')
+    } finally {
+      store.isRunning = false
+      store.currentOp = ''
+    }
+  }
+
   // ── 坏块扫描（SPI NAND）────────────────────────────────────────────────────
   async function scanBadBlocks(): Promise<{ totalBlocks: number; badBlocks: number[] }> {
     if (store.selectedType !== 'SPI_NAND' || !store.canOperate) {
@@ -394,6 +447,10 @@ export function useSpiNor() {
   return {
     detectChip,
     scanBadBlocks,
+    readNandUid,
+    readNandParamPage,
+    readNandBbmLut,
+    setNandEcc,
     eraseChip,
     readChip,
     writeChip,

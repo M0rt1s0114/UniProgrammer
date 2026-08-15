@@ -350,6 +350,51 @@ onMounted(async () => {
       >
         {{ t('nand.scanBadBlocks') }}
       </button>
+
+      <div style="display: flex; gap: 8px; margin-top: 6px">
+        <button
+          class="btn btn-ghost btn-sm"
+          style="flex: 1"
+          :disabled="!store.canOperate || store.isRunning"
+          @click="spiNor.readNandUid()"
+        >
+          {{ t('nand.readUid') }}{{ t('nand.experimental') }}
+        </button>
+        <button
+          class="btn btn-ghost btn-sm"
+          style="flex: 1"
+          :disabled="!store.canOperate || store.isRunning"
+          @click="spiNor.readNandParamPage()"
+        >
+          {{ t('nand.readParamPage') }}{{ t('nand.experimental') }}
+        </button>
+      </div>
+      <div style="display: flex; gap: 8px; margin-top: 6px">
+        <button
+          class="btn btn-ghost btn-sm"
+          style="flex: 1"
+          :disabled="!store.canOperate || store.isRunning"
+          @click="spiNor.readNandBbmLut()"
+        >
+          {{ t('nand.readBbmLut') }}{{ t('nand.experimental') }}
+        </button>
+        <button
+          class="btn btn-ghost btn-sm"
+          style="flex: 1"
+          :disabled="!store.canOperate || store.isRunning"
+          @click="spiNor.setNandEcc(true)"
+        >
+          {{ t('nand.eccEnable') }}{{ t('nand.experimental') }}
+        </button>
+      </div>
+      <button
+        class="btn btn-ghost btn-sm w-full"
+        style="margin-top: 6px"
+        :disabled="!store.canOperate || store.isRunning"
+        @click="spiNor.setNandEcc(false)"
+      >
+        {{ t('nand.eccDisable') }}{{ t('nand.experimental') }}
+      </button>
     </section>
 
     <div class="divider" />

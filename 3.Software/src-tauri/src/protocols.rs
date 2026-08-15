@@ -494,6 +494,76 @@ pub fn nand_scan_bad_blocks(
     Ok(bad_blocks)
 }
 
+/// Read the NAND unique ID (experimental, hardware validation pending).
+/// Winbond-family SPI NAND: 4Bh + four dummy bytes + 64 data bytes.
+pub fn nand_read_uid(dev: &Ch34xDevice, len: usize) -> Result<Vec<u8>, String> {
+    nand_wait_ready(dev, 200)?;
+    let mut out = vec![0xFFu8; len];
+    dev.cs_low()?;
+    dev.spi_tx(&[0x4B])?;
+    dev.spi_tx(&[0x00, 0x00, 0x00, 0x00])?;
+    dev.spi_rx(&mut out)?;
+    dev.cs_high()?;
+    Ok(out)
+}
+
+/// Read one 256-byte ONFI parameter page (experimental, hardware validation
+/// pending). GigaDevice / Winbond families expose it through ECh + address 00h
+/// + one dummy byte.
+pub fn nand_read_param_page(dev: &Ch34xDevice) -> Result<Vec<u8>, String> {
+    nand_wait_ready(dev, 200)?;
+    let mut out = vec![0xFFu8; 256];
+    dev.cs_low()?;
+    dev.spi_tx(&[0xEC, 0x00, 0x00])?;
+    dev.spi_rx(&mut out)?;
+    dev.cs_high()?;
+    Ok(out)
+}
+
+/// Read the 80-byte internal BBM LUT through the A1h command
+/// (experimental, hardware validation pending).
+pub fn nand_read_bbm_lut(dev: &Ch34xDevice) -> Result<Vec<u8>, String> {
+    nand_wait_ready(dev, 200)?;
+    let mut out = vec![0xFFu8; 80];
+    dev.cs_low()?;
+    dev.spi_tx(&[0xA1])?;
+    dev.spi_rx(&mut out)?;
+    dev.cs_high()?;
+    Ok(out)
+}
+
+/// Read configuration register B0h through Get Feature (0Fh).
+pub fn nand_get_ecc(dev: &Ch34xDevice) -> Result<bool, String> {
+    nand_wait_ready(dev, 200)?;
+    let mut cfg = [0xFFu8; 1];
+    dev.cs_low()?;
+    dev.spi_tx(&[0x0F, 0xB0])?;
+    dev.spi_rx(&mut cfg)?;
+    dev.cs_high()?;
+    Ok((cfg[0] & 0x10) != 0)
+}
+
+/// Toggle the on-die ECC bit (bit 4 of configuration register B0h) through
+/// Set Feature (1Fh). Follows the Linux spi-nand CFG_ECC_ENABLE convention.
+pub fn nand_set_ecc(dev: &Ch34xDevice, enable: bool) -> Result<(), String> {
+    nand_wait_ready(dev, 200)?;
+    let mut cfg = [0xFFu8; 1];
+    dev.cs_low()?;
+    dev.spi_tx(&[0x0F, 0xB0])?;
+    dev.spi_rx(&mut cfg)?;
+    dev.cs_high()?;
+
+    if enable {
+        cfg[0] |= 0x10;
+    } else {
+        cfg[0] &= !0x10;
+    }
+    dev.cs_low()?;
+    dev.spi_tx(&[0x1F, 0xB0, cfg[0]])?;
+    dev.cs_high()?;
+    nand_wait_ready(dev, 200)
+}
+
 fn nand_page_write(dev: &Ch34xDevice, page: &[u8], page_no: u32) -> Result<(), String> {
     if 3 + page.len() > dev.spi_frame_limit() {
         return Err(format!(
