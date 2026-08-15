@@ -7,16 +7,18 @@ const props = defineProps<{
   logs: LogEntry[]
 }>()
 
-
 const bottomRef = ref<HTMLElement | null>(null)
 const autoScroll = ref(true)
 
-watch(() => props.logs.length, async () => {
-  if (autoScroll.value) {
-    await nextTick()
-    bottomRef.value?.scrollIntoView({ behavior: 'instant' })
-  }
-})
+watch(
+  () => props.logs.length,
+  async () => {
+    if (autoScroll.value) {
+      await nextTick()
+      bottomRef.value?.scrollIntoView({ behavior: 'instant' })
+    }
+  },
+)
 
 function levelClass(level: LogEntry['level']) {
   return {
@@ -35,7 +37,7 @@ function levelClass(level: LogEntry['level']) {
     <div class="log-meta">
       <span class="log-count">{{ logs.length }} {{ t('log.lines') }}</span>
       <label class="autoscroll-toggle">
-        <input type="checkbox" v-model="autoScroll" />
+        <input v-model="autoScroll" type="checkbox" />
         {{ t('log.autoScroll') }}
       </label>
     </div>
@@ -44,12 +46,7 @@ function levelClass(level: LogEntry['level']) {
       <div v-if="logs.length === 0" class="log-empty">
         {{ t('log.waiting') }}
       </div>
-      <div
-        v-for="entry in logs"
-        :key="entry.id"
-        class="log-line"
-        :class="levelClass(entry.level)"
-      >
+      <div v-for="entry in logs" :key="entry.id" class="log-line" :class="levelClass(entry.level)">
         <span class="log-time">{{ entry.time }}</span>
         <span v-if="entry.level === 'functionTest'" class="log-level-test">[FunctionTest]</span>
         <span class="log-msg">{{ entry.message }}</span>
@@ -148,13 +145,30 @@ function levelClass(level: LogEntry['level']) {
   color: #c792ea;
 }
 
-.log-info  { }
-.log-warn  { border-left-color: var(--color-warn);   }
-.log-warn .log-msg    { color: var(--color-warn); }
-.log-error { border-left-color: var(--color-danger); }
-.log-error .log-msg   { color: var(--color-danger); }
-.log-success { border-left-color: var(--accent); }
-.log-function-test { border-left-color: #c792ea; }
-.log-function-test .log-msg { color: #c792ea; }
-.log-success .log-msg { color: var(--accent); }
+.log-info {
+}
+.log-warn {
+  border-left-color: var(--color-warn);
+}
+.log-warn .log-msg {
+  color: var(--color-warn);
+}
+.log-error {
+  border-left-color: var(--color-danger);
+}
+.log-error .log-msg {
+  color: var(--color-danger);
+}
+.log-success {
+  border-left-color: var(--accent);
+}
+.log-function-test {
+  border-left-color: #c792ea;
+}
+.log-function-test .log-msg {
+  color: #c792ea;
+}
+.log-success .log-msg {
+  color: var(--accent);
+}
 </style>

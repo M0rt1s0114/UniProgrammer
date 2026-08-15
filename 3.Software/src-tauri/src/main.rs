@@ -1,7 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod chiplib;
 mod ch34x;
+mod chiplib;
 mod dialogs;
 mod protocols;
 mod serprog;
@@ -243,10 +243,7 @@ fn load_chip_lib(state: State<'_, Mutex<AppState>>) -> Result<String, String> {
     let base = exe_dir();
     let xml_path = base.join("chiplib.xml");
     let bin_path = base.join("chiplib.bin");
-    let lib = chiplib::Chiplib::load_auto(
-        xml_path.to_str().unwrap(),
-        bin_path.to_str().unwrap(),
-    )?;
+    let lib = chiplib::Chiplib::load_auto(xml_path.to_str().unwrap(), bin_path.to_str().unwrap())?;
     s.lib = Some(lib);
     Ok("芯片库加载成功".to_string())
 }
@@ -475,13 +472,21 @@ fn read_chip(
             if data.len() != chunk {
                 return Err(format!(
                     "serprog 读取长度不符 @ 0x{:08X}: 预期 {} 实际 {}",
-                    addr, chunk, data.len()
+                    addr,
+                    chunk,
+                    data.len()
                 ));
             }
             out.extend_from_slice(&data);
             offset += chunk as u64;
-            app.emit("read_progress", ReadProgressEvent { done: offset, total })
-                .ok();
+            app.emit(
+                "read_progress",
+                ReadProgressEvent {
+                    done: offset,
+                    total,
+                },
+            )
+            .ok();
         }
         return Ok(out);
     }
@@ -494,37 +499,66 @@ fn read_chip(
             "SPI_EEPROM" => {
                 let dev = open_ch34x_mode(&s, bus)?;
                 let params = protocols::ChipParams::from_info(info);
-                return protocols::s95_read(&dev, &params, start_addr, size as usize, &mut |done, total| {
-                    app.emit("read_progress", ReadProgressEvent { done, total }).ok();
-                });
+                return protocols::s95_read(
+                    &dev,
+                    &params,
+                    start_addr,
+                    size as usize,
+                    &mut |done, total| {
+                        app.emit("read_progress", ReadProgressEvent { done, total })
+                            .ok();
+                    },
+                );
             }
             "SPI_DATA_45" => {
                 let dev = open_ch34x_mode(&s, bus)?;
                 let params = protocols::ChipParams::from_info(info);
-                return protocols::at45_read(&dev, &params, start_addr, size as usize, &mut |done, total| {
-                    app.emit("read_progress", ReadProgressEvent { done, total }).ok();
-                });
+                return protocols::at45_read(
+                    &dev,
+                    &params,
+                    start_addr,
+                    size as usize,
+                    &mut |done, total| {
+                        app.emit("read_progress", ReadProgressEvent { done, total })
+                            .ok();
+                    },
+                );
             }
             "SPI_NAND" => {
                 let dev = open_ch34x_mode(&s, bus)?;
                 let params = protocols::ChipParams::from_info(info);
                 return protocols::nand_read(&dev, &params, size, &mut |done, total| {
-                    app.emit("read_progress", ReadProgressEvent { done, total }).ok();
+                    app.emit("read_progress", ReadProgressEvent { done, total })
+                        .ok();
                 });
             }
             "I2C" | "I2C_F-RAM" | "I2C_SPD" => {
                 let dev = open_ch34x_mode(&s, bus)?;
                 let params = protocols::ChipParams::from_info(info);
-                return protocols::i2c_read(&dev, &params, start_addr, size as usize, &mut |done, total| {
-                    app.emit("read_progress", ReadProgressEvent { done, total }).ok();
-                });
+                return protocols::i2c_read(
+                    &dev,
+                    &params,
+                    start_addr,
+                    size as usize,
+                    &mut |done, total| {
+                        app.emit("read_progress", ReadProgressEvent { done, total })
+                            .ok();
+                    },
+                );
             }
             "Microwire" => {
                 let dev = open_ch34x_mode(&s, bus)?;
                 let params = protocols::ChipParams::from_info(info);
-                return protocols::mw_read(&dev, &params, start_addr, size as usize, &mut |done, total| {
-                    app.emit("read_progress", ReadProgressEvent { done, total }).ok();
-                });
+                return protocols::mw_read(
+                    &dev,
+                    &params,
+                    start_addr,
+                    size as usize,
+                    &mut |done, total| {
+                        app.emit("read_progress", ReadProgressEvent { done, total })
+                            .ok();
+                    },
+                );
             }
             other => return Err(format!("协议 {} 暂未实现", other)),
         }
@@ -576,8 +610,14 @@ fn read_chip(
         dev.cs_high()?;
 
         offset += chunk as u64;
-        app.emit("read_progress", ReadProgressEvent { done: offset, total })
-            .ok();
+        app.emit(
+            "read_progress",
+            ReadProgressEvent {
+                done: offset,
+                total,
+            },
+        )
+        .ok();
     }
 
     if params.addr4b {
@@ -645,37 +685,77 @@ fn write_chip(
             "SPI_EEPROM" => {
                 let dev = open_ch34x_mode(&s, bus)?;
                 let params = protocols::ChipParams::from_info(info);
-                return protocols::s95_write(&dev, &params, &data, start_addr, &mut |done, total| {
-                    app.emit("write_progress", WriteProgressEvent { done, total }).ok();
-                }).map(|_| format!("写入完成，共 {} 字节", total));
+                return protocols::s95_write(
+                    &dev,
+                    &params,
+                    &data,
+                    start_addr,
+                    &mut |done, total| {
+                        app.emit("write_progress", WriteProgressEvent { done, total })
+                            .ok();
+                    },
+                )
+                .map(|_| format!("写入完成，共 {} 字节", total));
             }
             "SPI_DATA_45" => {
                 let dev = open_ch34x_mode(&s, bus)?;
                 let params = protocols::ChipParams::from_info(info);
-                return protocols::at45_write(&dev, &params, &data, start_addr, &mut |done, total| {
-                    app.emit("write_progress", WriteProgressEvent { done, total }).ok();
-                }).map(|_| format!("写入完成，共 {} 字节", total));
+                return protocols::at45_write(
+                    &dev,
+                    &params,
+                    &data,
+                    start_addr,
+                    &mut |done, total| {
+                        app.emit("write_progress", WriteProgressEvent { done, total })
+                            .ok();
+                    },
+                )
+                .map(|_| format!("写入完成，共 {} 字节", total));
             }
             "SPI_NAND" => {
                 let dev = open_ch34x_mode(&s, bus)?;
                 let params = protocols::ChipParams::from_info(info);
-                return protocols::nand_write(&dev, &params, &data, force_segmented.unwrap_or(false), &mut |done, total| {
-                    app.emit("write_progress", WriteProgressEvent { done, total }).ok();
-                }).map(|_| format!("写入完成，共 {} 字节", total));
+                return protocols::nand_write(
+                    &dev,
+                    &params,
+                    &data,
+                    force_segmented.unwrap_or(false),
+                    &mut |done, total| {
+                        app.emit("write_progress", WriteProgressEvent { done, total })
+                            .ok();
+                    },
+                )
+                .map(|_| format!("写入完成，共 {} 字节", total));
             }
             "I2C" | "I2C_F-RAM" | "I2C_SPD" => {
                 let dev = open_ch34x_mode(&s, bus)?;
                 let params = protocols::ChipParams::from_info(info);
-                return protocols::i2c_write(&dev, &params, &data, start_addr, &mut |done, total| {
-                    app.emit("write_progress", WriteProgressEvent { done, total }).ok();
-                }).map(|_| format!("写入完成，共 {} 字节", total));
+                return protocols::i2c_write(
+                    &dev,
+                    &params,
+                    &data,
+                    start_addr,
+                    &mut |done, total| {
+                        app.emit("write_progress", WriteProgressEvent { done, total })
+                            .ok();
+                    },
+                )
+                .map(|_| format!("写入完成，共 {} 字节", total));
             }
             "Microwire" => {
                 let dev = open_ch34x_mode(&s, bus)?;
                 let params = protocols::ChipParams::from_info(info);
-                return protocols::mw_write(&dev, &params, &data, start_addr, &mut |done, total| {
-                    app.emit("write_progress", WriteProgressEvent { done, total }).ok();
-                }).map(|_| format!("写入完成，共 {} 字节", total));
+                return protocols::mw_write(
+                    &dev,
+                    &params,
+                    &data,
+                    start_addr,
+                    &mut |done, total| {
+                        app.emit("write_progress", WriteProgressEvent { done, total })
+                            .ok();
+                    },
+                )
+                .map(|_| format!("写入完成，共 {} 字节", total));
             }
             other => return Err(format!("协议 {} 暂未实现", other)),
         }
@@ -777,7 +857,9 @@ fn verify_chip(
             if buf.len() != chunk {
                 return Err(format!(
                     "serprog 读取长度不符 @ 0x{:08X}: 预期 {} 实际 {}",
-                    addr, chunk, buf.len()
+                    addr,
+                    chunk,
+                    buf.len()
                 ));
             }
             for (i, actual) in buf.iter().enumerate() {
@@ -791,8 +873,14 @@ fn verify_chip(
                 }
             }
             offset += chunk as u64;
-            app.emit("verify_progress", VerifyProgressEvent { done: offset, total })
-                .ok();
+            app.emit(
+                "verify_progress",
+                VerifyProgressEvent {
+                    done: offset,
+                    total,
+                },
+            )
+            .ok();
         }
         return Ok("校验通过".to_string());
     }
@@ -848,8 +936,14 @@ fn verify_chip(
                     }
                 }
                 offset = end;
-                app.emit("verify_progress", VerifyProgressEvent { done: offset as u64, total })
-                    .ok();
+                app.emit(
+                    "verify_progress",
+                    VerifyProgressEvent {
+                        done: offset as u64,
+                        total,
+                    },
+                )
+                .ok();
             }
             return Ok("校验通过".to_string());
         }
@@ -908,8 +1002,14 @@ fn verify_chip(
         }
 
         offset += chunk as u64;
-        app.emit("verify_progress", VerifyProgressEvent { done: offset, total })
-            .ok();
+        app.emit(
+            "verify_progress",
+            VerifyProgressEvent {
+                done: offset,
+                total,
+            },
+        )
+        .ok();
     }
 
     if params.addr4b {
@@ -993,10 +1093,7 @@ fn convert_chip_lib(state: State<'_, Mutex<AppState>>) -> Result<String, String>
     let xml_path = base.join("chiplib.xml");
     let bin_path = base.join("chiplib.bin");
 
-    chiplib::Chiplib::convert_xml_to_bin(
-        xml_path.to_str().unwrap(),
-        bin_path.to_str().unwrap(),
-    )?;
+    chiplib::Chiplib::convert_xml_to_bin(xml_path.to_str().unwrap(), bin_path.to_str().unwrap())?;
     Ok(format!("芯片库已成功转换为 {}", bin_path.display()))
 }
 

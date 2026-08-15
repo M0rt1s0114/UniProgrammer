@@ -8,62 +8,68 @@
 /* ---- Design Tokens ---- */
 :root {
   /* Background layers */
-  --bg-base:       #0d0f12;
-  --bg-surface:    #141720;
-  --bg-elevated:   #1c2030;
-  --bg-overlay:    #232840;
+  --bg-base: #0d0f12;
+  --bg-surface: #141720;
+  --bg-elevated: #1c2030;
+  --bg-overlay: #232840;
 
   /* Brand accent — circuit-board green */
-  --accent:        #00e5a0;
-  --accent-dim:    #00b87d;
-  --accent-glow:   rgba(0, 229, 160, 0.15);
+  --accent: #00e5a0;
+  --accent-dim: #00b87d;
+  --accent-glow: rgba(0, 229, 160, 0.15);
   --accent-subtle: rgba(0, 229, 160, 0.08);
 
   /* Semantic colors */
-  --color-warn:    #f0a500;
-  --color-danger:  #f05050;
-  --color-info:    #4a9eff;
+  --color-warn: #f0a500;
+  --color-danger: #f05050;
+  --color-info: #4a9eff;
   --color-success: #00e5a0;
 
   /* Text hierarchy */
-  --text-primary:   #e8edf5;
+  --text-primary: #e8edf5;
   --text-secondary: #8a96ab;
-  --text-muted:     #4a5568;
-  --text-accent:    #00e5a0;
+  --text-muted: #4a5568;
+  --text-accent: #00e5a0;
 
   /* Borders */
-  --border:         rgba(255,255,255,0.07);
-  --border-accent:  rgba(0, 229, 160, 0.3);
-  --border-focus:   rgba(0, 229, 160, 0.6);
+  --border: rgba(255, 255, 255, 0.07);
+  --border-accent: rgba(0, 229, 160, 0.3);
+  --border-focus: rgba(0, 229, 160, 0.6);
 
   /* Typography */
-  --font-sans:  'Inter', system-ui, sans-serif;
-  --font-mono:  'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
 
   /* Spacing */
-  --radius-sm:  4px;
-  --radius-md:  8px;
-  --radius-lg:  12px;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
 
   /* Transitions */
   --transition: 150ms ease;
 }
 
 /* ---- Reset & Base ---- */
-*, *::before, *::after {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
 
-html, body, #app {
+html,
+body,
+#app {
   height: 100%;
   overflow: hidden;
   /* 默认不透明背景；Linux 透明窗口由 .linux 覆盖 */
   background: var(--bg-base);
 }
 
-html.linux, html.linux body, html.linux #app {
+html.linux,
+html.linux body,
+html.linux #app {
   background: transparent;
 }
 
@@ -82,19 +88,43 @@ html.linux body {
 }
 
 /* ---- Scrollbar ---- */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: var(--bg-base); }
-::-webkit-scrollbar-thumb { background: var(--bg-overlay); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-base);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--bg-overlay);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
 
 /* ---- Typography Utilities ---- */
-.font-mono { font-family: var(--font-mono); }
-.text-accent { color: var(--accent); }
-.text-muted { color: var(--text-muted); }
-.text-secondary { color: var(--text-secondary); }
-.text-warn { color: var(--color-warn); }
-.text-danger { color: var(--color-danger); }
-.text-success { color: var(--color-success); }
+.font-mono {
+  font-family: var(--font-mono);
+}
+.text-accent {
+  color: var(--accent);
+}
+.text-muted {
+  color: var(--text-muted);
+}
+.text-secondary {
+  color: var(--text-secondary);
+}
+.text-warn {
+  color: var(--color-warn);
+}
+.text-danger {
+  color: var(--color-danger);
+}
+.text-success {
+  color: var(--color-success);
+}
 
 /* ---- Button Base ---- */
 .btn {
@@ -142,12 +172,12 @@ html.linux body {
 }
 
 .btn-danger {
-  background: rgba(240,80,80,0.1);
+  background: rgba(240, 80, 80, 0.1);
   color: var(--color-danger);
-  border-color: rgba(240,80,80,0.3);
+  border-color: rgba(240, 80, 80, 0.3);
 }
 .btn-danger:hover {
-  background: rgba(240,80,80,0.2);
+  background: rgba(240, 80, 80, 0.2);
   border-color: var(--color-danger);
 }
 
@@ -189,7 +219,9 @@ html.linux body {
   border-color: var(--border-focus);
   box-shadow: 0 0 0 2px var(--accent-subtle);
 }
-.input::placeholder { color: var(--text-muted); }
+.input::placeholder {
+  color: var(--text-muted);
+}
 
 /* select 在 WebKitGTK 下会套用 Gtk 原生样式；统一成自定义外观，
    保证 Windows / Linux 观感一致 */
@@ -238,10 +270,22 @@ select.input {
   font-size: 11px;
   font-weight: 500;
 }
-.badge-success { background: rgba(0,229,160,0.12); color: var(--accent); }
-.badge-warn    { background: rgba(240,165,0,0.12);  color: var(--color-warn); }
-.badge-danger  { background: rgba(240,80,80,0.12);  color: var(--color-danger); }
-.badge-idle    { background: var(--bg-elevated);    color: var(--text-muted); }
+.badge-success {
+  background: rgba(0, 229, 160, 0.12);
+  color: var(--accent);
+}
+.badge-warn {
+  background: rgba(240, 165, 0, 0.12);
+  color: var(--color-warn);
+}
+.badge-danger {
+  background: rgba(240, 80, 80, 0.12);
+  color: var(--color-danger);
+}
+.badge-idle {
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+}
 
 /* ---- Dot indicator ---- */
 .dot {
@@ -255,8 +299,13 @@ select.input {
   animation: pulse 1.4s ease-in-out infinite;
 }
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0.3; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
 }
 
 /* ---- Progress Bar ---- */
@@ -303,11 +352,24 @@ select.input {
   border: 1px solid var(--border);
   z-index: 100;
 }
-[data-tooltip]:hover::after { opacity: 1; }
+[data-tooltip]:hover::after {
+  opacity: 1;
+}
 
 /* ---- Animations ---- */
-.fade-enter-active, .fade-leave-active { transition: opacity 200ms ease; }
-.fade-enter-from, .fade-leave-to { opacity: 0; }
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 200ms ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
 
-.slide-up-enter-active { transition: all 200ms ease; }
-.slide-up-enter-from  { opacity: 0; transform: translateY(8px); }
+.slide-up-enter-active {
+  transition: all 200ms ease;
+}
+.slide-up-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}

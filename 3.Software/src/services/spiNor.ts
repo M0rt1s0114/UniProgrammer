@@ -15,14 +15,14 @@ export function useSpiNor() {
       return
     }
     const buf = new Uint8Array(size)
-    buf.fill(0xFF)
+    buf.fill(0xff)
     store.hexData = buf
   }
 
   // ── 通用：订阅一个进度 event，返回取消订阅函数 ──────────────────────────────
   async function listenProgress(
     eventName: string,
-    onProgress: (done: number, total: number) => void
+    onProgress: (done: number, total: number) => void,
   ): Promise<UnlistenFn> {
     return listen<{ done: number; total: number }>(eventName, ({ payload }) => {
       onProgress(payload.done, payload.total)
@@ -35,7 +35,10 @@ export function useSpiNor() {
     store.currentOp = '检测芯片'
     store.addLog('正在检测 SPI Flash...')
     try {
-      const result = await invoke('detect_chip') as { text: string; info: DetectedChipInfo | null }
+      const result = (await invoke('detect_chip')) as {
+        text: string
+        info: DetectedChipInfo | null
+      }
       store.detectStatus = 'success'
       store.chipInfo = result.text.split('\n')
       store.addLog(result.text, 'success')
@@ -43,7 +46,10 @@ export function useSpiNor() {
         store.selectedType = result.info.protocol
         store.chipVendors = await store.loadChipVendorsDirect(result.info.protocol)
         store.selectedVendor = result.info.vendor
-        store.chipModels = await store.loadChipModelsDirect(result.info.protocol, result.info.vendor)
+        store.chipModels = await store.loadChipModelsDirect(
+          result.info.protocol,
+          result.info.vendor,
+        )
         store.selectedModel = result.info.model
         store.detectedChipSize = result.info.size
         store.chipDetails = result.info
@@ -54,10 +60,10 @@ export function useSpiNor() {
         store.detectedChipSize = 0
         store.chipDetails = null
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       store.detectStatus = 'chip_rule_fail'
       store.chipInfo = []
-      store.addLog(`检测失败: ${e}`, 'error')
+      store.addLog(`检测失败: ${String(e)}`, 'error')
       store.chipDetected = false
       store.detectedChipSize = 0
       store.chipDetails = null
@@ -76,14 +82,14 @@ export function useSpiNor() {
     store.progressMessage = '正在擦除...'
     store.addLog('开始全片擦除...')
     try {
-      const msg = await invoke('chip_erase') as string
+      const msg = (await invoke('chip_erase')) as string
       store.addLog(msg, 'success')
       if (store.detectedChipSize > 0) {
         fillHexWithFF(store.detectedChipSize)
       }
       store.progress = 100
-    } catch (e: any) {
-      store.addLog(`擦除失败: ${e}`, 'error')
+    } catch (e: unknown) {
+      store.addLog(`擦除失败: ${String(e)}`, 'error')
     } finally {
       store.isRunning = false
       store.currentOp = ''
@@ -118,8 +124,8 @@ export function useSpiNor() {
       store.progress = 100
       store.progressMessage = '读取完成'
       store.addLog(`读取完成，共 ${raw.length} 字节`, 'success')
-    } catch (e: any) {
-      store.addLog(`读取失败: ${e}`, 'error')
+    } catch (e: unknown) {
+      store.addLog(`读取失败: ${String(e)}`, 'error')
       store.progress = 0
       store.progressMessage = ''
     } finally {
@@ -159,7 +165,7 @@ export function useSpiNor() {
       store.progress = 100
       store.progressMessage = '写入完成'
       store.addLog(msg, 'success')
-    } catch (e: any) {
+    } catch (e: unknown) {
       const message = String(e)
       if (!forceSegmented && message.includes('SPI_PAGE_TOO_LARGE')) {
         // CH341 DLL 单帧放不下大页 NAND：先给用户清晰警告
@@ -173,7 +179,7 @@ export function useSpiNor() {
         store.progress = 0
         store.progressMessage = ''
       } else {
-        store.addLog(`写入失败: ${e}`, 'error')
+        store.addLog(`写入失败: ${String(e)}`, 'error')
         store.progress = 0
         store.progressMessage = ''
       }
@@ -211,9 +217,9 @@ export function useSpiNor() {
       store.progress = 100
       store.progressMessage = '校验完成'
       store.addLog(msg, 'success')
-    } catch (e: any) {
+    } catch (e: unknown) {
       // 后端把首个不一致地址和字节值放在错误信息里，直接显示即可
-      store.addLog(`校验失败: ${e}`, 'error')
+      store.addLog(`校验失败: ${String(e)}`, 'error')
       store.progress = 0
       store.progressMessage = ''
     } finally {
@@ -234,16 +240,18 @@ export function useSpiNor() {
     for (let addr = 0; addr < data.length; addr += RECORD_LEN) {
       const chunk = data.slice(addr, addr + RECORD_LEN)
       const ll = chunk.length
-      const addrHi = (addr >> 8) & 0xFF
-      const addrLo = addr & 0xFF
+      const addrHi = (addr >> 8) & 0xff
+      const addrLo = addr & 0xff
 
       let sum = ll + addrHi + addrLo + 0x00 // type=00
       for (const b of chunk) sum += b
-      const cc = (~sum + 1) & 0xFF
+      const cc = (~sum + 1) & 0xff
 
-      const ddStr = Array.from(chunk).map(b => b.toString(16).padStart(2, '0')).join('')
+      const ddStr = Array.from(chunk)
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('')
       lines.push(
-        `:${ll.toString(16).padStart(2, '0')}${addrHi.toString(16).padStart(2, '0')}${addrLo.toString(16).padStart(2, '0')}00${ddStr}${cc.toString(16).padStart(2, '0')}`.toUpperCase()
+        `:${ll.toString(16).padStart(2, '0')}${addrHi.toString(16).padStart(2, '0')}${addrLo.toString(16).padStart(2, '0')}00${ddStr}${cc.toString(16).padStart(2, '0')}`.toUpperCase(),
       )
     }
     lines.push(':00000001FF')
@@ -279,8 +287,8 @@ export function useSpiNor() {
       }
       await invoke('write_file', { path, data: Array.from(bytes) })
       store.addLog(`已保存: ${path}`, 'success')
-    } catch (e: any) {
-      store.addLog(`保存失败: ${e}`, 'error')
+    } catch (e: unknown) {
+      store.addLog(`保存失败: ${String(e)}`, 'error')
     }
   }
 

@@ -6,15 +6,18 @@ export interface UiOption {
   label: string
 }
 
-const props = withDefaults(defineProps<{
-  modelValue: string | number
-  options: UiOption[]
-  placeholder?: string
-  disabled?: boolean
-}>(), {
-  placeholder: '',
-  disabled: false,
-})
+const props = withDefaults(
+  defineProps<{
+    modelValue: string | number
+    options: UiOption[]
+    placeholder?: string
+    disabled?: boolean
+  }>(),
+  {
+    placeholder: '',
+    disabled: false,
+  },
+)
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: string | number): void
@@ -25,7 +28,7 @@ const open = ref(false)
 const rootRef = ref<HTMLElement | null>(null)
 
 const currentLabel = computed(() => {
-  const found = props.options.find(o => o.value === props.modelValue)
+  const found = props.options.find((o) => o.value === props.modelValue)
   return found?.label ?? props.placeholder ?? ''
 })
 
@@ -50,9 +53,12 @@ function onKeydown(e: KeyboardEvent) {
   if (e.key === 'Escape') open.value = false
 }
 
-watch(() => props.disabled, v => {
-  if (v) open.value = false
-})
+watch(
+  () => props.disabled,
+  (v) => {
+    if (v) open.value = false
+  },
+)
 
 onMounted(() => {
   document.addEventListener('mousedown', onDocumentMouseDown)
@@ -162,7 +168,9 @@ onUnmounted(() => {
 
 .drop-enter-active,
 .drop-leave-active {
-  transition: opacity 100ms ease, transform 100ms ease;
+  transition:
+    opacity 100ms ease,
+    transform 100ms ease;
 }
 .drop-enter-from,
 .drop-leave-to {

@@ -7,7 +7,7 @@
 #[cfg(target_os = "windows")]
 mod imp {
     use std::ptr::null_mut;
-    use windows::core::{HSTRING, IUnknown};
+    use windows::core::{IUnknown, HSTRING};
     use windows::Win32::Foundation::HWND;
     use windows::Win32::System::Com::{
         CoCreateInstance, CoInitializeEx, CoTaskMemFree, CoUninitialize, CLSCTX_INPROC_SERVER,
@@ -48,8 +48,7 @@ mod imp {
     }
 
     fn item_path(dialog: &IFileDialog) -> Result<String, String> {
-        let item = unsafe { dialog.GetResult() }
-            .map_err(|e| format!("获取对话框选择失败: {e}"))?;
+        let item = unsafe { dialog.GetResult() }.map_err(|e| format!("获取对话框选择失败: {e}"))?;
         let name = unsafe { item.GetDisplayName(SIGDN_FILESYSPATH) }
             .map_err(|e| format!("获取文件路径失败: {e}"))?;
         let result = unsafe { name.to_string() }.map_err(|e| format!("路径解码失败: {e}"));
@@ -59,20 +58,12 @@ mod imp {
 
     pub fn open_file() -> Result<Option<String>, String> {
         let _com = ComGuard::new()?;
-        let dialog: IFileDialog = unsafe {
-            CoCreateInstance(
-                &FileOpenDialog,
-                None::<&IUnknown>,
-                CLSCTX_INPROC_SERVER,
-            )
-        }
-        .map_err(|e| format!("创建打开对话框失败: {e}"))?;
+        let dialog: IFileDialog =
+            unsafe { CoCreateInstance(&FileOpenDialog, None::<&IUnknown>, CLSCTX_INPROC_SERVER) }
+                .map_err(|e| format!("创建打开对话框失败: {e}"))?;
 
-        unsafe {
-            dialog
-                .SetOptions(FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST | FOS_NOCHANGEDIR)
-        }
-        .map_err(|e| format!("配置打开对话框失败: {e}"))?;
+        unsafe { dialog.SetOptions(FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST | FOS_NOCHANGEDIR) }
+            .map_err(|e| format!("配置打开对话框失败: {e}"))?;
 
         match unsafe { dialog.Show(HWND(null_mut())) } {
             Ok(()) => item_path(&dialog).map(Some),
@@ -82,19 +73,12 @@ mod imp {
 
     pub fn save_file(default_name: &str, default_ext: &str) -> Result<Option<String>, String> {
         let _com = ComGuard::new()?;
-        let dialog: IFileDialog = unsafe {
-            CoCreateInstance(
-                &FileSaveDialog,
-                None::<&IUnknown>,
-                CLSCTX_INPROC_SERVER,
-            )
-        }
-        .map_err(|e| format!("创建保存对话框失败: {e}"))?;
+        let dialog: IFileDialog =
+            unsafe { CoCreateInstance(&FileSaveDialog, None::<&IUnknown>, CLSCTX_INPROC_SERVER) }
+                .map_err(|e| format!("创建保存对话框失败: {e}"))?;
 
-        unsafe {
-            dialog.SetOptions(FOS_FORCEFILESYSTEM | FOS_OVERWRITEPROMPT | FOS_NOCHANGEDIR)
-        }
-        .map_err(|e| format!("配置保存对话框失败: {e}"))?;
+        unsafe { dialog.SetOptions(FOS_FORCEFILESYSTEM | FOS_OVERWRITEPROMPT | FOS_NOCHANGEDIR) }
+            .map_err(|e| format!("配置保存对话框失败: {e}"))?;
         unsafe { dialog.SetFileName(&HSTRING::from(default_name)) }
             .map_err(|e| format!("设置默认文件名失败: {e}"))?;
         unsafe { dialog.SetDefaultExtension(&HSTRING::from(default_ext)) }

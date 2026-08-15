@@ -6,7 +6,8 @@ import { t } from '@/i18n'
 const store = useProgStore()
 
 const statusColor = computed(() => {
-  if (store.detectStatus === 'programmer_fail' || store.detectStatus === 'chip_rule_fail') return '#f05050'
+  if (store.detectStatus === 'programmer_fail' || store.detectStatus === 'chip_rule_fail')
+    return '#f05050'
   if (store.status === 'running') return '#4a9eff'
   if (store.status === 'success') return '#00e5a0'
   return '#f05050'
@@ -34,16 +35,20 @@ const fileName = computed(() => {
       </span>
       <span class="status-label" :style="{ color: statusColor }">{{ statusLabel }}</span>
       <!-- 设备名称，仅连接后显示 -->
-      <span v-if="store.status === 'success' && store.connectedDevice" class="device-name text-muted">
+      <span
+        v-if="store.status === 'success' && store.connectedDevice"
+        class="device-name text-muted"
+      >
         · {{ store.connectedDevice }}
       </span>
       <span v-if="store.vccOutputEnabled" class="vcc-badge">
-        ⚡ {{ t('vcc.statusOn') }} {{ (store.vccTargetMv / 1000).toFixed(1) }} {{ t('vcc.voltageUnit') }}
+        ⚡ {{ t('vcc.statusOn') }} {{ (store.vccTargetMv / 1000).toFixed(1) }}
+        {{ t('vcc.voltageUnit') }}
       </span>
     </div>
 
     <div v-if="store.isRunning" class="status-progress">
-      <div class="progress-track" style="width: 140px;">
+      <div class="progress-track" style="width: 140px">
         <div class="progress-fill" :style="{ width: store.progress + '%' }" />
       </div>
       <span class="progress-pct">{{ Math.round(store.progress) }}%</span>
@@ -52,12 +57,22 @@ const fileName = computed(() => {
 
     <div class="status-right">
       <template v-if="fileName">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--text-muted)">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-          <polyline points="14,2 14,8 20,8"/>
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          style="color: var(--text-muted)"
+        >
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+          <polyline points="14,2 14,8 20,8" />
         </svg>
         <span class="file-name">{{ fileName }}</span>
-        <span v-if="store.fileSize" class="file-size text-muted">{{ formatBytes(store.fileSize) }}</span>
+        <span v-if="store.fileSize" class="file-size text-muted">{{
+          formatBytes(store.fileSize)
+        }}</span>
       </template>
       <span v-else class="text-muted">{{ t('status.noFile') }}</span>
     </div>

@@ -517,7 +517,7 @@ pub fn nand_read(
     progress: &mut dyn FnMut(u64, u64),
 ) -> Result<Vec<u8>, String> {
     let page_size = params.page.max(1);
-    let pages = ((size + page_size as u64 - 1) / page_size as u64) as usize;
+    let pages = size.div_ceil(page_size as u64) as usize;
     let mut out = Vec::with_capacity(size as usize);
     for page_no in 0..pages {
         let mut page = nand_page_read(dev, page_size, page_no as u32)?;
@@ -569,7 +569,7 @@ pub fn nand_write(
 
 pub fn nand_erase(dev: &Ch34xDevice, params: &ChipParams, size: u64) -> Result<(), String> {
     let block_size = params.block.max(1) as u64;
-    let blocks = ((size + block_size - 1) / block_size) as u32;
+    let blocks = size.div_ceil(block_size) as u32;
     for block_no in 0..blocks {
         nand_block_erase(dev, block_no)?;
     }
@@ -948,7 +948,11 @@ pub fn mw_write(
         mw.send(address, num_bit)?;
 
         if org {
-            let b1 = if l + 1 < data.len() { data[l + 1] } else { 0xFF };
+            let b1 = if l + 1 < data.len() {
+                data[l + 1]
+            } else {
+                0xFF
+            };
             let b0 = data[l];
             mw.send(b1 as u32, 8)?;
             mw.send(b0 as u32, 8)?;

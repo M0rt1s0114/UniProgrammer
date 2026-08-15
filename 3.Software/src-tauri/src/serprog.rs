@@ -218,12 +218,10 @@ impl Serprog {
 
     /// 查询固件名称（可选命令）。
     pub fn program_name(&mut self) -> Option<String> {
-        self.command(S_CMD_Q_PGMNAME, &[], 16)
-            .ok()
-            .map(|d| {
-                let end = d.iter().position(|&b| b == 0).unwrap_or(d.len());
-                String::from_utf8_lossy(&d[..end]).to_string()
-            })
+        self.command(S_CMD_Q_PGMNAME, &[], 16).ok().map(|d| {
+            let end = d.iter().position(|&b| b == 0).unwrap_or(d.len());
+            String::from_utf8_lossy(&d[..end]).to_string()
+        })
     }
 
     /// 查询支持的命令位图（可选命令，调试用）。

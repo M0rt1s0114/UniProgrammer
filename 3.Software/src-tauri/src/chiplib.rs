@@ -128,10 +128,7 @@ impl Chiplib {
                 break; // end record
             }
 
-            let text_end = rec[..0x30]
-                .iter()
-                .position(|&b| b == 0)
-                .unwrap_or(0x30);
+            let text_end = rec[..0x30].iter().position(|&b| b == 0).unwrap_or(0x30);
             let text = String::from_utf8_lossy(&rec[..text_end]);
             let mut fields = text.split(',');
             let _chip_type_txt = fields.next().unwrap_or("");
@@ -308,16 +305,17 @@ impl Chiplib {
         self.entries
             .binary_search_by(|e| e.id.cmp(&key))
             .ok()
-            .and_then(|idx| {
+            .map(|idx| {
                 let entry = &self.entries[idx];
-                let data_slice = &self.data[entry.data_offset as usize..][..entry.data_len as usize];
+                let data_slice =
+                    &self.data[entry.data_offset as usize..][..entry.data_len as usize];
                 let attrs = Self::parse_data_attrs(data_slice);
                 let vendor = attrs.get("vendor").cloned().unwrap_or_default();
                 let model = attrs.get("model").cloned().unwrap_or_default();
                 let protocol = attrs.get("protocol").cloned().unwrap_or_default();
                 let size = attrs.get("size").and_then(|v| v.parse().ok()).unwrap_or(0);
                 let page = attrs.get("page").and_then(|v| v.parse().ok()).unwrap_or(0);
-                Some(ChipInfo {
+                ChipInfo {
                     id: id_str.to_string(),
                     vendor,
                     model,
@@ -325,7 +323,7 @@ impl Chiplib {
                     size,
                     page,
                     attrs,
-                })
+                }
             })
     }
 
@@ -375,7 +373,8 @@ impl Chiplib {
         let mut seen = std::collections::HashSet::new();
         for entry in &self.entries {
             if entry.protocol == proto_id {
-                let data_slice = &self.data[entry.data_offset as usize..][..entry.data_len as usize];
+                let data_slice =
+                    &self.data[entry.data_offset as usize..][..entry.data_len as usize];
                 let attrs = Self::parse_data_attrs(data_slice);
                 if let Some(vendor) = attrs.get("vendor") {
                     if seen.insert(vendor.clone()) {
@@ -394,7 +393,8 @@ impl Chiplib {
         let mut models = Vec::new();
         for entry in &self.entries {
             if entry.protocol == proto_id {
-                let data_slice = &self.data[entry.data_offset as usize..][..entry.data_len as usize];
+                let data_slice =
+                    &self.data[entry.data_offset as usize..][..entry.data_len as usize];
                 let attrs = Self::parse_data_attrs(data_slice);
                 if let Some(vendor) = attrs.get("vendor") {
                     if vendor == vendor_name {
@@ -433,7 +433,11 @@ impl Chiplib {
         };
         let data_start = header.data_offset as usize;
         let data = file[data_start..].to_vec();
-        Ok(Chiplib { entries, data, version: header.version })
+        Ok(Chiplib {
+            entries,
+            data,
+            version: header.version,
+        })
     }
 
     fn load_xml(path: &str) -> Result<Self, String> {
@@ -441,10 +445,22 @@ impl Chiplib {
         let mut entries = Vec::new();
         let mut data_blob = Vec::new();
         let protocol_map: HashMap<&str, u16> = [
-            ("SPI_EC", 0), ("SPI_DATA_45", 1), ("SPI_NAND", 2), ("SPI_NOR", 3),
-            ("SPI_EEPROM", 4), ("SPI_F-RAM", 5), ("I2C", 6), ("I2C_F-RAM", 7),
-            ("I2C_SPD", 8), ("Microwire", 9), ("AVR", 10), ("MCU", 11),
-        ].iter().cloned().collect();
+            ("SPI_EC", 0),
+            ("SPI_DATA_45", 1),
+            ("SPI_NAND", 2),
+            ("SPI_NOR", 3),
+            ("SPI_EEPROM", 4),
+            ("SPI_F-RAM", 5),
+            ("I2C", 6),
+            ("I2C_F-RAM", 7),
+            ("I2C_SPD", 8),
+            ("Microwire", 9),
+            ("AVR", 10),
+            ("MCU", 11),
+        ]
+        .iter()
+        .cloned()
+        .collect();
 
         #[derive(Clone)]
         struct StackItem {
@@ -472,20 +488,25 @@ impl Chiplib {
                     }
 
                     let is_closing = tag_content.starts_with('/');
-                    let mut clean_content = if is_closing { &tag_content[1..] } else { tag_content };
+                    let mut clean_content = if is_closing {
+                        &tag_content[1..]
+                    } else {
+                        tag_content
+                    };
                     clean_content = clean_content.trim();
                     let is_self_closing = clean_content.ends_with('/');
                     if is_self_closing {
-                        clean_content = &clean_content[..clean_content.len()-1].trim();
+                        clean_content = clean_content[..clean_content.len() - 1].trim();
                     }
 
-                    let (tag_name, attr_str) = if let Some(space_idx) = clean_content.find(char::is_whitespace) {
-                        let name = &clean_content[..space_idx];
-                        let rest = clean_content[space_idx..].trim();
-                        (name, rest)
-                    } else {
-                        (clean_content, "")
-                    };
+                    let (tag_name, attr_str) =
+                        if let Some(space_idx) = clean_content.find(char::is_whitespace) {
+                            let name = &clean_content[..space_idx];
+                            let rest = clean_content[space_idx..].trim();
+                            (name, rest)
+                        } else {
+                            (clean_content, "")
+                        };
 
                     if is_closing {
                         if let Some(top) = stack.last() {
@@ -495,13 +516,27 @@ impl Chiplib {
                         }
                     } else {
                         if protocol_map.contains_key(tag_name) {
-                            stack.push(StackItem { tag_type: "protocol".into(), name: tag_name.to_string() });
+                            stack.push(StackItem {
+                                tag_type: "protocol".into(),
+                                name: tag_name.to_string(),
+                            });
                         } else {
-                            let current_protocol = stack.iter().rev().find(|s| s.tag_type == "protocol").map(|s| s.name.clone());
-                            let current_vendor = stack.iter().rev().find(|s| s.tag_type == "vendor").map(|s| s.name.clone());
+                            let current_protocol = stack
+                                .iter()
+                                .rev()
+                                .find(|s| s.tag_type == "protocol")
+                                .map(|s| s.name.clone());
+                            let current_vendor = stack
+                                .iter()
+                                .rev()
+                                .find(|s| s.tag_type == "vendor")
+                                .map(|s| s.name.clone());
                             if let Some(proto) = current_protocol {
                                 if attr_str.is_empty() {
-                                    stack.push(StackItem { tag_type: "vendor".into(), name: tag_name.to_string() });
+                                    stack.push(StackItem {
+                                        tag_type: "vendor".into(),
+                                        name: tag_name.to_string(),
+                                    });
                                 } else {
                                     let attrs = parse_attr_string(attr_str);
                                     let mut id = String::new();
@@ -523,7 +558,8 @@ impl Chiplib {
                                     let data_offset = data_blob.len() as u32;
                                     let data_bytes = attr_pairs.into_bytes();
                                     let data_len = data_bytes.len() as u16;
-                                    let proto_num = protocol_map.get(proto.as_str()).copied().unwrap_or(0xFF);
+                                    let proto_num =
+                                        protocol_map.get(proto.as_str()).copied().unwrap_or(0xFF);
                                     entries.push(IndexEntry {
                                         id: id_bytes,
                                         data_offset,
@@ -544,8 +580,12 @@ impl Chiplib {
             }
         }
 
-        entries.sort_by(|a, b| a.id.cmp(&b.id));
-        Ok(Chiplib { entries, data: data_blob, version: 20250628 })
+        entries.sort_by_key(|a| a.id);
+        Ok(Chiplib {
+            entries,
+            data: data_blob,
+            version: 20250628,
+        })
     }
 
     pub fn save_bin(&self, path: &str) -> Result<(), String> {
@@ -563,11 +603,16 @@ impl Chiplib {
         use std::io::Write;
         file.write_all(unsafe {
             std::slice::from_raw_parts(&header as *const Header as *const u8, size_of::<Header>())
-        }).map_err(|e| e.to_string())?;
+        })
+        .map_err(|e| e.to_string())?;
         for e in &self.entries {
             file.write_all(unsafe {
-                std::slice::from_raw_parts(e as *const IndexEntry as *const u8, size_of::<IndexEntry>())
-            }).map_err(|e| e.to_string())?;
+                std::slice::from_raw_parts(
+                    e as *const IndexEntry as *const u8,
+                    size_of::<IndexEntry>(),
+                )
+            })
+            .map_err(|e| e.to_string())?;
         }
         file.write_all(&self.data).map_err(|e| e.to_string())?;
         Ok(())
@@ -580,7 +625,10 @@ impl Chiplib {
             if let Some(eq_pos) = data[start..].iter().position(|&b| b == b'=') {
                 let key = String::from_utf8_lossy(&data[start..start + eq_pos]).to_string();
                 start += eq_pos + 1;
-                let val_end = data[start..].iter().position(|&b| b == 0).unwrap_or(data.len() - start);
+                let val_end = data[start..]
+                    .iter()
+                    .position(|&b| b == 0)
+                    .unwrap_or(data.len() - start);
                 let val = String::from_utf8_lossy(&data[start..start + val_end]).to_string();
                 map.insert(key, val);
                 start += val_end + 1;
@@ -597,22 +645,34 @@ fn parse_attr_string(s: &str) -> Vec<(String, String)> {
     let mut i = 0;
     let bytes = s.as_bytes();
     while i < bytes.len() {
-        while i < bytes.len() && bytes[i].is_ascii_whitespace() { i += 1; }
-        if i >= bytes.len() { break; }
+        while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+            i += 1;
+        }
+        if i >= bytes.len() {
+            break;
+        }
         let key_start = i;
-        while i < bytes.len() && bytes[i] != b'=' && !bytes[i].is_ascii_whitespace() { i += 1; }
+        while i < bytes.len() && bytes[i] != b'=' && !bytes[i].is_ascii_whitespace() {
+            i += 1;
+        }
         let key = String::from_utf8_lossy(&bytes[key_start..i]).to_string();
-        while i < bytes.len() && (bytes[i] == b'=' || bytes[i].is_ascii_whitespace()) { i += 1; }
+        while i < bytes.len() && (bytes[i] == b'=' || bytes[i].is_ascii_whitespace()) {
+            i += 1;
+        }
         if i < bytes.len() && bytes[i] == b'"' {
             i += 1;
             let val_start = i;
-            while i < bytes.len() && bytes[i] != b'"' { i += 1; }
+            while i < bytes.len() && bytes[i] != b'"' {
+                i += 1;
+            }
             let value = String::from_utf8_lossy(&bytes[val_start..i]).to_string();
             i += 1;
             attrs.push((key, value));
         } else {
             let val_start = i;
-            while i < bytes.len() && !bytes[i].is_ascii_whitespace() { i += 1; }
+            while i < bytes.len() && !bytes[i].is_ascii_whitespace() {
+                i += 1;
+            }
             let value = String::from_utf8_lossy(&bytes[val_start..i]).to_string();
             attrs.push((key, value));
         }

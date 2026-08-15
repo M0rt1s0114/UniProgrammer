@@ -81,7 +81,6 @@ const CH347_CMD_SPI_INIT: u8 = 0xC0;
 #[cfg_attr(not(hal_backend_libusb), allow(dead_code))]
 const CH347_CMD_SPI_CONTROL: u8 = 0xC1;
 #[allow(dead_code)] // kept for the full-duplex path, documented protocol parity
-#[cfg_attr(not(hal_backend_libusb), allow(dead_code))]
 const CH347_CMD_SPI_RD_WR: u8 = 0xC2;
 #[cfg_attr(not(hal_backend_libusb), allow(dead_code))]
 const CH347_CMD_SPI_BLCK_RD: u8 = 0xC3;
@@ -154,8 +153,7 @@ pub trait ProgrammerHal: Send {
 fn swap_byte(x: u8) -> u8 {
     let x = ((x >> 1) & 0x55) | ((x << 1) & 0xAA);
     let x = ((x >> 2) & 0x33) | ((x << 2) & 0xCC);
-    let x = ((x >> 4) & 0x0F) | ((x << 4) & 0xF0);
-    x
+    ((x >> 4) & 0x0F) | ((x << 4) & 0xF0)
 }
 
 /// Pure part of CH341 StreamSPI4 framing: 32 zero bytes + per-packet
@@ -333,7 +331,11 @@ impl Ch341 {
             .read_bulk(CH341_EP_IN, data, USB_TIMEOUT)
             .map_err(|e| format!("CH341 I2C 读取失败: {e}"))?;
         if n != data.len() {
-            return Err(format!("CH341 I2C 读取长度不符: 期望 {} 实际 {}", data.len(), n));
+            return Err(format!(
+                "CH341 I2C 读取长度不符: 期望 {} 实际 {}",
+                data.len(),
+                n
+            ));
         }
         Ok(())
     }
@@ -563,12 +565,12 @@ impl Ch347 {
         Self::put_u16(&mut self.cfg, 6, cpol);
         Self::put_u16(&mut self.cfg, 8, cpha);
         Self::put_u16(&mut self.cfg, 10, 0x0200); // software CS
-        // baud prescaler at offset 12: set_freq overwrites it
+                                                  // baud prescaler at offset 12: set_freq overwrites it
         Self::put_u16(&mut self.cfg, 14, 0x0000); // MSB first
-        // CRC polynomial (offset 16) untouched
+                                                  // CRC polynomial (offset 16) untouched
         Self::put_u16(&mut self.cfg, 18, 0x0000); // write/read interval
         self.cfg[20] = 0x00; // MOSI default data
-        // OtherCfg: keep I2C bits, clear both CS polarities (active low)
+                             // OtherCfg: keep I2C bits, clear both CS polarities (active low)
         self.cfg[21] &= 0x3F;
 
         self.commit_settings()
@@ -725,6 +727,7 @@ mod dll_hal {
     use windows::Win32::System::LibraryLoader::{GetProcAddress, LoadLibraryA};
 
     type FnOpen = unsafe extern "system" fn(u32) -> *mut std::ffi::c_void;
+    type FnGetProc = unsafe extern "system" fn() -> isize;
     type FnClose = unsafe extern "system" fn(u32) -> i32;
     type FnStream = unsafe extern "system" fn(u32, u32, u32, *mut u8) -> i32;
     type FnInit = unsafe extern "system" fn(u32, *const SpiCfg) -> i32;
@@ -848,13 +851,19 @@ mod dll_hal {
             // 芯片类型函数：新 DLL 用 CH347GetChipType，旧纯 CH341 DLL 只有 CH341GetChipType
             let get_type: FnGetChipType = {
                 let name = format!("{}GetChipType", prefix);
-                match unsafe { GetProcAddress(lib, PCSTR(CString::new(name.as_str()).unwrap().as_ptr() as *const u8)) } {
-                    Some(ptr) => unsafe { std::mem::transmute(ptr) },
+                match unsafe {
+                    GetProcAddress(
+                        lib,
+                        PCSTR(CString::new(name.as_str()).unwrap().as_ptr() as *const u8),
+                    )
+                } {
+                    Some(ptr) => unsafe { std::mem::transmute::<FnGetProc, FnGetChipType>(ptr) },
                     None => {
                         let fname = CString::new("CH347GetChipType").unwrap();
-                        let ptr = unsafe { GetProcAddress(lib, PCSTR(fname.as_ptr() as *const u8)) }
-                            .ok_or_else(|| format!("CH34X.DLL 缺少导出函数 {}", name))?;
-                        unsafe { std::mem::transmute(ptr) }
+                        let ptr =
+                            unsafe { GetProcAddress(lib, PCSTR(fname.as_ptr() as *const u8)) }
+                                .ok_or_else(|| format!("CH34X.DLL 缺少导出函数 {}", name))?;
+                        unsafe { std::mem::transmute::<FnGetProc, FnGetChipType>(ptr) }
                     }
                 }
             };
@@ -904,10 +913,9 @@ mod dll_hal {
                         return Err("CH347T/CH347F 不支持 Microwire".into());
                     }
                     let init_name = CString::new("CH347SPI_Init").unwrap();
-                    let init_ptr = unsafe {
-                        GetProcAddress(lib, PCSTR(init_name.as_ptr() as *const u8))
-                    }
-                    .ok_or("CH34X.DLL 缺少导出函数 CH347SPI_Init")?;
+                    let init_ptr =
+                        unsafe { GetProcAddress(lib, PCSTR(init_name.as_ptr() as *const u8)) }
+                            .ok_or("CH34X.DLL 缺少导出函数 CH347SPI_Init")?;
                     let init: FnInit = unsafe { std::mem::transmute(init_ptr) };
                     let cfg = SpiCfg {
                         i_mode: settings.spi_mode,
@@ -978,9 +986,7 @@ mod dll_hal {
 
         fn raw_write(&self, data: &[u8]) -> Result<(), String> {
             let mut len = data.len() as u32;
-            let ret = unsafe {
-                (self.write_data)(self.idx, data.as_ptr() as *mut _, &mut len)
-            };
+            let ret = unsafe { (self.write_data)(self.idx, data.as_ptr() as *mut _, &mut len) };
             if ret == 0 {
                 return Err("DLL WriteData 失败".into());
             }
@@ -989,9 +995,7 @@ mod dll_hal {
 
         fn raw_read(&self, data: &mut [u8]) -> Result<usize, String> {
             let mut len = data.len() as u32;
-            let ret = unsafe {
-                (self.read_data)(self.idx, data.as_mut_ptr() as *mut _, &mut len)
-            };
+            let ret = unsafe { (self.read_data)(self.idx, data.as_mut_ptr() as *mut _, &mut len) };
             if ret == 0 {
                 return Err("DLL ReadData 失败".into());
             }
@@ -1088,7 +1092,9 @@ impl Ch34xDevice {
     pub fn open_with_mode(settings: &Ch34xSettings, mode: DeviceMode) -> Result<Self, String> {
         #[cfg(hal_backend_dll)]
         {
-            return Ok(Ch34xDevice(Box::new(dll_hal::DllHal::open(settings, mode)?)));
+            Ok(Ch34xDevice(Box::new(dll_hal::DllHal::open(
+                settings, mode,
+            )?)))
         }
 
         #[cfg(hal_backend_libusb)]
@@ -1100,13 +1106,15 @@ impl Ch34xDevice {
                     return Err("CH347F 没有 libusb 实现，请使用 Windows DLL 后端".into())
                 }
             };
-            return Ok(Ch34xDevice(device));
+            Ok(Ch34xDevice(device))
         }
 
         #[cfg(not(any(hal_backend_dll, hal_backend_libusb)))]
         {
             let _ = (settings, mode);
-            compile_error!("没有可用的 HAL 后端（build.rs 应设置 hal_backend_dll 或 hal_backend_libusb）");
+            compile_error!(
+                "没有可用的 HAL 后端（build.rs 应设置 hal_backend_dll 或 hal_backend_libusb）"
+            );
         }
     }
 }

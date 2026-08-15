@@ -102,7 +102,10 @@ const matchStart = ref(-1)
 const matchLen = ref(0)
 
 function parseHexPattern(text: string): number[] | null {
-  const tokens = text.trim().split(/[\s,]+/).filter(Boolean)
+  const tokens = text
+    .trim()
+    .split(/[\s,]+/)
+    .filter(Boolean)
   if (tokens.length === 0) return null
   const bytes: number[] = []
   for (const token of tokens) {
@@ -205,16 +208,16 @@ function crc32(data: Uint8Array): number {
     for (let n = 0; n < 256; n++) {
       let c = n
       for (let k = 0; k < 8; k++) {
-        c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1
+        c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1
       }
       crcTable[n] = c >>> 0
     }
   }
-  let crc = 0xFFFFFFFF
+  let crc = 0xffffffff
   for (let i = 0; i < data.length; i++) {
-    crc = (crcTable[(crc ^ data[i]) & 0xFF]! ^ (crc >>> 8)) >>> 0
+    crc = (crcTable[(crc ^ data[i]) & 0xff]! ^ (crc >>> 8)) >>> 0
   }
-  return (crc ^ 0xFFFFFFFF) >>> 0
+  return (crc ^ 0xffffffff) >>> 0
 }
 
 function checksum() {
@@ -223,8 +226,8 @@ function checksum() {
   let sum16 = 0
   let xor8 = 0
   for (let i = 0; i < props.data.length; i++) {
-    sum8 = (sum8 + props.data[i]) & 0xFF
-    sum16 = (sum16 + props.data[i]) & 0xFFFF
+    sum8 = (sum8 + props.data[i]) & 0xff
+    sum16 = (sum16 + props.data[i]) & 0xffff
     xor8 ^= props.data[i]
   }
   const crc = crc32(props.data)
@@ -311,19 +314,22 @@ function scrollToTop() {
 
 defineExpose({ scrollToTop })
 
-watch(() => props.data, () => {
-  editing.value = null
-  matchStart.value = -1
-  matchLen.value = 0
-  scrollToTop()
-})
+watch(
+  () => props.data,
+  () => {
+    editing.value = null
+    matchStart.value = -1
+    matchLen.value = 0
+    scrollToTop()
+  },
+)
 
 let resizeObserver: ResizeObserver | null = null
 
 onMounted(() => {
   if (containerRef.value) {
     containerHeight.value = containerRef.value.clientHeight
-    resizeObserver = new ResizeObserver(entries => {
+    resizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
         const h = entry.contentRect.height
         if (h > 0) containerHeight.value = h
@@ -364,28 +370,51 @@ onUnmounted(() => {
     <div class="hex-toolbar">
       <div class="tool-group">
         <span class="tool-label">{{ t('hex.search') }}</span>
-        <input v-model="searchText" class="tool-input" :placeholder="t('hex.searchPlaceholder')" @keydown.enter="findNext" />
+        <input
+          v-model="searchText"
+          class="tool-input"
+          :placeholder="t('hex.searchPlaceholder')"
+          @keydown.enter="findNext"
+        />
         <button class="btn btn-ghost btn-sm" @click="findNext">»</button>
       </div>
       <div class="tool-group">
         <span class="tool-label">{{ t('hex.goto') }}</span>
-        <input v-model="gotoText" class="tool-input tool-input-addr" :placeholder="t('hex.gotoPlaceholder')" @keydown.enter="gotoAddress" />
+        <input
+          v-model="gotoText"
+          class="tool-input tool-input-addr"
+          :placeholder="t('hex.gotoPlaceholder')"
+          @keydown.enter="gotoAddress"
+        />
         <button class="btn btn-ghost btn-sm" @click="gotoAddress">Go</button>
       </div>
       <div class="tool-group">
         <span class="tool-label">{{ t('hex.fill') }}</span>
-        <input v-model="fillText" class="tool-input tool-input-fill" :placeholder="t('hex.fillPlaceholder')" />
+        <input
+          v-model="fillText"
+          class="tool-input tool-input-fill"
+          :placeholder="t('hex.fillPlaceholder')"
+        />
         <button class="btn btn-ghost btn-sm" @click="fillBuffer">Fill</button>
       </div>
-      <button class="btn btn-ghost btn-sm" :disabled="history.length === 0" @click="undo">{{ t('hex.undo') }}</button>
+      <button class="btn btn-ghost btn-sm" :disabled="history.length === 0" @click="undo">
+        {{ t('hex.undo') }}
+      </button>
       <button class="btn btn-ghost btn-sm" @click="checksum">{{ t('hex.checksum') }}</button>
     </div>
 
     <div ref="containerRef" class="hex-scroll" @scroll="onScroll">
       <div v-if="!data || data.length === 0" class="hex-empty">
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-          <polyline points="14,2 14,8 20,8"/>
+        <svg
+          width="32"
+          height="32"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+        >
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+          <polyline points="14,2 14,8 20,8" />
         </svg>
         <span>{{ t('hex.noData') }}</span>
       </div>
@@ -398,7 +427,9 @@ onUnmounted(() => {
             class="hex-row"
             :style="{ height: ROW_HEIGHT + 'px' }"
           >
-            <span class="col-addr addr-text" :style="{ width: colWidths.addr + 'px' }">{{ row.addr }}</span>
+            <span class="col-addr addr-text" :style="{ width: colWidths.addr + 'px' }">{{
+              row.addr
+            }}</span>
             <span class="col-bytes" :style="{ width: colWidths.bytes + 'px' }">
               <span
                 v-for="(byte, bi) in row.bytes"
@@ -416,7 +447,8 @@ onUnmounted(() => {
                 <input
                   v-if="isEditing(row.rowIndex, bi)"
                   v-model="editing.text"
-                  class="byte-edit"                  maxlength="2"
+                  class="byte-edit"
+                  maxlength="2"
                   @click.stop
                   @keydown.enter="commitEdit"
                   @blur="commitEdit"
@@ -424,7 +456,9 @@ onUnmounted(() => {
                 <template v-else>{{ byte }}</template>
               </span>
             </span>
-            <span class="col-ascii ascii-text" :style="{ width: colWidths.ascii + 'px' }">{{ row.ascii }}</span>
+            <span class="col-ascii ascii-text" :style="{ width: colWidths.ascii + 'px' }">{{
+              row.ascii
+            }}</span>
           </div>
         </div>
       </div>
@@ -465,8 +499,15 @@ onUnmounted(() => {
   user-select: none;
 }
 
-.header-spacer { flex: 1; }
-.edit-hint { text-transform: none; font-weight: 400; font-size: 10px; color: var(--text-muted); }
+.header-spacer {
+  flex: 1;
+}
+.edit-hint {
+  text-transform: none;
+  font-weight: 400;
+  font-size: 10px;
+  color: var(--text-muted);
+}
 
 .col-addr {
   text-align: right;
@@ -501,7 +542,9 @@ onUnmounted(() => {
   transition: background 120ms;
   margin: 0 2px;
 }
-.drag-handle:hover { background: var(--border-accent); }
+.drag-handle:hover {
+  background: var(--border-accent);
+}
 
 .hex-toolbar {
   display: flex;
@@ -514,8 +557,16 @@ onUnmounted(() => {
   overflow-x: auto;
 }
 
-.tool-group { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
-.tool-label { font-size: 10px; color: var(--text-muted); }
+.tool-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.tool-label {
+  font-size: 10px;
+  color: var(--text-muted);
+}
 .tool-input {
   width: 90px;
   background: var(--bg-base);
@@ -526,9 +577,16 @@ onUnmounted(() => {
   font-size: 11px;
   padding: 2px 6px;
 }
-.tool-input:focus { outline: none; border-color: var(--border-focus); }
-.tool-input-addr { width: 78px; }
-.tool-input-fill { width: 96px; }
+.tool-input:focus {
+  outline: none;
+  border-color: var(--border-focus);
+}
+.tool-input-addr {
+  width: 78px;
+}
+.tool-input-fill {
+  width: 96px;
+}
 
 .hex-scroll {
   flex: 1;
@@ -552,7 +610,9 @@ onUnmounted(() => {
   padding: 0 10px;
   transition: background 60ms;
 }
-.hex-row:hover { background: var(--accent-subtle); }
+.hex-row:hover {
+  background: var(--accent-subtle);
+}
 
 .addr-text {
   text-align: right;
@@ -573,12 +633,25 @@ onUnmounted(() => {
   cursor: crosshair;
   border-radius: 2px;
 }
-.byte-cell:hover { background: var(--bg-overlay); }
-.byte-null { color: var(--text-muted); }
-.byte-ff { color: var(--color-warn); }
-.byte-pad { color: transparent; cursor: default; }
-.byte-hit { background: rgba(74, 158, 255, 0.25); }
-.byte-editing { background: var(--bg-overlay); }
+.byte-cell:hover {
+  background: var(--bg-overlay);
+}
+.byte-null {
+  color: var(--text-muted);
+}
+.byte-ff {
+  color: var(--color-warn);
+}
+.byte-pad {
+  color: transparent;
+  cursor: default;
+}
+.byte-hit {
+  background: rgba(74, 158, 255, 0.25);
+}
+.byte-editing {
+  background: var(--bg-overlay);
+}
 
 .byte-edit {
   width: 100%;
@@ -592,7 +665,9 @@ onUnmounted(() => {
   text-align: center;
   padding: 0;
 }
-.byte-edit:focus { outline: none; }
+.byte-edit:focus {
+  outline: none;
+}
 
 .ascii-text {
   padding-left: 12px;

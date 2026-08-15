@@ -144,8 +144,8 @@ export const useProgStore = defineStore('prog', () => {
     try {
       await invoke('load_chip_lib')
       chipTypes.value = await invoke('get_chip_types')
-    } catch (e: any) {
-      addLog(`芯片库初始化失败: ${e}`, 'error')
+    } catch (e: unknown) {
+      addLog(`芯片库初始化失败: ${String(e)}`, 'error')
     }
   }
 
@@ -153,8 +153,8 @@ export const useProgStore = defineStore('prog', () => {
   async function loadChipVendorsDirect(protocol: string): Promise<string[]> {
     try {
       return await invoke('get_chip_vendors', { protocol })
-    } catch (e: any) {
-      addLog(`加载厂商失败: ${e}`, 'error')
+    } catch (e: unknown) {
+      addLog(`加载厂商失败: ${String(e)}`, 'error')
       return []
     }
   }
@@ -162,8 +162,8 @@ export const useProgStore = defineStore('prog', () => {
   async function loadChipModelsDirect(protocol: string, vendor: string): Promise<string[]> {
     try {
       return await invoke('get_chip_models', { protocol, vendor })
-    } catch (e: any) {
-      addLog(`加载型号失败: ${e}`, 'error')
+    } catch (e: unknown) {
+      addLog(`加载型号失败: ${String(e)}`, 'error')
       return []
     }
   }
@@ -201,17 +201,17 @@ export const useProgStore = defineStore('prog', () => {
     chipDetails.value = null
     if (!selectedType.value || !selectedVendor.value || !selectedModel.value) return
     try {
-      const info = await invoke('get_chip_info', {
+      const info = (await invoke('get_chip_info', {
         protocol: selectedType.value,
         vendor: selectedVendor.value,
         model: selectedModel.value,
-      }) as DetectedChipInfo
+      })) as DetectedChipInfo
       chipDetected.value = true
       detectedChipSize.value = info.size
       chipDetails.value = info
       addLog(`已选择: ${info.vendor} ${info.model} (${formatBytes(info.size)})`, 'success')
-    } catch (e: any) {
-      addLog(`加载芯片参数失败: ${e}`, 'error')
+    } catch (e: unknown) {
+      addLog(`加载芯片参数失败: ${String(e)}`, 'error')
     }
   }
 
@@ -225,12 +225,12 @@ export const useProgStore = defineStore('prog', () => {
     }
     addLog('正在初始化 CH34X...')
     try {
-      const msg = await invoke('initialize', {
+      const msg = (await invoke('initialize', {
         kind,
         vcc18v: vcc18v.value,
         spiMode: spiMode.value,
         freqKhz: spiFreq.value,
-      }) as string
+      })) as string
       status.value = 'success'
       connectedDevice.value = msg
       addLog(msg, 'success')
@@ -240,10 +240,10 @@ export const useProgStore = defineStore('prog', () => {
       if (chipTypes.value.length === 0) {
         await loadLibAndTypes()
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       status.value = 'error'
       connectedDevice.value = ''
-      addLog(`初始化失败: ${e}`, 'error')
+      addLog(`初始化失败: ${String(e)}`, 'error')
     }
   }
 
@@ -256,7 +256,7 @@ export const useProgStore = defineStore('prog', () => {
     }
     addLog(`正在连接 serprog (${port})...`)
     try {
-      const msg = await invoke('connect_serprog', { port }) as string
+      const msg = (await invoke('connect_serprog', { port })) as string
       status.value = 'success'
       connectedDevice.value = msg
       addLog(msg, 'success')
@@ -266,9 +266,9 @@ export const useProgStore = defineStore('prog', () => {
       if (chipTypes.value.length === 0) {
         await loadLibAndTypes()
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       status.value = 'error'
-      addLog(`serprog 连接失败: ${e}`, 'error')
+      addLog(`serprog 连接失败: ${String(e)}`, 'error')
     }
   }
 
@@ -281,8 +281,8 @@ export const useProgStore = defineStore('prog', () => {
       filePath.value = file.name
       fileSize.value = file.size
       addLog(`已加载文件: ${file.name} (${formatBytes(file.size)})`, 'success')
-    } catch (e: any) {
-      addLog(`文件加载失败: ${e}`, 'error')
+    } catch (e: unknown) {
+      addLog(`文件加载失败: ${String(e)}`, 'error')
     }
   }
 
@@ -296,8 +296,8 @@ export const useProgStore = defineStore('prog', () => {
       filePath.value = path
       fileSize.value = bytes.length
       addLog(`已加载文件: ${path} (${formatBytes(bytes.length)})`, 'success')
-    } catch (e: any) {
-      addLog(`文件加载失败: ${e}`, 'error')
+    } catch (e: unknown) {
+      addLog(`文件加载失败: ${String(e)}`, 'error')
     }
   }
 
@@ -305,32 +305,62 @@ export const useProgStore = defineStore('prog', () => {
   async function convertLib() {
     addLog('正在转换芯片库...')
     try {
-      const msg = await invoke('convert_chip_lib') as string
+      const msg = (await invoke('convert_chip_lib')) as string
       addLog(msg, 'success')
-    } catch (e: any) {
-      addLog(`转换失败: ${e}`, 'error')
+    } catch (e: unknown) {
+      addLog(`转换失败: ${String(e)}`, 'error')
     }
   }
 
   return {
-    status, connectedDevice,
-    vcc18v, spiMode, spiFreq,
-    vccOutputEnabled, vccTargetMv, vccFollowChip, vccChipMv,
-    detectStatus, chipInfo, chipDetails,
-    isRunning, currentOp, progress, progressMessage,
+    status,
+    connectedDevice,
+    vcc18v,
+    spiMode,
+    spiFreq,
+    vccOutputEnabled,
+    vccTargetMv,
+    vccFollowChip,
+    vccChipMv,
+    detectStatus,
+    chipInfo,
+    chipDetails,
+    isRunning,
+    currentOp,
+    progress,
+    progressMessage,
     hexData,
-    filePath, fileSize,
-    startAddr, lengthVal,
+    filePath,
+    fileSize,
+    startAddr,
+    lengthVal,
     verifyAfterWrite,
     logs,
-    chipTypes, chipVendors, chipModels,
-    selectedType, selectedVendor, selectedModel,
-    chipDetected, detectedChipSize,
-    isConnected, canDetect, canSearch, canOperate, isSpiNor,
-    addLog, clearLogs,
-    loadLibAndTypes, loadChipVendorsDirect, loadChipModelsDirect,
-    onTypeChanged, onVendorChanged, onModelChanged,
-    initCh34x, connectSerprog,
-    loadFile, openFileViaDialog, convertLib,
+    chipTypes,
+    chipVendors,
+    chipModels,
+    selectedType,
+    selectedVendor,
+    selectedModel,
+    chipDetected,
+    detectedChipSize,
+    isConnected,
+    canDetect,
+    canSearch,
+    canOperate,
+    isSpiNor,
+    addLog,
+    clearLogs,
+    loadLibAndTypes,
+    loadChipVendorsDirect,
+    loadChipModelsDirect,
+    onTypeChanged,
+    onVendorChanged,
+    onModelChanged,
+    initCh34x,
+    connectSerprog,
+    loadFile,
+    openFileViaDialog,
+    convertLib,
   }
 })

@@ -222,7 +222,8 @@ const en: MessageRecord = {
   'vcc.offHint': 'Voltage output disabled (hardware defaults to no output at power-up)',
   'vcc.statusOn': 'VCC ON',
   'vcc.modalTitle': 'Enable VCC Output?',
-  'vcc.modalBody': 'Enabling voltage output may damage the target chip, the programmer, or the computer USB port. Verify the target chip supply voltage first.',
+  'vcc.modalBody':
+    'Enabling voltage output may damage the target chip, the programmer, or the computer USB port. Verify the target chip supply voltage first.',
   'vcc.typeHint': 'Type "{0}" to enable',
   'vcc.enablePhrase': 'Enable',
   'vcc.changeTitle': 'Change Target Voltage',
@@ -237,7 +238,8 @@ const en: MessageRecord = {
 
   // Erase confirm modal
   'modal.eraseTitle': 'Confirm Full Chip Erase',
-  'modal.eraseBody': 'This will irreversibly erase the entire chip. All data will become FF.\nPlease make sure you have backed up important data.',
+  'modal.eraseBody':
+    'This will irreversibly erase the entire chip. All data will become FF.\nPlease make sure you have backed up important data.',
 
   // Log console
   'log.autoScroll': 'Auto-scroll',

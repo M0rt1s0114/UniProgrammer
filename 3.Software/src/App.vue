@@ -11,11 +11,17 @@ import StatusBar from '@/components/StatusBar.vue'
 const store = useProgStore()
 const appWindow = getCurrentWindow()
 
-function minimizeWindow() { appWindow.minimize() }
-function maximizeWindow() { appWindow.toggleMaximize() }
-function closeWindow()    { appWindow.close() }
+function minimizeWindow() {
+  appWindow.minimize()
+}
+function maximizeWindow() {
+  appWindow.toggleMaximize()
+}
+function closeWindow() {
+  appWindow.close()
+}
 
-const localeLabel = computed(() => locale.value === 'zh' ? 'EN' : '中')
+const localeLabel = computed(() => (locale.value === 'zh' ? 'EN' : '中'))
 function toggleLocale() {
   setLocale(locale.value === 'zh' ? 'en' : 'zh')
 }
@@ -49,10 +55,17 @@ onMounted(() => {
   <div class="app-shell" :class="{ 'is-resizing': isResizing }">
     <header class="titlebar" data-tauri-drag-region>
       <div class="titlebar-icon">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-          <rect x="2" y="6" width="20" height="12" rx="2"/>
-          <path d="M8 6V4M12 6V4M16 6V4M8 18v2M12 18v2M16 18v2"/>
-          <path d="M6 10h2M10 10h2M14 10h2"/>
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+        >
+          <rect x="2" y="6" width="20" height="12" rx="2" />
+          <path d="M8 6V4M12 6V4M16 6V4M8 18v2M12 18v2M16 18v2" />
+          <path d="M6 10h2M10 10h2M14 10h2" />
         </svg>
       </div>
       <span class="titlebar-title">{{ t('app.title') }}</span>
@@ -62,14 +75,30 @@ onMounted(() => {
         {{ localeLabel }}
       </button>
       <div class="wc-group">
-        <button class="wc-btn wc-minimize" @click="minimizeWindow" :title="t('app.minimize')">
-          <svg width="10" height="10" viewBox="0 0 10 10"><line x1="1" y1="5" x2="9" y2="5" stroke="currentColor" stroke-width="1.5"/></svg>
+        <button class="wc-btn wc-minimize" :title="t('app.minimize')" @click="minimizeWindow">
+          <svg width="10" height="10" viewBox="0 0 10 10">
+            <line x1="1" y1="5" x2="9" y2="5" stroke="currentColor" stroke-width="1.5" />
+          </svg>
         </button>
-        <button class="wc-btn wc-maximize" @click="maximizeWindow" :title="t('app.maximize')">
-          <svg width="10" height="10" viewBox="0 0 10 10"><rect x1="1.5" y1="1.5" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
+        <button class="wc-btn wc-maximize" :title="t('app.maximize')" @click="maximizeWindow">
+          <svg width="10" height="10" viewBox="0 0 10 10">
+            <rect
+              x1="1.5"
+              y1="1.5"
+              width="7"
+              height="7"
+              rx="1"
+              stroke="currentColor"
+              stroke-width="1.5"
+              fill="none"
+            />
+          </svg>
         </button>
-        <button class="wc-btn wc-close" @click="closeWindow" :title="t('app.close')">
-          <svg width="10" height="10" viewBox="0 0 10 10"><line x1="1.5" y1="1.5" x2="8.5" y2="8.5" stroke="currentColor" stroke-width="1.5"/><line x1="8.5" y1="1.5" x2="1.5" y2="8.5" stroke="currentColor" stroke-width="1.5"/></svg>
+        <button class="wc-btn wc-close" :title="t('app.close')" @click="closeWindow">
+          <svg width="10" height="10" viewBox="0 0 10 10">
+            <line x1="1.5" y1="1.5" x2="8.5" y2="8.5" stroke="currentColor" stroke-width="1.5" />
+            <line x1="8.5" y1="1.5" x2="1.5" y2="8.5" stroke="currentColor" stroke-width="1.5" />
+          </svg>
         </button>
       </div>
     </header>
@@ -82,12 +111,19 @@ onMounted(() => {
       <main class="content">
         <div class="hex-pane">
           <div class="pane-bar">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="2" y="3" width="20" height="18" rx="2"/>
-              <line x1="8" y1="3" x2="8" y2="21"/>
-              <line x1="14" y1="3" x2="14" y2="21"/>
-              <line x1="2" y1="9" x2="22" y2="9"/>
-              <line x1="2" y1="15" x2="22" y2="15"/>
+            <svg
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <rect x="2" y="3" width="20" height="18" rx="2" />
+              <line x1="8" y1="3" x2="8" y2="21" />
+              <line x1="14" y1="3" x2="14" y2="21" />
+              <line x1="2" y1="9" x2="22" y2="9" />
+              <line x1="2" y1="15" x2="22" y2="15" />
             </svg>
             <span class="pane-bar-title">{{ t('pane.hexView') }}</span>
             <div class="pane-bar-spacer" />
@@ -97,22 +133,40 @@ onMounted(() => {
           </div>
         </div>
 
-        <div class="resize-handle" @mousedown="onDividerMouseDown" :title="t('app.dragToResize')">
+        <div class="resize-handle" :title="t('app.dragToResize')" @mousedown="onDividerMouseDown">
           <div class="resize-grip" />
         </div>
 
         <div class="log-pane" :style="{ height: logHeight + 'px' }">
           <div class="pane-bar">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="4 17 10 11 4 5"/>
-              <line x1="12" y1="19" x2="20" y2="19"/>
+            <svg
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <polyline points="4 17 10 11 4 5" />
+              <line x1="12" y1="19" x2="20" y2="19" />
             </svg>
             <span class="pane-bar-title">{{ t('pane.outputLog') }}</span>
             <div class="pane-bar-spacer" />
-            <button class="btn btn-ghost btn-sm" @click="store.clearLogs()" :data-tooltip="t('action.clearLog')">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="3 6 5 6 21 6"/>
-                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+            <button
+              class="btn btn-ghost btn-sm"
+              :data-tooltip="t('action.clearLog')"
+              @click="store.clearLogs()"
+            >
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
               </svg>
             </button>
           </div>
@@ -136,7 +190,10 @@ onMounted(() => {
   background: var(--bg-base);
   border-radius: 12px;
 }
-.app-shell.is-resizing { cursor: ns-resize; user-select: none; }
+.app-shell.is-resizing {
+  cursor: ns-resize;
+  user-select: none;
+}
 
 .titlebar {
   display: flex;
@@ -149,11 +206,27 @@ onMounted(() => {
   flex-shrink: 0;
   -webkit-app-region: drag;
 }
-.titlebar button { -webkit-app-region: no-drag; }
-.titlebar-icon { color: var(--accent); display: flex; align-items: center; }
-.titlebar-title { font-size: 13px; font-weight: 600; letter-spacing: 0.04em; color: var(--text-primary); }
-.titlebar-version { font-family: var(--font-mono); font-size: 10px; }
-.titlebar-spacer { flex: 1; }
+.titlebar button {
+  -webkit-app-region: no-drag;
+}
+.titlebar-icon {
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+}
+.titlebar-title {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-primary);
+}
+.titlebar-version {
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+.titlebar-spacer {
+  flex: 1;
+}
 
 .locale-btn {
   display: flex;
@@ -169,51 +242,130 @@ onMounted(() => {
   font-size: 11px;
   font-weight: 500;
   cursor: pointer;
-  transition: background 120ms, color 120ms;
+  transition:
+    background 120ms,
+    color 120ms;
 }
 .locale-btn:hover {
   background: var(--bg-elevated);
   color: var(--text-primary);
 }
 
-.wc-group { display: flex; align-items: center; gap: 2px; -webkit-app-region: no-drag; margin-right: -8px; }
-.wc-btn {
-  display: flex; align-items: center; justify-content: center;
-  width: 40px; height: 40px; border: none;
-  background: transparent; color: var(--text-muted);
-  cursor: pointer; transition: background 120ms, color 120ms;
+.wc-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  -webkit-app-region: no-drag;
+  margin-right: -8px;
 }
-.wc-btn:hover { background: var(--bg-elevated); color: var(--text-primary); }
-.wc-close:hover { background: #e81123; color: #fff; }
+.wc-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    background 120ms,
+    color 120ms;
+}
+.wc-btn:hover {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+.wc-close:hover {
+  background: #e81123;
+  color: #fff;
+}
 
-.app-body { display: flex; flex: 1; overflow: hidden; min-height: 0; }
-.sidebar { width: 230px; flex-shrink: 0; overflow-y: auto; background: var(--bg-surface); }
-.sidebar-divider { width: 1px; background: var(--border); flex-shrink: 0; }
-.content { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 0; }
+.app-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+.sidebar {
+  width: 230px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  background: var(--bg-surface);
+}
+.sidebar-divider {
+  width: 1px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+.content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
 
 .pane-bar {
-  display: flex; align-items: center; gap: 6px;
-  padding: 0 10px; height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  height: 32px;
   background: var(--bg-surface);
   border-bottom: 1px solid var(--border);
-  flex-shrink: 0; color: var(--text-muted);
+  flex-shrink: 0;
+  color: var(--text-muted);
 }
-.pane-bar-title { font-size: 11px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-secondary); }
-.pane-bar-spacer { flex: 1; }
+.pane-bar-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.pane-bar-spacer {
+  flex: 1;
+}
 
-.hex-pane { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 0; }
-.pane-body { flex: 1; overflow: hidden; }
+.hex-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+.pane-body {
+  flex: 1;
+  overflow: hidden;
+}
 
 .resize-handle {
-  height: 5px; flex-shrink: 0;
+  height: 5px;
+  flex-shrink: 0;
   background: var(--bg-surface);
   border-top: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
-  cursor: ns-resize; display: flex; align-items: center; justify-content: center;
+  cursor: ns-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   transition: background 120ms;
 }
-.resize-handle:hover { background: var(--bg-elevated); }
-.resize-grip { width: 32px; height: 2px; border-radius: 1px; background: var(--border); }
+.resize-handle:hover {
+  background: var(--bg-elevated);
+}
+.resize-grip {
+  width: 32px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--border);
+}
 
-.log-pane { display: flex; flex-direction: column; flex-shrink: 0; overflow: hidden; }
+.log-pane {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  overflow: hidden;
+}
 </style>

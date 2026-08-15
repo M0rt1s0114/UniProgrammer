@@ -37,12 +37,18 @@ const spiFreqOptions: UiOption[] = [
   { value: 469, label: '468.75 KHz' },
 ]
 
-const chipTypeOptions = computed<UiOption[]>(() => store.chipTypes.map(v => ({ value: v, label: v })))
-const chipVendorOptions = computed<UiOption[]>(() => store.chipVendors.map(v => ({ value: v, label: v })))
-const chipModelOptions = computed<UiOption[]>(() => store.chipModels.map(v => ({ value: v, label: v })))
+const chipTypeOptions = computed<UiOption[]>(() =>
+  store.chipTypes.map((v) => ({ value: v, label: v })),
+)
+const chipVendorOptions = computed<UiOption[]>(() =>
+  store.chipVendors.map((v) => ({ value: v, label: v })),
+)
+const chipModelOptions = computed<UiOption[]>(() =>
+  store.chipModels.map((v) => ({ value: v, label: v })),
+)
 
 // VCC 输出（高危功能，默认关闭）
-const vccVoltageOptions: UiOption[] = [1200, 1800, 2500, 3300].map(mv => ({
+const vccVoltageOptions: UiOption[] = [1200, 1800, 2500, 3300].map((mv) => ({
   value: mv,
   label: `${(mv / 1000).toFixed(1)} V`,
 }))
@@ -50,9 +56,7 @@ const vccModal = ref<'enable' | 'change' | null>(null)
 const vccConfirmText = ref('')
 const pendingVccTarget = ref<number | null>(null)
 const voltageLabel = computed(() => (store.vccTargetMv / 1000).toFixed(1))
-const vccEnableHint = computed(() =>
-  t('vcc.typeHint').replace('{0}', t('vcc.enablePhrase')),
-)
+const vccEnableHint = computed(() => t('vcc.typeHint').replace('{0}', t('vcc.enablePhrase')))
 const vccChangeHint = computed(() => {
   if (pendingVccTarget.value === null) return ''
   return t('vcc.changePhraseHint').replace('{0}', (pendingVccTarget.value / 1000).toFixed(1))
@@ -89,7 +93,10 @@ function requestVccTarget(mv: number) {
 function onVccFollowChange() {
   if (store.vccFollowChip && store.vccChipMv !== null) {
     store.vccTargetMv = store.vccChipMv
-    store.addLog(t('vcc.followLog').replace('{0}', (store.vccChipMv / 1000).toFixed(1)), 'functionTest')
+    store.addLog(
+      t('vcc.followLog').replace('{0}', (store.vccChipMv / 1000).toFixed(1)),
+      'functionTest',
+    )
   }
 }
 
@@ -139,7 +146,11 @@ async function confirmErase() {
 }
 
 async function connect() {
-  if (programmerType.value === 'ch341' || programmerType.value === 'ch347' || programmerType.value === 'ch347f') {
+  if (
+    programmerType.value === 'ch341' ||
+    programmerType.value === 'ch347' ||
+    programmerType.value === 'ch347f'
+  ) {
     await store.initCh34x(programmerType.value)
   } else if (programmerType.value === 'hidprog') {
     // 预留给自有 HIDProg 编程器项目，暂不实现任何功能
@@ -174,51 +185,84 @@ onMounted(async () => {
 
 <template>
   <div class="op-panel">
-
     <!-- ── 编程器连接 ── -->
     <section class="panel-section">
       <div class="section-label">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="2" y="3" width="20" height="14" rx="2"/>
-          <path d="M8 21h8M12 17v4"/>
+        <svg
+          width="13"
+          height="13"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <rect x="2" y="3" width="20" height="14" rx="2" />
+          <path d="M8 21h8M12 17v4" />
         </svg>
         {{ t('section.programmer') }}
       </div>
 
       <div class="field">
         <label class="field-label">{{ t('label.type') }}</label>
-        <UiSelect v-model="programmerType" :options="programmerOptions" :disabled="store.status === 'running'" />
+        <UiSelect
+          v-model="programmerType"
+          :options="programmerOptions"
+          :disabled="store.status === 'running'"
+        />
       </div>
 
-      <div v-if="programmerType === 'ch341' || programmerType === 'ch347'" class="field" style="margin-top: 6px;">
-        <label class="toggle-row" style="cursor: pointer;">
+      <div
+        v-if="programmerType === 'ch341' || programmerType === 'ch347'"
+        class="field"
+        style="margin-top: 6px"
+      >
+        <label class="toggle-row" style="cursor: pointer">
           <input v-model="store.vcc18v" type="checkbox" class="toggle-check" />
           <span class="toggle-text">{{ t('label.vcc18Adapter') }}</span>
         </label>
       </div>
 
-      <div v-if="programmerType === 'ch347' || programmerType === 'ch347f'" class="field" style="margin-top: 6px;">
+      <div
+        v-if="programmerType === 'ch347' || programmerType === 'ch347f'"
+        class="field"
+        style="margin-top: 6px"
+      >
         <label class="field-label">{{ t('label.spiMode') }}</label>
         <UiSelect v-model="store.spiMode" :options="spiModeOptions" />
       </div>
 
-      <div v-if="programmerType === 'ch347' || programmerType === 'ch347f'" class="field" style="margin-top: 6px;">
+      <div
+        v-if="programmerType === 'ch347' || programmerType === 'ch347f'"
+        class="field"
+        style="margin-top: 6px"
+      >
         <label class="field-label">{{ t('label.spiClock') }}</label>
         <UiSelect v-model="store.spiFreq" :options="spiFreqOptions" />
       </div>
 
-      <div v-if="programmerType === 'serprog'" class="field" style="margin-top: 6px;">
+      <div v-if="programmerType === 'serprog'" class="field" style="margin-top: 6px">
         <label class="field-label">{{ t('label.serialPort') }}</label>
         <input v-model="serialPort" class="input" :placeholder="t('placeholder.serialPort')" />
       </div>
 
-      <button class="btn btn-primary w-full" style="margin-top: 8px;" @click="connect" :disabled="store.status === 'running'">
+      <button
+        class="btn btn-primary w-full"
+        style="margin-top: 8px"
+        :disabled="store.status === 'running'"
+        @click="connect"
+      >
         {{ store.status === 'success' ? t('action.reconnect') : t('action.connect') }}
       </button>
 
       <!-- 设备名称已移至状态栏，此处移除 -->
       <!-- 转换芯片库按钮隐藏但保留代码 -->
-      <button class="btn btn-ghost btn-sm" style="margin-top: 4px; display: none;" @click="store.convertLib()">转换芯片库 (XML→BIN)</button>
+      <button
+        class="btn btn-ghost btn-sm"
+        style="margin-top: 4px; display: none"
+        @click="store.convertLib()"
+      >
+        转换芯片库 (XML→BIN)
+      </button>
     </section>
 
     <div class="divider" />
@@ -230,11 +274,21 @@ onMounted(async () => {
       <button class="btn btn-secondary w-full" @click="openFileDialog">
         {{ t('action.openFile') }}
       </button>
-      <div style="display: flex; gap: 8px;">
-        <button class="btn btn-ghost btn-sm" style="flex: 1;" :disabled="!store.hexData" @click="spiNor.saveFileNative('bin')">
+      <div style="display: flex; gap: 8px">
+        <button
+          class="btn btn-ghost btn-sm"
+          style="flex: 1"
+          :disabled="!store.hexData"
+          @click="spiNor.saveFileNative('bin')"
+        >
           {{ t('action.saveBin') }}
         </button>
-        <button class="btn btn-ghost btn-sm" style="flex: 1;" :disabled="!store.hexData" @click="spiNor.saveFileNative('hex')">
+        <button
+          class="btn btn-ghost btn-sm"
+          style="flex: 1"
+          :disabled="!store.hexData"
+          @click="spiNor.saveFileNative('hex')"
+        >
           {{ t('action.saveHex') }}
         </button>
       </div>
@@ -246,33 +300,67 @@ onMounted(async () => {
     <!-- ── 芯片选择 ── -->
     <section class="panel-section">
       <div class="section-label">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="2" y="6" width="20" height="12" rx="2"/>
-          <path d="M8 6V4M12 6V4M16 6V4M8 18v2M12 18v2M16 18v2"/>
+        <svg
+          width="13"
+          height="13"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <rect x="2" y="6" width="20" height="12" rx="2" />
+          <path d="M8 6V4M12 6V4M16 6V4M8 18v2M12 18v2M16 18v2" />
         </svg>
         {{ t('section.chip') }}
       </div>
 
       <div class="field">
         <label class="field-label">{{ t('label.type') }}</label>
-        <UiSelect v-model="store.selectedType" :options="chipTypeOptions" :placeholder="t('placeholder.selectType')" @change="onTypeChange" />
+        <UiSelect
+          v-model="store.selectedType"
+          :options="chipTypeOptions"
+          :placeholder="t('placeholder.selectType')"
+          @change="onTypeChange"
+        />
       </div>
 
-      <div class="field" style="margin-top: 6px;">
+      <div class="field" style="margin-top: 6px">
         <label class="field-label">{{ t('label.vendor') }}</label>
-        <UiSelect v-model="store.selectedVendor" :options="chipVendorOptions" :placeholder="t('placeholder.selectVendor')" :disabled="!store.selectedType" @change="onVendorChange" />
+        <UiSelect
+          v-model="store.selectedVendor"
+          :options="chipVendorOptions"
+          :placeholder="t('placeholder.selectVendor')"
+          :disabled="!store.selectedType"
+          @change="onVendorChange"
+        />
       </div>
 
-      <div class="field" style="margin-top: 6px;">
+      <div class="field" style="margin-top: 6px">
         <label class="field-label">{{ t('label.model') }}</label>
-        <UiSelect v-model="store.selectedModel" :options="chipModelOptions" :placeholder="t('placeholder.selectModel')" :disabled="!store.selectedVendor" @change="onModelChange" />
+        <UiSelect
+          v-model="store.selectedModel"
+          :options="chipModelOptions"
+          :placeholder="t('placeholder.selectModel')"
+          :disabled="!store.selectedVendor"
+          @change="onModelChange"
+        />
       </div>
 
-      <div style="display: flex; gap: 8px; margin-top: 8px;">
-        <button class="btn btn-secondary" style="flex: 1;" :disabled="!store.canDetect" @click="spiNor.detectChip()">
+      <div style="display: flex; gap: 8px; margin-top: 8px">
+        <button
+          class="btn btn-secondary"
+          style="flex: 1"
+          :disabled="!store.canDetect"
+          @click="spiNor.detectChip()"
+        >
           {{ t('action.detect') }}
         </button>
-        <button class="btn btn-secondary" style="flex: 1;" :disabled="!store.canSearch" @click="store.onModelChanged()">
+        <button
+          class="btn btn-secondary"
+          style="flex: 1"
+          :disabled="!store.canSearch"
+          @click="store.onModelChanged()"
+        >
           {{ t('action.search') }}
         </button>
       </div>
@@ -284,13 +372,34 @@ onMounted(async () => {
     <section class="panel-section">
       <div class="section-label">{{ t('section.chipInfo') }}</div>
       <div v-if="store.chipDetected && store.chipDetails" class="chip-info">
-        <div class="chip-info-line">{{ store.chipDetails.vendor }} {{ store.chipDetails.model }}</div>
+        <div class="chip-info-line">
+          {{ store.chipDetails.vendor }} {{ store.chipDetails.model }}
+        </div>
         <div class="chip-info-line">{{ t('chipInfo.jedec') }} {{ store.chipDetails.id }}</div>
-        <div class="chip-info-line">{{ t('chipInfo.capacity') }} {{ formatBytes(store.chipDetails.size) }}</div>
-        <div class="chip-info-line">{{ t('chipInfo.page') }} {{ store.chipDetails.page }} B<span v-if="store.chipDetails.sector"> · {{ t('chipInfo.sector') }} {{ store.chipDetails.sector }} B</span></div>
-        <div class="chip-info-line" v-if="store.chipDetails.block">{{ t('chipInfo.block') }} {{ formatBytes(store.chipDetails.block) }}</div>
-        <div class="chip-info-line" v-if="store.chipDetails.vcc">{{ t('chipInfo.vcc') }} {{ store.chipDetails.vcc }} V</div>
-        <div class="chip-info-line">{{ t('chipInfo.addr4') }} {{ store.chipDetails.addr4bit && (store.chipDetails.addr4bit & 0x0f) ? t('common.yes') : t('common.no') }}</div>
+        <div class="chip-info-line">
+          {{ t('chipInfo.capacity') }} {{ formatBytes(store.chipDetails.size) }}
+        </div>
+        <div class="chip-info-line">
+          {{ t('chipInfo.page') }} {{ store.chipDetails.page }} B<span
+            v-if="store.chipDetails.sector"
+          >
+            · {{ t('chipInfo.sector') }} {{ store.chipDetails.sector }} B</span
+          >
+        </div>
+        <div v-if="store.chipDetails.block" class="chip-info-line">
+          {{ t('chipInfo.block') }} {{ formatBytes(store.chipDetails.block) }}
+        </div>
+        <div v-if="store.chipDetails.vcc" class="chip-info-line">
+          {{ t('chipInfo.vcc') }} {{ store.chipDetails.vcc }} V
+        </div>
+        <div class="chip-info-line">
+          {{ t('chipInfo.addr4') }}
+          {{
+            store.chipDetails.addr4bit && store.chipDetails.addr4bit & 0x0f
+              ? t('common.yes')
+              : t('common.no')
+          }}
+        </div>
       </div>
       <div v-else class="chip-placeholder">{{ t('chipInfo.none') }}</div>
     </section>
@@ -300,8 +409,15 @@ onMounted(async () => {
     <!-- ── 电压调节 ── -->
     <section class="panel-section">
       <div class="section-label">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+        <svg
+          width="13"
+          height="13"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
         </svg>
         {{ t('section.vcc') }}
       </div>
@@ -336,7 +452,9 @@ onMounted(async () => {
       >
         {{ store.vccOutputEnabled ? t('vcc.disconnectPower') : t('vcc.connectPower') }}
       </button>
-      <div v-if="store.vccOutputEnabled" class="vcc-status">{{ t('vcc.statusOn') }} · {{ voltageLabel }} {{ t('vcc.voltageUnit') }}</div>
+      <div v-if="store.vccOutputEnabled" class="vcc-status">
+        {{ t('vcc.statusOn') }} · {{ voltageLabel }} {{ t('vcc.voltageUnit') }}
+      </div>
       <div v-if="!store.vccOutputEnabled" class="vcc-hint">{{ t('vcc.offHint') }}</div>
     </section>
 
@@ -346,19 +464,35 @@ onMounted(async () => {
     <section class="panel-section">
       <div class="section-label">{{ t('section.operations') }}</div>
 
-      <button class="btn btn-secondary w-full op-btn" :disabled="!store.canOperate" @click="spiNor.readChip()">
+      <button
+        class="btn btn-secondary w-full op-btn"
+        :disabled="!store.canOperate"
+        @click="spiNor.readChip()"
+      >
         <span class="op-label">{{ t('action.read') }}</span>
       </button>
 
-      <button class="btn btn-secondary w-full op-btn" :disabled="!store.canOperate" @click="spiNor.writeChip()">
+      <button
+        class="btn btn-secondary w-full op-btn"
+        :disabled="!store.canOperate"
+        @click="spiNor.writeChip()"
+      >
         <span class="op-label">{{ t('action.write') }}</span>
       </button>
 
-      <button class="btn btn-danger w-full op-btn" :disabled="!store.canOperate" @click="requestErase()">
+      <button
+        class="btn btn-danger w-full op-btn"
+        :disabled="!store.canOperate"
+        @click="requestErase()"
+      >
         <span class="op-label">{{ t('action.erase') }}</span>
       </button>
 
-      <button class="btn btn-secondary w-full op-btn" :disabled="!store.canOperate" @click="spiNor.verifyChip()">
+      <button
+        class="btn btn-secondary w-full op-btn"
+        :disabled="!store.canOperate"
+        @click="spiNor.verifyChip()"
+      >
         <span class="op-label">{{ t('action.verify') }}</span>
       </button>
     </section>
@@ -372,7 +506,6 @@ onMounted(async () => {
         <div class="running-label">{{ store.currentOp }} — {{ Math.round(store.progress) }}%</div>
       </div>
     </Transition>
-
   </div>
 
   <!-- VCC 输出确认弹窗（高危） -->
@@ -391,12 +524,21 @@ onMounted(async () => {
         <input
           v-model="vccConfirmText"
           class="input vcc-confirm-input"
-          :placeholder="vccModal === 'enable' ? t('vcc.enablePhrase') : (pendingVccTarget ? (pendingVccTarget / 1000).toFixed(1) : '')"
+          :placeholder="
+            vccModal === 'enable'
+              ? t('vcc.enablePhrase')
+              : pendingVccTarget
+                ? (pendingVccTarget / 1000).toFixed(1)
+                : ''
+          "
           @keydown.enter="vccModal === 'enable' ? confirmVccEnable() : confirmVccTarget()"
         />
         <div class="modal-actions">
           <button class="btn btn-secondary" @click="closeVccModal">{{ t('action.cancel') }}</button>
-          <button class="btn btn-danger" @click="vccModal === 'enable' ? confirmVccEnable() : confirmVccTarget()">
+          <button
+            class="btn btn-danger"
+            @click="vccModal === 'enable' ? confirmVccEnable() : confirmVccTarget()"
+          >
             {{ vccModal === 'enable' ? t('vcc.connectPower') : t('vcc.apply') }}
           </button>
         </div>
@@ -412,8 +554,12 @@ onMounted(async () => {
         <h3 class="modal-title">{{ t('modal.eraseTitle') }}</h3>
         <p class="modal-body">{{ t('modal.eraseBody') }}</p>
         <div class="modal-actions">
-          <button class="btn btn-secondary" @click="showEraseConfirm = false">{{ t('action.cancel') }}</button>
-          <button class="btn btn-danger" @click="confirmErase">{{ t('action.confirmErase') }}</button>
+          <button class="btn btn-secondary" @click="showEraseConfirm = false">
+            {{ t('action.cancel') }}
+          </button>
+          <button class="btn btn-danger" @click="confirmErase">
+            {{ t('action.confirmErase') }}
+          </button>
         </div>
       </div>
     </div>
@@ -448,9 +594,15 @@ onMounted(async () => {
   margin-bottom: 2px;
 }
 
-.w-full { width: 100%; }
+.w-full {
+  width: 100%;
+}
 
-.field { display: flex; flex-direction: column; gap: 4px; }
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
 .field-label {
   font-size: 11px;
   color: var(--text-secondary);
@@ -513,14 +665,32 @@ onMounted(async () => {
   padding: 8px 12px !important;
 }
 
-.op-icon { display: flex; align-items: center; }
-.op-label { font-weight: 500; font-size: 13px; }
-.op-desc  { font-size: 10px; color: var(--text-muted); font-family: var(--font-mono); }
+.op-icon {
+  display: flex;
+  align-items: center;
+}
+.op-label {
+  font-weight: 500;
+  font-size: 13px;
+}
+.op-desc {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
 
-.read-icon   { color: var(--color-info); }
-.write-icon  { color: var(--accent); }
-.erase-icon  { color: var(--color-danger); }
-.verify-icon { color: var(--color-warn); }
+.read-icon {
+  color: var(--color-info);
+}
+.write-icon {
+  color: var(--accent);
+}
+.erase-icon {
+  color: var(--color-danger);
+}
+.verify-icon {
+  color: var(--color-warn);
+}
 
 .toggle-row {
   display: flex;
@@ -568,7 +738,9 @@ onMounted(async () => {
   padding: 8px;
   background: var(--bg-surface);
 }
-.vcc-power-btn { margin-top: 6px; }
+.vcc-power-btn {
+  margin-top: 6px;
+}
 .vcc-box.vcc-active {
   border-color: rgba(240, 80, 80, 0.65);
   background: rgba(240, 80, 80, 0.08);
@@ -596,7 +768,9 @@ onMounted(async () => {
   padding: 4px 10px;
   cursor: pointer;
 }
-.vcc-toggle:hover { border-color: var(--border-focus); }
+.vcc-toggle:hover {
+  border-color: var(--border-focus);
+}
 .vcc-toggle.is-on {
   border-color: rgba(240, 80, 80, 0.8);
   background: rgba(240, 80, 80, 0.15);
@@ -626,12 +800,14 @@ onMounted(async () => {
   text-align: center;
 }
 
-.vcc-modal .modal-icon { color: var(--color-warn); }
+.vcc-modal .modal-icon {
+  color: var(--color-warn);
+}
 
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.7);
+  background: rgba(0, 0, 0, 0.7);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -652,8 +828,14 @@ onMounted(async () => {
   text-align: center;
 }
 
-.modal-icon { color: var(--color-danger); margin: 0 auto; }
-.modal-title { font-size: 16px; font-weight: 600; }
+.modal-icon {
+  color: var(--color-danger);
+  margin: 0 auto;
+}
+.modal-title {
+  font-size: 16px;
+  font-weight: 600;
+}
 
 .modal-body {
   font-size: 13px;
@@ -663,7 +845,9 @@ onMounted(async () => {
   white-space: pre-line;
 }
 
-.modal-body strong { color: var(--text-primary); }
+.modal-body strong {
+  color: var(--text-primary);
+}
 
 .modal-actions {
   display: flex;
@@ -672,5 +856,7 @@ onMounted(async () => {
   margin-top: 8px;
 }
 
-.modal-actions .btn { min-width: 96px; }
+.modal-actions .btn {
+  min-width: 96px;
+}
 </style>
