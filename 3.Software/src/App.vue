@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { onMounted, ref, computed } from 'vue'
-import { getCurrentWindow } from '@tauri-apps/api/window'
+import { onMounted, ref, computed, nextTick } from 'vue'
+import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window'
 import { useProgStore } from '@/stores/prog'
 import { locale, setLocale, t } from '@/i18n'
 import OperationPanel from '@/components/OperationPanel.vue'
@@ -49,7 +49,29 @@ function onDividerMouseDown(e: MouseEvent) {
 
 onMounted(() => {
   store.addLog('UnProg 已启动')
+  fitWindowToSidebar()
 })
+
+// 启动时按左侧栏实际内容高度调整窗口，保证“文件/芯片/电压”等信息
+// 一次完整显示，不用滚动。仅执行一次，之后尊重用户手动调整的尺寸。
+async function fitWindowToSidebar() {
+  await nextTick()
+  await new Promise((resolve) => setTimeout(resolve, 150))
+  try {
+    const sidebar = document.querySelector<HTMLElement>('.sidebar')
+    if (!sidebar) return
+    const titleH = document.querySelector<HTMLElement>('.titlebar')?.offsetHeight ?? 40
+    const toolbarH = document.querySelector<HTMLElement>('.toolbar')?.offsetHeight ?? 58
+    const statusH = document.querySelector<HTMLElement>('.status-bar')?.offsetHeight ?? 28
+    const chromeH = titleH + toolbarH + statusH
+    const availH = window.screen.availHeight
+    const maxH = Math.max(680, availH - 48)
+    const targetH = Math.min(Math.max(680, Math.ceil(sidebar.scrollHeight + chromeH)), maxH)
+    await appWindow.setSize(new LogicalSize(window.innerWidth, targetH))
+  } catch (err) {
+    console.warn('fit window to sidebar failed:', err)
+  }
+}
 </script>
 
 <template>
