@@ -55,6 +55,19 @@ function loadStringSetting(key: string, fallback: string): string {
   }
 }
 
+function loadVccTargetMv(): number {
+  try {
+    const save = JSON.parse(localStorage.getItem('nand.saveVoltage') ?? 'false') === true
+    if (save) {
+      const mv = Number(localStorage.getItem('vcc.targetMv'))
+      if ([1200, 1800, 2500, 3300].includes(mv)) return mv
+    }
+  } catch {
+    // ignore
+  }
+  return 3300
+}
+
 let _logId = 0
 
 export const useProgStore = defineStore('prog', () => {
@@ -67,7 +80,7 @@ export const useProgStore = defineStore('prog', () => {
   const spiFreq = ref(15000)
   // VCC 输出（高危功能）：默认关闭，连接编程器时重置，不持久化
   const vccOutputEnabled = ref(false)
-  const vccTargetMv = ref(3300)
+  const vccTargetMv = ref(loadVccTargetMv())
   const vccFollowChip = ref(false)
   // 芯片信息必须声明在 vccChipMv 之前，否则 computed 初始化时会触发 TDZ 错误
   const chipDetails = ref<DetectedChipInfo | null>(null)
@@ -124,15 +137,45 @@ export const useProgStore = defineStore('prog', () => {
   const nandProgramMode = ref<'main' | 'oob_auto' | 'main_oob'>(
     loadStringSetting('nand.programMode', 'main') as 'main' | 'oob_auto' | 'main_oob',
   )
-  watch([nandReadBadBlockFirst, nandBadBlockMode, nandProgramMode], () => {
-    try {
-      localStorage.setItem('nand.readBadBlockFirst', JSON.stringify(nandReadBadBlockFirst.value))
-      localStorage.setItem('nand.badBlockMode', JSON.stringify(nandBadBlockMode.value))
-      localStorage.setItem('nand.programMode', JSON.stringify(nandProgramMode.value))
-    } catch {
-      // WebView 禁用存储时忽略，仅本次会话生效
-    }
-  })
+  const nandBatchBurn = ref(loadBoolSetting('nand.batchBurn', false))
+  const nandSaveVoltage = ref(loadBoolSetting('nand.saveVoltage', false))
+  const nandPowerAutoDetect = ref(loadBoolSetting('nand.powerAutoDetect', false))
+  const nandAutoDetectEeprom = ref(loadBoolSetting('nand.autoDetectEeprom', false))
+  const nandProgressEstimate = ref(loadBoolSetting('nand.progressEstimate', false))
+  const nandCheckSoundSwitch = ref(loadBoolSetting('nand.checkSoundSwitch', true))
+  watch(
+    [
+      nandReadBadBlockFirst,
+      nandBadBlockMode,
+      nandProgramMode,
+      nandBatchBurn,
+      nandSaveVoltage,
+      nandPowerAutoDetect,
+      nandAutoDetectEeprom,
+      nandProgressEstimate,
+      nandCheckSoundSwitch,
+    ],
+    () => {
+      try {
+        localStorage.setItem('nand.readBadBlockFirst', JSON.stringify(nandReadBadBlockFirst.value))
+        localStorage.setItem('nand.badBlockMode', JSON.stringify(nandBadBlockMode.value))
+        localStorage.setItem('nand.programMode', JSON.stringify(nandProgramMode.value))
+        localStorage.setItem('nand.batchBurn', JSON.stringify(nandBatchBurn.value))
+        localStorage.setItem('nand.saveVoltage', JSON.stringify(nandSaveVoltage.value))
+        localStorage.setItem('nand.powerAutoDetect', JSON.stringify(nandPowerAutoDetect.value))
+        localStorage.setItem('nand.autoDetectEeprom', JSON.stringify(nandAutoDetectEeprom.value))
+        localStorage.setItem('nand.progressEstimate', JSON.stringify(nandProgressEstimate.value))
+        localStorage.setItem('nand.checkSoundSwitch', JSON.stringify(nandCheckSoundSwitch.value))
+        if (nandSaveVoltage.value) {
+          localStorage.setItem('vcc.targetMv', JSON.stringify(vccTargetMv.value))
+        } else {
+          localStorage.removeItem('vcc.targetMv')
+        }
+      } catch {
+        // WebView 禁用存储时忽略，仅本次会话生效
+      }
+    },
+  )
 
   // 日志
   const logs = ref<LogEntry[]>([])
@@ -377,6 +420,12 @@ export const useProgStore = defineStore('prog', () => {
     nandReadBadBlockFirst,
     nandBadBlockMode,
     nandProgramMode,
+    nandBatchBurn,
+    nandSaveVoltage,
+    nandPowerAutoDetect,
+    nandAutoDetectEeprom,
+    nandProgressEstimate,
+    nandCheckSoundSwitch,
     logs,
     chipTypes,
     chipVendors,

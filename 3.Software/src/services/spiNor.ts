@@ -8,6 +8,24 @@ export function useSpiNor() {
   // 预填充上限：NAND 等大容量芯片不预分配 FF，避免 WebView 内存爆炸
   const MAX_PREFILL = 8 * 1024 * 1024
 
+  function playVerifySound() {
+    try {
+      const ctx = new AudioContext()
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.type = 'sine'
+      osc.frequency.value = 880
+      gain.gain.setValueAtTime(0.08, ctx.currentTime)
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12)
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      osc.start()
+      osc.stop(ctx.currentTime + 0.13)
+    } catch {
+      // 音频不可用时静默忽略
+    }
+  }
+
   function fillHexWithFF(size: number) {
     if (size > MAX_PREFILL) {
       store.hexData = null
@@ -129,6 +147,28 @@ export function useSpiNor() {
       store.addLog(result.hex, 'info')
     } catch (e: unknown) {
       store.addLog(`BBM 映射表读取失败: ${String(e)}`, 'error')
+    } finally {
+      store.isRunning = false
+      store.currentOp = ''
+    }
+  }
+
+  async function readNandOtpPage(page: number) {
+    if (store.selectedType !== 'SPI_NAND' || !store.canOperate) {
+      store.addLog('OTP 读取仅支持已连接的 SPI NAND 芯片', 'warn')
+      return
+    }
+    store.isRunning = true
+    store.currentOp = `读取 NAND OTP 页 ${page}`
+    try {
+      const result = (await invoke('read_nand_otp_page', { page })) as {
+        length: number
+        hex: string
+      }
+      store.addLog(`NAND OTP 页 ${page} 读取完成（${result.length} 字节，实验性）`, 'success')
+      store.addLog(result.hex, 'info')
+    } catch (e: unknown) {
+      store.addLog(`NAND OTP 页 ${page} 读取失败: ${String(e)}`, 'error')
     } finally {
       store.isRunning = false
       store.currentOp = ''
@@ -422,6 +462,9 @@ export function useSpiNor() {
       store.progress = 100
       store.progressMessage = '校验完成'
       store.addLog(msg, 'success')
+      if (store.nandCheckSoundSwitch) {
+        playVerifySound()
+      }
     } catch (e: unknown) {
       // 后端把首个不一致地址和字节值放在错误信息里，直接显示即可
       store.addLog(`校验失败: ${String(e)}`, 'error')
@@ -528,6 +571,7 @@ export function useSpiNor() {
     readNandUid,
     readNandParamPage,
     readNandBbmLut,
+    readNandOtpPage,
     setNandEcc,
     readAt45PageMode,
     setAt45PageMode,

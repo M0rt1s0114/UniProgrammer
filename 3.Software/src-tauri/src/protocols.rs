@@ -512,6 +512,47 @@ pub fn nand_scan_bad_blocks(
     Ok(bad_blocks)
 }
 
+/// Read one OTP page through the Etron-style OTP_EN flow: temporarily set
+/// bit 6 of configuration register B0h, issue Page Read (13h) for the OTP
+/// page address, read main + spare cache, then restore the configuration
+/// register. Experimental, hardware validation pending.
+pub fn nand_read_otp_page(
+    dev: &Ch34xDevice,
+    page_no: u32,
+    page_size: usize,
+    spare_size: usize,
+) -> Result<Vec<u8>, String> {
+    nand_wait_ready(dev, 200)?;
+    let mut cfg = [0xFFu8; 1];
+    dev.cs_low()?;
+    dev.spi_tx(&[0x0F, 0xB0])?;
+    dev.spi_rx(&mut cfg)?;
+    dev.cs_high()?;
+
+    let old_cfg = cfg[0];
+    let otp_cfg = old_cfg | 0x40; // OTP_EN
+    dev.cs_low()?;
+    dev.spi_tx(&[0x1F, 0xB0, otp_cfg])?;
+    dev.cs_high()?;
+    nand_wait_ready(dev, 200)?;
+
+    let result = (|| {
+        nand_load_page(dev, page_no)?;
+        let mut out = nand_read_cache(dev, 0, page_size)?;
+        out.extend_from_slice(&nand_read_cache(dev, page_size, spare_size)?);
+        Ok(out)
+    })();
+
+    let _ = (|| -> Result<(), String> {
+        dev.cs_low()?;
+        dev.spi_tx(&[0x1F, 0xB0, old_cfg])?;
+        dev.cs_high()?;
+        nand_wait_ready(dev, 200)
+    })();
+
+    result
+}
+
 /// Read the NAND unique ID (experimental, hardware validation pending).
 /// Winbond-family SPI NAND: 4Bh + four dummy bytes + 64 data bytes.
 pub fn nand_read_uid(dev: &Ch34xDevice, len: usize) -> Result<Vec<u8>, String> {

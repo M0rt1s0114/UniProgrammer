@@ -59,6 +59,8 @@ const nandProgramModeOptions = computed<UiOption[]>(() => [
   { value: 'main_oob', label: t('nand.prog.mainOob') },
 ])
 
+const nandOtpPage = ref(0)
+
 // VCC 输出（高危功能，默认关闭）
 const vccVoltageOptions: UiOption[] = [1200, 1800, 2500, 3300].map((mv) => ({
   value: mv,
@@ -148,6 +150,10 @@ async function connect() {
       return
     }
     await store.connectSerprog(port)
+  }
+  if (store.status === 'success' && store.nandPowerAutoDetect) {
+    store.addLog('上电自动检测已开启，正在自动检测芯片...')
+    await spiNor.detectChip()
   }
 }
 
@@ -395,6 +401,53 @@ onMounted(async () => {
       >
         {{ t('nand.eccDisable') }}{{ t('nand.experimental') }}
       </button>
+
+      <div class="nand-options-grid">
+        <label class="toggle-row">
+          <input v-model="store.nandBatchBurn" type="checkbox" class="toggle-check" />
+          <span class="toggle-text">{{ t('nand.batchBurn') }}</span>
+        </label>
+        <label class="toggle-row">
+          <input v-model="store.nandSaveVoltage" type="checkbox" class="toggle-check" />
+          <span class="toggle-text">{{ t('nand.saveVoltage') }}</span>
+        </label>
+        <label class="toggle-row">
+          <input v-model="store.nandPowerAutoDetect" type="checkbox" class="toggle-check" />
+          <span class="toggle-text">{{ t('nand.powerAutoDetect') }}</span>
+        </label>
+        <label class="toggle-row">
+          <input v-model="store.nandAutoDetectEeprom" type="checkbox" class="toggle-check" />
+          <span class="toggle-text">{{ t('nand.autoDetectEeprom') }}</span>
+        </label>
+        <label class="toggle-row">
+          <input v-model="store.nandProgressEstimate" type="checkbox" class="toggle-check" />
+          <span class="toggle-text">{{ t('nand.progressEstimate') }}</span>
+        </label>
+        <label class="toggle-row">
+          <input v-model="store.nandCheckSoundSwitch" type="checkbox" class="toggle-check" />
+          <span class="toggle-text">{{ t('nand.checkSoundSwitch') }}</span>
+        </label>
+      </div>
+
+      <div style="display: flex; gap: 8px; margin-top: 6px">
+        <input
+          v-model.number="nandOtpPage"
+          type="number"
+          min="0"
+          max="63"
+          class="input"
+          style="width: 80px"
+          :title="t('nand.otpPage')"
+        />
+        <button
+          class="btn btn-ghost btn-sm"
+          style="flex: 1"
+          :disabled="!store.canOperate || store.isRunning"
+          @click="spiNor.readNandOtpPage(nandOtpPage)"
+        >
+          {{ t('nand.readOtpPage') }}{{ t('nand.experimental') }}
+        </button>
+      </div>
     </section>
 
     <div v-if="store.selectedType === 'SPI_DATA_45'" class="divider" />
@@ -673,6 +726,13 @@ onMounted(async () => {
   gap: 7px;
   cursor: pointer;
   padding: 2px 0 2px 4px;
+}
+
+.nand-options-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 10px;
+  margin-top: 6px;
 }
 
 .toggle-check {

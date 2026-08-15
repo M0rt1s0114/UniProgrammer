@@ -504,6 +504,25 @@ fn read_nand_bbm_lut(state: State<'_, Mutex<AppState>>) -> Result<BbmLutResult, 
 }
 
 #[tauri::command]
+fn read_nand_otp_page(
+    state: State<'_, Mutex<AppState>>,
+    page: u32,
+) -> Result<RawBytesResult, String> {
+    if page > 63 {
+        return Err("OTP 页号超出范围（0-63）".into());
+    }
+    let s = state.lock().map_err(|e| e.to_string())?;
+    require_nand_ch34x(&s)?;
+    let info = s.detected.as_ref().unwrap();
+    let page_size = info.page.max(1) as usize;
+    let spare_size = info.attr_u64("spare").unwrap_or(64).max(1) as usize;
+    let dev = open_ch34x_mode(&s, DeviceMode::Spi)?;
+    Ok(raw_bytes_result(protocols::nand_read_otp_page(
+        &dev, page, page_size, spare_size,
+    )?))
+}
+
+#[tauri::command]
 fn get_nand_ecc(state: State<'_, Mutex<AppState>>) -> Result<bool, String> {
     let s = state.lock().map_err(|e| e.to_string())?;
     require_nand_ch34x(&s)?;
@@ -1450,6 +1469,7 @@ fn main() {
             read_nand_uid,
             read_nand_param_page,
             read_nand_bbm_lut,
+            read_nand_otp_page,
             get_nand_ecc,
             set_nand_ecc,
             read_at45_page_mode,
