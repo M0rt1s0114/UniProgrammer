@@ -1,0 +1,5 @@
+[alias]
+# Run from 3.Software/src-tauri:
+#   cargo lint                 (platform default backend)
+#   cargo lint --features hal-libusb
+lint = ["clippy", "--all-targets", "--", "-D", "warnings"]

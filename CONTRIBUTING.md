@@ -92,18 +92,48 @@ feat(hal)!: split backends into separate compile features
   `feat/...`, `fix/...`, `docs/...`, `chore/...`
 - Keep pull requests focused on one change.
 - Add or update tests for changed logic.
-- Make sure `cargo check` and `cargo test` pass locally.
+- Make sure `cargo check`, `cargo test`, and the lint suite from
+  [Code style](#code-style) pass locally.
 
 ## Code style
 
-Rust:
+Run the full lint suite from `3.Software` before pushing:
 
-```bash
-cargo fmt --all -- --check
-cargo clippy --all-targets --all-features
+Windows (PowerShell):
+
+```powershell
+.\lint.ps1
 ```
 
-Frontend:
+Linux / macOS:
+
+```bash
+./lint.sh
+```
+
+The suite checks:
+
+- Frontend: `npm run lint` (ESLint 10 + typescript-eslint +
+  eslint-plugin-vue) and `npm run format:check` (Prettier)
+- Backend: `cargo fmt --check` and `cargo lint`
+  (`cargo clippy --all-targets -- -D warnings`; see
+  `3.Software/src-tauri/.cargo/config.toml`)
+
+Individual commands:
+
+```bash
+# Frontend (run inside 3.Software)
+npm run lint
+npm run lint:fix
+npm run format:check
+npm run format
+
+# Backend (run inside 3.Software/src-tauri)
+cargo fmt --check
+cargo lint
+```
+
+Frontend style notes:
 
 - Vue 3 `<script setup lang="ts">`
 - Keep user-visible strings in `3.Software/src/i18n/index.ts`

@@ -115,6 +115,8 @@ programmer over USART1.
 
 - Rust + Node.js 22
 - `cargo test` for backend tests
+- Code quality: run `.\lint.ps1` (Windows) or `./lint.sh` (Linux) inside
+  `3.Software` to execute ESLint, Prettier, `cargo fmt` and `cargo clippy`
 - Hardware validation is required before declaring a release stable
 
 ## Maintainers
