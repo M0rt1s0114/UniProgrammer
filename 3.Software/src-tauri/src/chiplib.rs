@@ -353,6 +353,11 @@ impl Chiplib {
         None
     }
 
+    #[allow(dead_code)] // used by the chipdb_tool example
+    pub fn entry_count(&self) -> usize {
+        self.entries.len()
+    }
+
     // 新增：列出所有协议类型（去重，按原数字顺序）
     pub fn list_protocols(&self) -> Vec<String> {
         let mut protos = Vec::new();
@@ -618,6 +623,79 @@ impl Chiplib {
         Ok(())
     }
 
+    /// Insert or replace one chip entry by JEDEC ID while keeping every
+    /// other entry untouched. The previous data blob (when replacing) is
+    /// intentionally left in place; save_bin() writes the new appended blob.
+    #[allow(dead_code)] // used by the chipdb_tool example
+    pub fn upsert_chip(
+        &mut self,
+        id: &str,
+        vendor: &str,
+        model: &str,
+        protocol: &str,
+        extra_attrs: &[(&str, &str)],
+    ) -> Result<(), String> {
+        let proto_id = protocol_name_to_id(protocol);
+        if proto_id == 0xFF {
+            return Err(format!("未知协议: {}", protocol));
+        }
+        if id.is_empty() || id.len() > MAX_ID_LEN {
+            return Err(format!("无效 ID: {}", id));
+        }
+
+        let mut id_bytes = [0u8; MAX_ID_LEN];
+        id_bytes[..id.len()].copy_from_slice(id.as_bytes());
+
+        let mut attrs: Vec<(String, String)> = vec![
+            ("vendor".into(), vendor.to_string()),
+            ("model".into(), model.to_string()),
+            ("protocol".into(), protocol.to_string()),
+        ];
+        attrs.extend(
+            extra_attrs
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string())),
+        );
+        if !attrs.iter().any(|(k, _)| k == "id") {
+            attrs.push(("id".into(), id.to_string()));
+        }
+
+        // Canonical serialization: vendor/model/protocol first, remaining
+        // keys sorted, trailing NUL (matches import_imsprog_dat).
+        let mut parts: Vec<String> = Vec::with_capacity(attrs.len());
+        for key in ["vendor", "model", "protocol"] {
+            if let Some((_, value)) = attrs.iter().find(|(k, _)| k == key) {
+                parts.push(format!("{}={}", key, value));
+            }
+        }
+        let mut rest: Vec<&(String, String)> = attrs
+            .iter()
+            .filter(|(k, _)| !["vendor", "model", "protocol"].contains(&k.as_str()))
+            .collect();
+        rest.sort_by(|a, b| a.0.cmp(&b.0));
+        for (key, value) in rest {
+            parts.push(format!("{}={}", key, value));
+        }
+        let mut blob = parts.join("\0").into_bytes();
+        blob.push(0);
+        if blob.len() > u16::MAX as usize {
+            return Err("芯片属性块超过 64KB 上限".into());
+        }
+
+        let entry = IndexEntry {
+            id: id_bytes,
+            data_offset: self.data.len() as u32,
+            data_len: blob.len() as u16,
+            protocol: proto_id,
+        };
+        match self.entries.binary_search_by(|e| e.id.cmp(&id_bytes)) {
+            Ok(idx) => self.entries[idx] = entry,
+            Err(idx) => self.entries.insert(idx, entry),
+        }
+        self.data.extend_from_slice(&blob);
+        Ok(())
+    }
+
     fn parse_data_attrs(data: &[u8]) -> HashMap<String, String> {
         let mut map = HashMap::new();
         let mut start = 0;
@@ -721,9 +799,23 @@ mod tests {
     use super::*;
 
     #[test]
+    fn xml_fallback_contains_new_chip() {
+        let lib = Chiplib::load_xml("../chiplib.xml").expect("load chiplib.xml");
+        let d40 = lib.find_by_id("5E3213").expect("ZB25D40B in XML fallback");
+        assert_eq!(d40.vendor, "Zbit");
+        assert_eq!(d40.model, "ZB25D40B");
+        assert_eq!(d40.protocol, "SPI_NOR");
+        assert_eq!(d40.page, 256);
+        assert_eq!(d40.size, 512 * 1024);
+        assert_eq!(d40.attr_u32("sector"), Some(4096));
+        assert_eq!(d40.attr_u32("block"), Some(64 * 1024));
+        assert_eq!(d40.attr("vcc"), Some("3.3"));
+    }
+
+    #[test]
     fn load_enriched_bin() {
         let lib = Chiplib::load_bin("chiplib.bin").expect("load chiplib.bin");
-        assert_eq!(lib.entries.len(), 686);
+        assert_eq!(lib.entries.len(), 687);
 
         let nor = lib.find_by_id("EF4018").expect("W25Q128 JEDEC");
         assert_eq!(nor.protocol, "SPI_NOR");
@@ -731,6 +823,14 @@ mod tests {
         assert_eq!(nor.size, 16 * 1024 * 1024);
         assert!(nor.attr_u32("sector").is_some());
         assert!(nor.attr_u32("block").is_some());
+
+        let d40 = lib.find_by_id("5E3213").expect("Zbit ZB25D40B JEDEC");
+        assert_eq!(d40.protocol, "SPI_NOR");
+        assert_eq!(d40.vendor, "Zbit");
+        assert_eq!(d40.model, "ZB25D40B");
+        assert_eq!(d40.size, 512 * 1024);
+        assert_eq!(d40.attr_u32("sector"), Some(4096));
+        assert_eq!(d40.attr_u32("block"), Some(64 * 1024));
 
         let i2c = lib
             .find_by_model("I2C", "Generic", "_24C02")

@@ -1473,6 +1473,7 @@ SPI_NOR/WINBOND：
     </Zetta>
     <Zbit>
       <ZB25D20   id="5E4012" page="256" size="262144"/>
+      <ZB25D40B  id="5E3213" page="256" size="524288" vcc="3.3" sector="4096" block="65536"/>
     </Zbit>
 	<GeneralPlus> 
 	  <GPR25L005E id="C22010" page="256" size="65536"/>
