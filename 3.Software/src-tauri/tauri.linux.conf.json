@@ -1,0 +1,14 @@
+{
+  "app": {
+    "windows": [
+      {
+        "title": "UniProgrammer",
+        "width": 960,
+        "height": 680,
+        "decorations": false,
+        "transparent": true,
+        "center": true
+      }
+    ]
+  }
+}

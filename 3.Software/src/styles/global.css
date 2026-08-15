@@ -59,18 +59,26 @@
 html, body, #app {
   height: 100%;
   overflow: hidden;
-  /* 窗口 transparent=true，根层必须透明，圆角外的区域才能透出桌面 */
+  /* 默认不透明背景；Linux 透明窗口由 .linux 覆盖 */
+  background: var(--bg-base);
+}
+
+html.linux, html.linux body, html.linux #app {
   background: transparent;
 }
 
 body {
-  background: transparent;
+  background: var(--bg-base);
   color: var(--text-primary);
   font-family: var(--font-sans);
   font-size: 13px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   user-select: none;
+}
+
+html.linux body {
+  background: transparent;
 }
 
 /* ---- Scrollbar ---- */
