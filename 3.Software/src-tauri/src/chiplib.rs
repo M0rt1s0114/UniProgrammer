@@ -801,6 +801,7 @@ mod tests {
     #[test]
     fn xml_fallback_contains_new_chip() {
         let lib = Chiplib::load_xml("../chiplib.xml").expect("load chiplib.xml");
+        assert_eq!(lib.entry_count(), 960);
         let d40 = lib.find_by_id("5E3213").expect("ZB25D40B in XML fallback");
         assert_eq!(d40.vendor, "Zbit");
         assert_eq!(d40.model, "ZB25D40B");
@@ -810,12 +811,19 @@ mod tests {
         assert_eq!(d40.attr_u32("sector"), Some(4096));
         assert_eq!(d40.attr_u32("block"), Some(64 * 1024));
         assert_eq!(d40.attr("vcc"), Some("3.3"));
+
+        let merged = lib
+            .find_by_id("0B4018")
+            .expect("XT25F128B in XML fallback after vendor merge");
+        assert_eq!(merged.vendor, "XTX");
+        assert_eq!(merged.protocol, "SPI_NOR");
+        assert_eq!(merged.size, 16 * 1024 * 1024);
     }
 
     #[test]
     fn load_enriched_bin() {
         let lib = Chiplib::load_bin("chiplib.bin").expect("load chiplib.bin");
-        assert_eq!(lib.entries.len(), 687);
+        assert_eq!(lib.entries.len(), 960);
 
         let nor = lib.find_by_id("EF4018").expect("W25Q128 JEDEC");
         assert_eq!(nor.protocol, "SPI_NOR");
@@ -831,6 +839,32 @@ mod tests {
         assert_eq!(d40.size, 512 * 1024);
         assert_eq!(d40.attr_u32("sector"), Some(4096));
         assert_eq!(d40.attr_u32("block"), Some(64 * 1024));
+
+        let xtx = lib
+            .find_by_id("0B4018")
+            .expect("XT25F128B from vendor merge");
+        assert_eq!(xtx.protocol, "SPI_NOR");
+        assert_eq!(xtx.vendor, "XTX");
+        assert_eq!(xtx.model, "XT25F128B");
+        assert_eq!(xtx.size, 16 * 1024 * 1024);
+
+        let nand = lib
+            .find_by_id("EFBA22")
+            .expect("W25N02KWZEIR from vendor merge");
+        assert_eq!(nand.protocol, "SPI_NAND");
+        assert_eq!(nand.vendor, "WINBOND");
+        assert_eq!(nand.model, "W25N02KWZEIR");
+        assert_eq!(nand.page, 2048);
+        assert_eq!(nand.size, 256 * 1024 * 1024);
+
+        let dataflash = lib
+            .find_by_id("1F2200")
+            .expect("AT45DB011D binary from vendor merge");
+        assert_eq!(dataflash.protocol, "SPI_DATA_45");
+        assert_eq!(dataflash.vendor, "ATMEL");
+        assert_eq!(dataflash.model, "AT45DB011D_3V3_binary");
+        assert_eq!(dataflash.page, 256);
+        assert_eq!(dataflash.size, 128 * 1024);
 
         let i2c = lib
             .find_by_model("I2C", "Generic", "_24C02")

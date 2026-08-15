@@ -801,6 +801,14 @@ SPI_NOR/WINBOND：
     <ATMEL>
       <AT45DB642D_page1024 id="1F2800" page="1024" size="8388608" adapt="adapSPI45"/>
     </ATMEL> 
+    <ATMEL>
+      <AT45DB011D_3V3_binary id="1F2200" page="256" size="131072" vcc="3.3" sector="256" algorithm="25"/>
+      <AT45DB021D_3V3_binary id="1F2300" page="256" size="262144" vcc="3.3" sector="256" algorithm="26"/>
+      <AT45DB041D_3V3_binary id="1F2400" page="256" size="524288" vcc="3.3" sector="256" algorithm="27"/>
+      <AT45DB081D_3V3_binary id="1F2500" page="256" size="1048576" vcc="3.3" sector="256" algorithm="28"/>
+      <AT45DB161D_3V3_binary id="1F2600" page="512" size="2097152" vcc="3.3" sector="512" algorithm="28"/>
+      <AT45DB321D_3V3_binary id="1F2701" page="512" size="4194304" vcc="3.3" sector="512" algorithm="29"/>
+    </ATMEL>
   </SPI_DATA_45>
   <SPI_NAND>
     <ETRON>
@@ -1060,6 +1068,29 @@ SPI_NOR/WINBOND：
 	<ZXIC>
      <ZX298100A0 vcc="3.3" id="2C24" page="2048" size="268435456" spare="128" besize="128" planes="2"/>
     </ZXIC>
+    <WINBOND>
+      <W25N02KWZEIR id="EFBA22" page="2048" size="268435456" vcc="1.8" block="131072" spare="128" sector="2048" algorithm="8" addr4bit="34" timing="1000"/>
+    </WINBOND>
+    <GIGADEVICE>
+      <GD5F4GM8REYIGR id="C885" page="2048" size="536870912" vcc="1.8" block="131072" spare="128"/>
+      <GD5F1GQ4UFxIG id="C8B148" page="2048" size="134217728" vcc="1.8" block="131072" spare="128" sector="2048" algorithm="17" addr4bit="1" timing="1000"/>
+      <GD5F1GQ4RFxIG id="C8A148" page="2048" size="134217728" vcc="1.8" block="131072" spare="128" sector="2048" algorithm="17" addr4bit="1" timing="1000"/>
+      <GD5F2GQ5UExxG id="C852" page="2048" size="268435456" vcc="3.3" block="131072" spare="128"/>
+      <GD5F2GQ5RExxG id="C842" page="2048" size="268435456" vcc="1.8" block="131072" spare="128"/>
+      <GD5F4GQ6UExxG id="C855" page="2048" size="536870912" vcc="3.3" block="131072" spare="128"/>
+      <GD5F4GQ6RExxG id="C845" page="2048" size="536870912" vcc="3.3" block="131072" spare="128"/>
+    </GIGADEVICE>
+    <FORESEE>
+      <F35UQA001G-WWT id="CD6161" page="2048" size="134217728" vcc="1.8" block="131072" spare="64"/>
+    </FORESEE>
+    <MACRONIX>
+      <MX35LF2GE4AB id="C222" page="2048" size="268435456" vcc="3.3" block="131072" spare="64"/>
+      <MX66L1G45G id="C2201B" page="2048" size="134217728" vcc="3.3" block="131072" spare="64"/>
+      <MX66U1G45G id="C2253B" page="2048" size="134217728" vcc="1.8" block="131072" spare="64"/>
+    </MACRONIX>
+    <MICRON>
+      <MT29F4G01ABBFDWB id="2C3435" page="4096" size="536870912" vcc="3.3" block="262144" spare="256"/>
+    </MICRON>
   </SPI_NAND>
    
   <SPI_NOR>
@@ -1532,6 +1563,324 @@ SPI_NOR/WINBOND：
     </Fudan>
 
 	
+    <XTX>
+      <XT25F128B id="0B4018" page="256" size="16777216" sector="256" block="65536" algorithm="4" timing="1000"/>
+      <XT25RQ128D id="0B6018" page="256" size="16777216" sector="256" block="65536" algorithm="4" timing="1000"/>
+      <XT25RQ256D id="0B6019" page="256" size="33554432" sector="4096" block="65536"/>
+      <XT25RF256B id="0B4019" page="256" size="33554432" sector="256" block="65536" algorithm="20" addr4bit="17" timing="1000"/>
+    </XTX>
+    <ADESTO>
+      <AT25QL321 id="1F4216" page="256" size="4194304" sector="256" block="65536" timing="1000"/>
+      <AT25QF641 id="1F3217" page="256" size="8388608" sector="4096" block="65536"/>
+      <AT25QL641 id="1F4317" page="256" size="8388608" sector="256" block="65536" timing="1000"/>
+      <AT25SF128 id="1F7018" page="256" size="16777216" sector="4096" block="65536"/>
+      <AT25QL128A id="1F4218" page="256" size="16777216" sector="256" block="65536" timing="1000"/>
+    </ADESTO>
+    <AMIC>
+      <A25L05PT id="372020" page="256" size="65536" sector="4096" block="65536"/>
+      <A25L10PT id="372021" page="256" size="131072" sector="256" block="65536" timing="1000"/>
+      <A25L10PU id="372011" page="256" size="131072" sector="256" block="65536" timing="1000"/>
+      <A25L20PT id="372022" page="256" size="262144" sector="256" block="65536" timing="1000"/>
+      <A25L20PU id="372012" page="256" size="262144" sector="256" block="65536" timing="1000"/>
+      <A25L40PT id="372023" page="256" size="524288" sector="4096" block="65536"/>
+      <A25L40PU id="372013" page="256" size="524288" sector="256" block="65536" timing="1000"/>
+      <A25L80PT id="372024" page="256" size="1048576" sector="256" block="65536" timing="1000"/>
+      <A25L80PU id="372014" page="256" size="1048576" sector="256" block="65536" timing="1000"/>
+      <A25L16PT id="372025" page="256" size="2097152" sector="256" block="65536" timing="1000"/>
+      <A25L040 id="373013" page="256" size="524288" sector="256" block="65536" timing="1000"/>
+      <A25L080 id="373014" page="256" size="1048576" sector="256" block="65536" timing="1000"/>
+      <A25L016 id="373015" page="256" size="2097152" sector="256" block="65536" timing="1000"/>
+      <A25L032 id="373016" page="256" size="4194304" sector="256" block="65536" timing="1000"/>
+      <A25LQ16 id="374015" page="256" size="2097152" sector="256" block="65536" timing="1000"/>
+    </AMIC>
+    <Boya>
+      <BY25D80 id="684014" page="256" size="1048576" sector="256" block="65536" algorithm="3" timing="1000"/>
+    </Boya>
+    <EON>
+      <EN25B10 id="1C2011" page="256" size="131072" sector="256" block="65536" timing="1000"/>
+      <EN25B20 id="1C2012" page="256" size="262144" sector="256" block="65536" timing="1000"/>
+      <EN25B40 id="1C2013" page="256" size="524288" sector="256" block="65536" timing="1000"/>
+      <EN25B80 id="1C2014" page="256" size="1048576" sector="256" block="65536" timing="1000"/>
+      <EN25B16 id="1C2015" page="256" size="2097152" sector="256" block="65536" timing="1000"/>
+      <EN25B32 id="1C2016" page="256" size="4194304" sector="256" block="65536" timing="1000"/>
+      <EN25B64 id="1C2017" page="256" size="8388608" sector="256" block="65536" timing="1000"/>
+      <EN25F05 id="1C3110" page="256" size="65536" sector="4096" block="65536"/>
+      <EN25F10 id="1C3111" page="256" size="131072" sector="256" block="65536" timing="200"/>
+      <EN25F20 id="1C3112" page="256" size="262144" sector="256" block="65536" timing="1000"/>
+      <EN25F40 id="1C3113" page="256" size="524288" sector="256" block="65536" timing="1000"/>
+      <EN25F80 id="1C3114" page="256" size="1048576" sector="256" block="65536" timing="500"/>
+      <EN25F16 id="1C3115" page="256" size="2097152" sector="256" block="65536" timing="1000"/>
+      <EN25F32 id="1C3116" page="256" size="4194304" sector="256" block="65536" timing="1000"/>
+      <EN25Q40 id="1C3013" page="256" size="524288" sector="256" block="65536" timing="1000"/>
+      <EN25Q80A id="1C3014" page="256" size="1048576" sector="256" block="65536" timing="1000"/>
+      <EN25QH80 id="1C7014" page="256" size="1048576" sector="4096" block="65536"/>
+      <EN25Q16A id="1C3015" page="256" size="2097152" sector="256" block="65536" timing="1000"/>
+      <EN25Q32A id="1C3016" page="256" size="4194304" sector="256" block="65536" timing="1000"/>
+      <EN25Q32A id="1C7016" page="256" size="4194304" sector="256" block="65536" algorithm="5" timing="1000"/>
+      <EN25Q64 id="1C3017" page="256" size="8388608" sector="256" block="65536" timing="1000"/>
+      <EN25Q128 id="1C3018" page="256" size="16777216" sector="256" block="65536" timing="1000"/>
+      <EN25QH16 id="1C7015" page="256" size="2097152" sector="256" block="65536" timing="1000"/>
+      <EN25QH64 id="1C7017" page="256" size="8388608" sector="256" block="65536" timing="1000"/>
+      <EN25QH128 id="1C7018" page="256" size="16777216" sector="256" block="65536" timing="1000"/>
+      <EN25QH256 id="1C7019" page="256" size="33554432" sector="256" block="65536" addr4bit="17" timing="1000"/>
+      <EN25T80 id="1C5114" page="256" size="1048576" sector="256" block="65536" timing="1000"/>
+      <EN25T16 id="1C5115" page="256" size="2097152" sector="256" block="65536" timing="1000"/>
+      <EN25F64 id="1C3117" page="256" size="8388608" sector="4096" block="65536"/>
+      <EN25S10A id="1C3811" page="256" size="131072" sector="256" block="65536" timing="1000"/>
+      <EN25S20A id="1C3812" page="256" size="262144" sector="256" block="65536" timing="1000"/>
+      <EN25S40A id="1C3813" page="256" size="524288" sector="256" block="65536" timing="1000"/>
+      <EN25F80 id="1C3814" page="256" size="1048576" sector="256" block="65536" timing="1000"/>
+      <EN25S16B id="1C3815" page="256" size="2097152" sector="256" block="65536" timing="1000"/>
+      <EN25S32 id="1C3816" page="256" size="4194304" sector="4096" block="65536"/>
+      <EN25S64 id="1C3817" page="256" size="8388608" sector="256" block="65536" timing="1000"/>
+    </EON>
+    <PFLASH>
+      <PM25LV010 id="7F9D7C" page="256" size="131072" sector="256" block="65536" timing="1000"/>
+      <PM25LD512C_SCE id="7F9D20" page="256" size="65536" vcc="3.3" sector="256" block="65536" timing="1000"/>
+      <PM25LD010C_SCE id="7F9D21" page="256" size="131072" vcc="3.3" sector="256" block="65536" timing="1000"/>
+      <PM25LD020_SCE id="7F9D22" page="256" size="262144" vcc="3.3" sector="256" block="65536" timing="1000"/>
+      <PM25LQ020 id="7F9D42" page="256" size="262144" sector="256" block="65536" timing="1000"/>
+      <PM25W020 id="7F9D7D" page="256" size="262144" sector="256" block="65536" timing="1000"/>
+      <PM25LV040 id="7F9D7E" page="256" size="524288" sector="256" block="65536" timing="1000"/>
+      <PM25LQ032 id="7F9D46" page="256" size="4194304" sector="256" block="65536" algorithm="30" timing="1000"/>
+    </PFLASH>
+    <PUYA>
+      <P25Q05H id="856010" page="256" size="8192" sector="4096" block="65536"/>
+      <P25Q10H id="856011" page="256" size="131072" sector="256" block="65536" algorithm="2" timing="1000"/>
+      <P25Q20H id="856012" page="256" size="262144" sector="256" block="65536" algorithm="2" timing="1000"/>
+      <P25Q16H id="856015" page="256" size="2097152" sector="256" block="65536" algorithm="2" timing="1000"/>
+      <PY25Q128HA id="852018" page="256" size="16777216" vcc="3.3" sector="256" block="65536" algorithm="4" timing="1000"/>
+    </PUYA>
+    <TERRA>
+      <TS25L16PE id="208015" page="256" size="2097152" sector="4096" block="65536"/>
+      <TS25L80PE id="208014" page="256" size="1048576" sector="4096" block="65536"/>
+      <TS25L40P id="202013" page="256" size="524288" sector="256" block="65536" timing="1000"/>
+    </TERRA>
+    <EXCELSEMI>
+      <ES25P20 id="4A2012" page="256" size="262144" sector="256" block="65536" timing="1000"/>
+      <ES25P40 id="4A2013" page="256" size="524288" sector="256" block="65536" timing="1000"/>
+      <ES25P80 id="4A2014" page="256" size="1048576" sector="256" block="65536" timing="1000"/>
+      <ES25P16 id="4A2015" page="256" size="2097152" sector="256" block="65536" timing="1000"/>
+      <ES25P32 id="4A2016" page="256" size="4194304" sector="256" block="65536" timing="1000"/>
+      <ES25M40A id="4A3213" page="256" size="524288" sector="256" block="65536" timing="1000"/>
+      <ES25M80A id="4A3214" page="256" size="1048576" sector="256" block="65536" timing="1000"/>
+      <ES25M16A id="4A3215" page="256" size="2097152" sector="256" block="65536" timing="1000"/>
+    </EXCELSEMI>
+    <FIDELIX>
+      <FM25F01 id="A13111" page="256" size="131072" sector="256" block="65536" timing="1000"/>
+      <FM25Q16A id="F83215" page="256" size="2097152" sector="256" block="65536" timing="1200"/>
+      <FM25Q32A id="F83216" page="256" size="4194304" sector="256" block="65536" timing="1000"/>
+      <FM25Q64A id="F83217" page="256" size="8388608" sector="256" block="65536" timing="1000"/>
+    </FIDELIX>
+    <GIGADEVICE>
+      <GD25LQ80_1V8 id="C86014" page="256" size="1048576" vcc="1.8" sector="256" block="65536" algorithm="2" timing="1000"/>
+      <GD25LB32E id="C86016" page="256" size="4194304" sector="256" block="65536" algorithm="4" timing="1000"/>
+      <GD25LF255E-DTR id="C86319" page="256" size="33554432" sector="4096" block="65536"/>
+      <GD25LT256E-DTR id="C86619" page="256" size="33554432" sector="256" block="65536" algorithm="26" addr4bit="17" timing="1000"/>
+      <GD25B512E id="C8401A" page="256" size="67108864" sector="4096" block="65536"/>
+      <GD25LB512ME id="C8671A" page="256" size="67108864" sector="256" block="65536" algorithm="26" addr4bit="1" timing="1000"/>
+    </GIGADEVICE>
+    <INTEL>
+      <QB25F320S33B id="898912" page="256" size="4194304" sector="4096" block="65536"/>
+      <QB25F640S33B id="898913" page="256" size="8388608" sector="4096" block="65536"/>
+    </INTEL>
+    <MACRONIX>
+      <MX25L1021E id="C22211" page="32" size="131072" sector="256" block="65536" timing="1000"/>
+      <MX25L12855E id="C22618" page="256" size="16777216" sector="256" block="65536" algorithm="22" timing="1000"/>
+      <MX77U12850F id="C27538" page="256" size="16777216" sector="4096" block="65536"/>
+      <MX25L1633E id="C22415" page="256" size="2097152" sector="256" block="65536" algorithm="23" timing="1000"/>
+      <MX25L1635E id="C22515" page="256" size="2097152" sector="256" block="65536" algorithm="22" timing="1000"/>
+      <MX25L3225D id="C25E16" page="256" size="4194304" sector="256" block="65536" algorithm="22" timing="1000"/>
+      <MX25L3239E id="C22536" page="256" size="4194304" sector="256" block="65536" algorithm="24" timing="1000"/>
+      <MX25L5121E id="C22210" page="32" size="65536" sector="256" block="65536" timing="1000"/>
+      <MX25L6455E id="C22617" page="256" size="8388608" sector="256" block="65536" algorithm="22" timing="1000"/>
+      <MX25L6495F id="C29517" page="256" size="8388608" sector="4096" block="65536"/>
+      <MX25L6439E id="C22537" page="256" size="8388608" sector="256" block="65536" algorithm="24" timing="1000"/>
+      <MX25R512F id="C22810" page="256" size="65536" sector="256" block="65536" algorithm="24" timing="1000"/>
+      <MX25R1035F id="C22811" page="256" size="131072" sector="256" block="65536" algorithm="24" timing="1000"/>
+      <MX25R1635F id="C22815" page="256" size="2097152" sector="256" block="65536" algorithm="24" timing="1000"/>
+      <MX25R2035F id="C22812" page="256" size="262144" sector="256" block="65536" algorithm="24" timing="1000"/>
+      <MX25R3235F id="C22816" page="256" size="4194304" sector="256" block="65536" algorithm="24" timing="1000"/>
+      <MX25R4035F id="C22813" page="256" size="524288" sector="256" block="65536" algorithm="24" timing="1000"/>
+      <MX25R6435F id="C22817" page="256" size="8388608" sector="256" block="65536" algorithm="24" timing="1000"/>
+      <MX25R8035F id="C22814" page="256" size="1048576" sector="256" block="65536" algorithm="24" timing="1000"/>
+      <MX25U1001E_1V8 id="C22531" page="256" size="131072" sector="256" block="65536" timing="1000"/>
+      <MX25U12835F_1V8 id="C22518" page="256" size="16777216" sector="4096" block="65536"/>
+      <MX25U1635E_1V8 id="C22535" page="256" size="2097152" sector="256" block="65536" algorithm="24" timing="1000"/>
+      <MX25U2032E_1V8 id="C22532" page="256" size="262144" sector="256" block="65536" algorithm="24" timing="1000"/>
+      <MX25U4032E_1V8 id="C22533" page="256" size="524288" sector="256" block="65536" algorithm="24" timing="1000"/>
+      <MX25U5121E_1V8 id="C22530" page="256" size="65536" sector="256" block="65536" timing="1000"/>
+      <MX25U8032E_1V8 id="C22534" page="256" size="1048576" sector="256" block="65536" algorithm="24" timing="1000"/>
+      <MX25U12873F_1V8 id="C22538" page="256" size="16777216" sector="256" block="65536" algorithm="24" timing="1000"/>
+      <MX25V1035F id="C22311" page="256" size="131072" sector="4096" block="65536"/>
+      <MX25V2035F id="C22312" page="256" size="262144" sector="4096" block="65536"/>
+      <MX25V512F id="C22310" page="256" size="65536" sector="4096" block="65536"/>
+      <MX25V4035 id="C22553" page="256" size="524288" sector="4096" block="65536"/>
+      <MX25V4035F id="C22313" page="256" size="524288" sector="4096" block="65536"/>
+      <MX25V8035 id="C22554" page="256" size="1048576" sector="4096" block="65536"/>
+      <MX25V8035F id="C22314" page="256" size="1048576" sector="256" block="65536" algorithm="23" timing="1000"/>
+      <MX66U51235F_1V8 id="C2253A" page="256" size="67108864" sector="256" block="65536" algorithm="24" addr4bit="17" timing="1000"/>
+      <MX66U1G45G_1V8 id="C2253B" page="256" size="134217728" sector="4096" block="65536"/>
+      <MX77L51250F id="C2751A" page="256" size="67108864" sector="4096" block="65536"/>
+    </MACRONIX>
+    <MICRON>
+      <N25Q032A id="20BA16" page="256" size="4194304" sector="256" block="65536" timing="1000"/>
+      <N25Q064A id="20BA17" page="256" size="8388608" sector="256" block="65536" timing="1000"/>
+      <N25Q064A11EF640E id="20BB17" page="256" size="8388608" sector="256" block="65536" timing="1000"/>
+      <N25W256A11 id="2CCB19" page="256" size="33554432" sector="4096" block="65536"/>
+      <MT25QL128AB id="20BA18" page="256" size="16777216" sector="256" block="65536" timing="1000"/>
+      <MT25QU128ABA id="20BB18" page="256" size="16777216" sector="256" block="65536" timing="1000"/>
+    </MICRON>
+    <NANTRONICS>
+      <N25S20 id="D53012" page="256" size="262144" sector="4096" block="65536"/>
+      <N25S40 id="D53013" page="256" size="524288" sector="4096" block="65536"/>
+      <N25S16 id="D53015" page="256" size="2097152" sector="4096" block="65536"/>
+      <N25S32 id="D53016" page="256" size="4194304" sector="256" block="65536" timing="1000"/>
+      <N25S80 id="D53014" page="256" size="1048576" sector="256" block="65536" timing="1000"/>
+    </NANTRONICS>
+    <NEXFLASH>
+      <NX25P10 id="9D7F7C" page="256" size="131072" sector="4096" block="65536"/>
+      <NX25P20 id="9D7F7D" page="256" size="262144" sector="4096" block="65536"/>
+      <NX25P40 id="9D7F7E" page="256" size="524288" sector="4096" block="65536"/>
+      <NX25P80 id="9D7F13" page="256" size="1048576" sector="4096" block="65536"/>
+    </NEXFLASH>
+    <NUMONYX>
+      <M25P05 id="202010" page="128" size="65536" sector="4096" block="65536"/>
+      <M25P10 id="202011" page="128" size="131072" sector="256" block="65536" timing="1000"/>
+      <M25P20 id="202012" page="256" size="262144" sector="256" block="65536" timing="1000"/>
+      <M25P80 id="202014" page="256" size="1048576" sector="256" block="65536" timing="1000"/>
+      <M25P32 id="202016" page="256" size="4194304" sector="256" block="65536" timing="1000"/>
+      <M25P64 id="202017" page="256" size="8388608" sector="256" block="65536" timing="1000"/>
+      <M25P128_ST25P28V6G id="202018" page="256" size="16777216" sector="256" block="65536" timing="1000"/>
+      <M25PE10 id="208011" page="256" size="131072" sector="4096" block="65536"/>
+      <M25PE20 id="208012" page="256" size="262144" sector="4096" block="65536"/>
+      <M25PE40 id="208013" page="256" size="524288" sector="4096" block="65536"/>
+    </NUMONYX>
+    <PCT>
+      <PCT25LF020A id="BF4300" page="256" size="262144" sector="4096" block="65536"/>
+      <PCT25VF016B id="BF2541" page="256" size="2097152" sector="256" block="65536" timing="1000"/>
+      <PCT25VF032B id="BF254A" page="256" size="4194304" sector="256" block="65536" timing="1000"/>
+      <PCT25VF040A id="BF4400" page="256" size="524288" sector="4096" block="65536"/>
+      <PCT25VF040B id="BF258D" page="256" size="524288" sector="256" block="65536" timing="1000"/>
+      <PCT25VF080B id="BF258E" page="256" size="1048576" sector="256" block="65536" timing="1000"/>
+    </PCT>
+    <SANYO>
+      <LE25FU206MA id="6244" page="256" size="262144" sector="4096" block="65536"/>
+      <LE25FU406BMA id="621E" page="256" size="524288" sector="4096" block="65536"/>
+      <LE25FW206M id="6226" page="256" size="262144" sector="4096" block="65536"/>
+      <LE25FW406M id="6207" page="256" size="524288" sector="4096" block="65536"/>
+      <LE25FW406AM id="621A" page="256" size="524288" sector="4096" block="65536"/>
+    </SANYO>
+    <SPANSION>
+      <S25FL002D id="010211" page="256" size="262144" sector="4096" block="65536"/>
+      <S25FL004A id="010212" page="256" size="524288" sector="4096" block="65536"/>
+      <S25FL008A id="010213" page="256" size="1048576" sector="4096" block="65536"/>
+      <S25FL016A id="010214" page="256" size="2097152" sector="256" block="65536" timing="1000"/>
+      <S25FL032A id="010215" page="256" size="4194304" sector="256" block="65536" timing="1000"/>
+      <S25FL040A_BOT id="010226" page="256" size="524288" sector="4096" block="65536"/>
+      <S25FL040A_TOP id="010225" page="256" size="524288" sector="4096" block="65536"/>
+      <S25FL064A id="010216" page="256" size="8388608" sector="256" block="65536" timing="1000"/>
+      <S25FL116K id="014015" page="256" size="2097152" sector="256" block="65536" algorithm="3" timing="1000"/>
+      <S25FL128P id="012018" page="256" size="16777216" sector="256" block="65536" timing="1000"/>
+      <S25FL132K id="014016" page="256" size="4194304" sector="256" block="65536" algorithm="3" timing="1000"/>
+      <S25FL164K id="014017" page="256" size="8388608" sector="256" block="65536" timing="1000"/>
+      <S25FL256S id="010219" page="256" size="33554432" sector="256" block="65536" addr4bit="33" timing="3000"/>
+      <FL256LAIF01 id="016019" page="256" size="33554432" sector="4096" block="65536"/>
+    </SPANSION>
+    <WINBOND>
+      <W25Q256JW id="EF6019" page="256" size="33554432" sector="256" block="65536" algorithm="6" addr4bit="17" timing="1000"/>
+      <W25Q256JW-DTR id="EF8019" page="256" size="33554432" sector="4096" block="65536"/>
+      <W25Q128JW_DTR id="EF8018" page="256" size="16777216" sector="4096" block="65536"/>
+      <W25Q16JW_DTR id="EF8015" page="256" size="2097152" vcc="1.8" sector="4096" block="65536"/>
+      <W25Q16JV-DTR id="EF7015" page="256" size="2097152" vcc="3.3" sector="4096" block="65536"/>
+      <W25Q32JV_DTR id="EF7016" page="256" size="4194304" vcc="1.8" sector="4096" block="65536"/>
+      <W25Q32JW_DTR id="EF8016" page="256" size="4194304" vcc="1.8" sector="256" block="65536" algorithm="3" timing="1000"/>
+      <W25Q512JV id="EF4020" page="256" size="67108864" vcc="3.3" sector="4096" block="65536"/>
+      <W25Q512JV-DTR id="EF7020" page="256" size="67108864" vcc="3.3" sector="256" block="65536" algorithm="6" addr4bit="17" timing="1000"/>
+      <W25Q40BW id="EF5013" page="256" size="524288" vcc="3.3" sector="256" block="65536" algorithm="12" timing="1000"/>
+    </WINBOND>
+    <XMC>
+      <XM25QH128A id="207018" page="256" size="16777216" vcc="3.3" sector="256" block="65536" algorithm="3" timing="1000"/>
+      <XM25QH256B id="206019" page="256" size="33554432" sector="4096" block="65536"/>
+      <XM25QH64A id="207017" page="256" size="8388608" sector="256" block="65536" algorithm="3" timing="1000"/>
+      <XM25QU256B id="207019" page="256" size="33554432" sector="4096" block="65536"/>
+      <XM25QU64A id="203817" page="256" size="8388608" sector="4096" block="65536"/>
+      <XM25RU256C id="204419" page="256" size="33554432" sector="4096" block="65536"/>
+      <XM25QU128B id="205018" page="256" size="16777216" sector="4096" block="65536"/>
+    </XMC>
+    <Zbit>
+      <ZB25D16 id="5E4015" page="256" size="2097152" sector="256" block="65536" algorithm="3" timing="1000"/>
+      <ZB25LQ128A id="5E5018" page="256" size="16777216" sector="256" block="65536" algorithm="4" timing="1200"/>
+      <ZB25VQ128A id="5E6018" page="256" size="16777216" sector="4096" block="65536"/>
+      <ZB25LQ256A id="5E5019" page="256" size="33554432" sector="4096" block="65536"/>
+      <ZB25VQ256A id="5E6019" page="256" size="33554432" sector="4096" block="65536"/>
+    </Zbit>
+    <Berg_Micro>
+      <BG25Q16A id="E04015" page="256" size="2097152" sector="256" block="65536" timing="1000"/>
+      <BG25Q32A id="E04016" page="256" size="4194304" sector="256" block="65536" timing="1000"/>
+    </Berg_Micro>
+    <BoyaMicro>
+      <BY25B128AS id="684018" page="256" size="16777216" sector="256" block="65536" algorithm="3" timing="1000"/>
+    </BoyaMicro>
+    <PMC>
+      <PM25LD512 id="9D20" page="256" size="65536" sector="4096" block="65536"/>
+      <PM25LD010 id="9D21" page="256" size="131072" sector="4096" block="65536"/>
+      <PM25LD020 id="9D22" page="256" size="262144" sector="4096" block="65536"/>
+      <PM25LD040 id="9D7E" page="256" size="524288" sector="4096" block="65536"/>
+      <PM25LV512 id="9D7B" page="256" size="65536" sector="4096" block="65536"/>
+      <PM25LV010 id="9D7C" page="256" size="131072" sector="4096" block="65536"/>
+      <PM25LV020 id="9D7D" page="256" size="262144" sector="4096" block="65536"/>
+      <PM25LV080B id="9D13" page="256" size="1048576" sector="4096" block="65536"/>
+      <PM25LV016B id="9D14" page="256" size="2097152" sector="4096" block="65536"/>
+      <PM25WD020 id="9D32" page="256" size="262144" sector="4096" block="65536"/>
+      <PM25WD040 id="9D33" page="256" size="524288" sector="4096" block="65536"/>
+    </PMC>
+    <ST>
+      <M25PX16 id="207115" page="256" size="2097152" sector="4096" block="65536"/>
+      <M25PX32 id="207116" page="256" size="4194304" sector="4096" block="65536"/>
+      <M25PX64 id="207117" page="256" size="8388608" sector="4096" block="65536"/>
+      <M25PX80 id="207114" page="256" size="1048576" sector="4096" block="65536"/>
+    </ST>
+    <ATMEL>
+      <AT25DF021 id="1F4300" page="256" size="262144" sector="4096" block="65536"/>
+      <AT25DF041 id="1F4400" page="256" size="524288" sector="4096" block="65536"/>
+      <AT25SF041 id="1F8400" page="256" size="524288" sector="4096" block="65536"/>
+      <AT25DF081 id="1F4500" page="256" size="1048576" sector="4096" block="65536"/>
+      <AT25DF161 id="1F4600" page="256" size="2097152" sector="256" block="65536" timing="1000"/>
+      <AT25DF161 id="1F4602" page="256" size="2097152" sector="4096" block="65536"/>
+      <AT25DF321 id="1F4700" page="256" size="4194304" sector="256" block="65536" timing="1000"/>
+      <AT25DF641 id="1F4800" page="256" size="8388608" sector="256" block="65536" timing="1000"/>
+      <AT25F512 id="1F65" page="256" size="65536" sector="4096" block="65536"/>
+      <AT25F512B id="1F6500" page="256" size="65536" sector="4096" block="65536"/>
+      <AT25F1024 id="1F60" page="256" size="131072" sector="4096" block="65536"/>
+      <AT25F2048 id="1F63" page="256" size="262144" sector="4096" block="65536"/>
+      <AT25F4096 id="1F64" page="256" size="524288" sector="4096" block="65536"/>
+      <AT26F004 id="1F0400" page="256" size="524288" sector="4096" block="65536"/>
+    </ATMEL>
+    <ACE>
+      <ACE25A128G_1V8 id="E06018" page="256" size="16777216" sector="4096" block="65536"/>
+    </ACE>
+    <Fremont>
+      <FT25H16 id="0E4015" page="256" size="2097152" sector="4096" block="65536"/>
+    </Fremont>
+    <Fudan>
+      <FM25W128 id="A12818" page="256" size="16777216" sector="256" block="65536" algorithm="16" timing="1000"/>
+    </Fudan>
+    <ISSI>
+      <IS25WQ020 id="9D1152" page="256" size="262144" sector="256" block="65536" timing="1000"/>
+      <IS25WQ040 id="9D1253" page="256" size="524288" sector="256" block="65536" timing="1000"/>
+      <IS25LQ016 id="9D1445" page="256" size="2097152" sector="4096" block="65536"/>
+      <IS25LP016D id="9D6015" page="256" size="2097152" sector="256" block="65536" algorithm="17" timing="1000"/>
+      <IS25WP016D id="9D7015" page="256" size="2097152" sector="256" block="65536" algorithm="17" timing="1000"/>
+      <IS25LP032D id="9D6016" page="256" size="4194304" sector="256" block="65536" algorithm="17" timing="1000"/>
+      <IS25WP032D id="9D7016" page="256" size="4194304" sector="256" block="65536" algorithm="17" timing="1000"/>
+      <IS25LP064A id="9D6017" page="256" size="8388608" sector="256" block="65536" algorithm="17" timing="1000"/>
+      <IC25WP064A id="9D7017" page="256" size="8388608" sector="256" block="65536" algorithm="17" timing="1000"/>
+      <IC25LP128 id="9D6018" page="256" size="16777216" sector="256" block="65536" algorithm="17" timing="1000"/>
+      <IC25WP128 id="9D7018" page="256" size="16777216" sector="256" block="65536" algorithm="17" timing="1000"/>
+      <IC25LP256D id="9D6019" page="256" size="33554432" sector="256" block="65536" algorithm="17" addr4bit="33" timing="1000"/>
+      <IS25WP256A id="9D7019" page="256" size="33554432" sector="256" block="65536" algorithm="17" addr4bit="33" timing="1000"/>
+    </ISSI>
   </SPI_NOR>
   
   <SPI_EEPROM>   
