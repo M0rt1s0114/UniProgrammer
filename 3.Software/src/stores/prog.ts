@@ -1,6 +1,7 @@
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { invoke } from '@tauri-apps/api/core'
+import { t } from '@/i18n'
 
 export interface DetectedChipInfo {
   id: string
@@ -46,6 +47,27 @@ export const useProgStore = defineStore('prog', () => {
   // VCC 输出（高危功能）：默认关闭，连接编程器时重置，不持久化
   const vccOutputEnabled = ref(false)
   const vccTargetMv = ref(3300)
+  const vccFollowChip = ref(false)
+  const VCC_LEVELS = [1200, 1800, 2500, 3300]
+  const vccChipMv = computed<number | null>(() => {
+    const vcc = chipDetails.value?.vcc
+    if (!vcc) return null
+    const value = Number.parseFloat(vcc)
+    if (Number.isNaN(value)) return null
+    const mv = Math.round(value * 1000)
+    return VCC_LEVELS.includes(mv) ? mv : null
+  })
+
+  watch(vccChipMv, (mv) => {
+    if (!vccFollowChip.value) return
+    if (mv !== null) {
+      vccTargetMv.value = mv
+      addLog(t('vcc.followLog').replace('{0}', (mv / 1000).toFixed(1)), 'functionTest')
+    } else {
+      vccFollowChip.value = false
+      addLog(t('vcc.noChipVcc'), 'warn')
+    }
+  })
 
   // 芯片检测状态
   const detectStatus = ref<DetectStatus>('idle')
@@ -292,7 +314,7 @@ export const useProgStore = defineStore('prog', () => {
   return {
     status, connectedDevice,
     vcc18v, spiMode, spiFreq,
-    vccOutputEnabled, vccTargetMv,
+    vccOutputEnabled, vccTargetMv, vccFollowChip, vccChipMv,
     detectStatus, chipInfo, chipDetails,
     isRunning, currentOp, progress, progressMessage,
     hexData,

@@ -80,10 +80,17 @@ function disableVccOutput() {
 }
 
 function requestVccTarget(mv: number) {
-  if (!store.vccOutputEnabled || store.isRunning) return
+  if (!store.vccOutputEnabled || store.vccFollowChip || store.isRunning) return
   pendingVccTarget.value = mv
   vccConfirmText.value = ''
   vccModal.value = 'change'
+}
+
+function onVccFollowChange() {
+  if (store.vccFollowChip && store.vccChipMv !== null) {
+    store.vccTargetMv = store.vccChipMv
+    store.addLog(t('vcc.followLog').replace('{0}', (store.vccChipMv / 1000).toFixed(1)), 'functionTest')
+  }
 }
 
 function confirmVccTarget() {
@@ -200,38 +207,6 @@ onMounted(async () => {
         <UiSelect v-model="store.spiFreq" :options="spiFreqOptions" />
       </div>
 
-      <div
-        v-if="programmerType === 'ch341' || programmerType === 'ch347' || programmerType === 'ch347f'"
-        class="vcc-box"
-        :class="{ 'vcc-active': store.vccOutputEnabled }"
-        style="margin-top: 8px;"
-      >
-        <div class="vcc-row">
-          <span class="vcc-title">{{ t('section.vcc') }}</span>
-          <button
-            class="vcc-toggle"
-            :class="{ 'is-on': store.vccOutputEnabled }"
-            :disabled="store.isRunning"
-            @click="store.vccOutputEnabled ? disableVccOutput() : requestVccEnable()"
-          >
-            {{ store.vccOutputEnabled ? t('vcc.disableAction') : t('vcc.enableAction') }}
-          </button>
-          <span v-if="store.vccOutputEnabled" class="vcc-status">
-            {{ t('vcc.statusOn') }} · {{ voltageLabel }} {{ t('vcc.voltageUnit') }}
-          </span>
-        </div>
-        <div v-if="!store.vccOutputEnabled" class="vcc-hint">{{ t('vcc.offHint') }}</div>
-        <div v-if="store.vccOutputEnabled" class="field" style="margin-top: 6px;">
-          <label class="field-label">{{ t('vcc.target') }}</label>
-          <UiSelect
-            :model-value="store.vccTargetMv"
-            :options="vccVoltageOptions"
-            :disabled="store.isRunning"
-            @change="requestVccTarget"
-          />
-        </div>
-      </div>
-
       <div v-if="programmerType === 'serprog'" class="field" style="margin-top: 6px;">
         <label class="field-label">{{ t('label.serialPort') }}</label>
         <input v-model="serialPort" class="input" :placeholder="t('placeholder.serialPort')" />
@@ -293,16 +268,6 @@ onMounted(async () => {
         <UiSelect v-model="store.selectedModel" :options="chipModelOptions" :placeholder="t('placeholder.selectModel')" :disabled="!store.selectedVendor" @change="onModelChange" />
       </div>
 
-      <div v-if="store.chipDetected && store.chipDetails" class="chip-info" style="margin-top: 8px;">
-        <div class="chip-info-line">{{ store.chipDetails.vendor }} {{ store.chipDetails.model }}</div>
-        <div class="chip-info-line">{{ t('chipInfo.jedec') }} {{ store.chipDetails.id }}</div>
-        <div class="chip-info-line">{{ t('chipInfo.capacity') }} {{ formatBytes(store.chipDetails.size) }}</div>
-        <div class="chip-info-line">{{ t('chipInfo.page') }} {{ store.chipDetails.page }} B<span v-if="store.chipDetails.sector"> · {{ t('chipInfo.sector') }} {{ store.chipDetails.sector }} B</span></div>
-        <div class="chip-info-line" v-if="store.chipDetails.block">{{ t('chipInfo.block') }} {{ formatBytes(store.chipDetails.block) }}</div>
-        <div class="chip-info-line" v-if="store.chipDetails.vcc">{{ t('chipInfo.vcc') }} {{ store.chipDetails.vcc }} V</div>
-        <div class="chip-info-line">{{ t('chipInfo.addr4') }} {{ store.chipDetails.addr4bit && (store.chipDetails.addr4bit & 0x0f) ? t('common.yes') : t('common.no') }}</div>
-      </div>
-
       <div style="display: flex; gap: 8px; margin-top: 8px;">
         <button class="btn btn-secondary" style="flex: 1;" :disabled="!store.canDetect" @click="spiNor.detectChip()">
           {{ t('action.detect') }}
@@ -311,6 +276,68 @@ onMounted(async () => {
           {{ t('action.search') }}
         </button>
       </div>
+    </section>
+
+    <div class="divider" />
+
+    <!-- ── 芯片信息 ── -->
+    <section class="panel-section">
+      <div class="section-label">{{ t('section.chipInfo') }}</div>
+      <div v-if="store.chipDetected && store.chipDetails" class="chip-info">
+        <div class="chip-info-line">{{ store.chipDetails.vendor }} {{ store.chipDetails.model }}</div>
+        <div class="chip-info-line">{{ t('chipInfo.jedec') }} {{ store.chipDetails.id }}</div>
+        <div class="chip-info-line">{{ t('chipInfo.capacity') }} {{ formatBytes(store.chipDetails.size) }}</div>
+        <div class="chip-info-line">{{ t('chipInfo.page') }} {{ store.chipDetails.page }} B<span v-if="store.chipDetails.sector"> · {{ t('chipInfo.sector') }} {{ store.chipDetails.sector }} B</span></div>
+        <div class="chip-info-line" v-if="store.chipDetails.block">{{ t('chipInfo.block') }} {{ formatBytes(store.chipDetails.block) }}</div>
+        <div class="chip-info-line" v-if="store.chipDetails.vcc">{{ t('chipInfo.vcc') }} {{ store.chipDetails.vcc }} V</div>
+        <div class="chip-info-line">{{ t('chipInfo.addr4') }} {{ store.chipDetails.addr4bit && (store.chipDetails.addr4bit & 0x0f) ? t('common.yes') : t('common.no') }}</div>
+      </div>
+      <div v-else class="chip-placeholder">{{ t('chipInfo.none') }}</div>
+    </section>
+
+    <div class="divider" />
+
+    <!-- ── 电压调节 ── -->
+    <section class="panel-section">
+      <div class="section-label">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+        </svg>
+        {{ t('section.vcc') }}
+      </div>
+
+      <div class="field">
+        <label class="field-label">{{ t('label.vccVoltage') }}</label>
+        <UiSelect
+          :model-value="store.vccTargetMv"
+          :options="vccVoltageOptions"
+          :disabled="!store.vccOutputEnabled || store.vccFollowChip || store.isRunning"
+          @change="requestVccTarget"
+        />
+      </div>
+
+      <label class="toggle-row">
+        <input
+          v-model="store.vccFollowChip"
+          type="checkbox"
+          class="toggle-check"
+          :disabled="!store.vccChipMv || store.isRunning"
+          @change="onVccFollowChange"
+        />
+        <span class="toggle-text">{{ t('vcc.followChip') }}</span>
+      </label>
+      <div class="vcc-hint">{{ store.vccChipMv ? t('vcc.followHint') : t('vcc.noChipVcc') }}</div>
+
+      <button
+        class="btn w-full vcc-power-btn"
+        :class="{ 'btn-secondary': !store.vccOutputEnabled, 'btn-danger': store.vccOutputEnabled }"
+        :disabled="store.isRunning"
+        @click="store.vccOutputEnabled ? disableVccOutput() : requestVccEnable()"
+      >
+        {{ store.vccOutputEnabled ? t('vcc.disconnectPower') : t('vcc.connectPower') }}
+      </button>
+      <div v-if="store.vccOutputEnabled" class="vcc-status">{{ t('vcc.statusOn') }} · {{ voltageLabel }} {{ t('vcc.voltageUnit') }}</div>
+      <div v-if="!store.vccOutputEnabled" class="vcc-hint">{{ t('vcc.offHint') }}</div>
     </section>
 
     <div class="divider" />
@@ -370,7 +397,7 @@ onMounted(async () => {
         <div class="modal-actions">
           <button class="btn btn-secondary" @click="closeVccModal">{{ t('action.cancel') }}</button>
           <button class="btn btn-danger" @click="vccModal === 'enable' ? confirmVccEnable() : confirmVccTarget()">
-            {{ vccModal === 'enable' ? t('vcc.enableAction') : t('vcc.apply') }}
+            {{ vccModal === 'enable' ? t('vcc.connectPower') : t('vcc.apply') }}
           </button>
         </div>
       </div>
@@ -541,6 +568,7 @@ onMounted(async () => {
   padding: 8px;
   background: var(--bg-surface);
 }
+.vcc-power-btn { margin-top: 6px; }
 .vcc-box.vcc-active {
   border-color: rgba(240, 80, 80, 0.65);
   background: rgba(240, 80, 80, 0.08);

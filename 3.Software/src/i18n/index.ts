@@ -43,6 +43,7 @@ const zh: MessageRecord = {
   'section.programmer': '编程器',
   'section.file': '文件',
   'section.chip': '芯片',
+  'section.chipInfo': '芯片信息',
   'section.operations': '操作',
 
   // Field labels
@@ -72,17 +73,22 @@ const zh: MessageRecord = {
   'chipInfo.block': '块:',
   'chipInfo.vcc': 'VCC:',
   'chipInfo.addr4': '4B 地址:',
+  'chipInfo.none': '尚未选择或检测到芯片',
 
   // Common
   'common.yes': '是',
   'common.no': '否',
 
   // VCC output
-  'section.vcc': 'VCC 输出',
+  'section.vcc': '电压调节',
+  'label.vccVoltage': 'VCC 电压',
+  'vcc.connectPower': '接通电源',
+  'vcc.disconnectPower': '断开电源',
+  'vcc.followChip': '同步芯片库信息',
+  'vcc.followHint': '根据芯片库中的 VCC 信息自动设置电压',
+  'vcc.noChipVcc': '芯片库中没有 VCC 电压信息',
+  'vcc.followLog': '电压跟随芯片库：{0}V',
   'vcc.offHint': '电压输出已关闭（硬件上电默认不输出电压）',
-  'vcc.enableAction': '开启输出',
-  'vcc.disableAction': '紧急关闭',
-  'vcc.target': '目标电压',
   'vcc.statusOn': 'VCC ON',
   'vcc.modalTitle': '启用 VCC 输出？',
   'vcc.modalBody': '输出电压可能损坏目标芯片、编程器或电脑 USB 端口。请先确认目标芯片的供电电压。',
@@ -168,6 +174,7 @@ const en: MessageRecord = {
   'section.programmer': 'Programmer',
   'section.file': 'File',
   'section.chip': 'Chip',
+  'section.chipInfo': 'Chip Information',
   'section.operations': 'Operations',
 
   // Field labels
@@ -197,17 +204,22 @@ const en: MessageRecord = {
   'chipInfo.block': 'Block:',
   'chipInfo.vcc': 'VCC:',
   'chipInfo.addr4': '4B Address:',
+  'chipInfo.none': 'No chip selected or detected yet',
 
   // Common
   'common.yes': 'Yes',
   'common.no': 'No',
 
   // VCC output
-  'section.vcc': 'VCC Output',
+  'section.vcc': 'Voltage Regulation',
+  'label.vccVoltage': 'VCC Voltage',
+  'vcc.connectPower': 'Enable Power',
+  'vcc.disconnectPower': 'Disconnect Power',
+  'vcc.followChip': 'Follow chip database',
+  'vcc.followHint': 'Set voltage automatically from the chip database VCC field',
+  'vcc.noChipVcc': 'No VCC information in the chip database',
+  'vcc.followLog': 'Voltage follows chip database: {0}V',
   'vcc.offHint': 'Voltage output disabled (hardware defaults to no output at power-up)',
-  'vcc.enableAction': 'Enable Output',
-  'vcc.disableAction': 'Emergency Off',
-  'vcc.target': 'Target Voltage',
   'vcc.statusOn': 'VCC ON',
   'vcc.modalTitle': 'Enable VCC Output?',
   'vcc.modalBody': 'Enabling voltage output may damage the target chip, the programmer, or the computer USB port. Verify the target chip supply voltage first.',
