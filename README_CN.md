@@ -111,7 +111,8 @@ cargo run --example chipdb_tool -- \
 - Rust + Node.js 22
 - 后端测试：`cargo test`
 - 代码规范：在 `3.Software` 下运行 `.\lint.ps1`（Windows）或 `./lint.sh`
-  （Linux），会依次执行 ESLint、Prettier、`cargo fmt` 与 `cargo clippy`
+  （Linux），会依次执行 ESLint、Prettier、`cargo fmt` 与 `cargo clippy`；
+  CI 会在 `main` 推送和 Pull Request 时自动执行同样检查
 - 发布稳定版前必须完成真机验证
 
 ## 维护者

@@ -119,6 +119,9 @@ The suite checks:
   (`cargo clippy --all-targets -- -D warnings`; see
   `3.Software/src-tauri/.cargo/config.toml`)
 
+CI runs the same checks on every push to `main` and every pull request via
+`.github/workflows/lint.yml`.
+
 Individual commands:
 
 ```bash

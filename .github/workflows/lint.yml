@@ -1,0 +1,90 @@
+name: Lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: lint-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Frontend lint (ubuntu)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: 3.Software/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: 3.Software
+
+      - name: ESLint
+        run: npm run lint
+        working-directory: 3.Software
+
+      - name: Prettier check
+        run: npm run format:check
+        working-directory: 3.Software
+
+      - name: Frontend build
+        run: npm run build
+        working-directory: 3.Software
+
+  rust:
+    name: Rust lint (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows-dll
+            os: windows-latest
+            features: ""
+          - name: linux-libusb
+            os: ubuntu-24.04
+            features: ""
+          - name: windows-libusb
+            os: windows-latest
+            features: "--features hal-libusb"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Tauri Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file \
+            libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev \
+            libusb-1.0-0-dev libudev-dev pkg-config
+
+      - uses: dtolnay/rust-toolchain@1.96.0
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: 3.Software/src-tauri
+
+      - name: rustfmt check
+        shell: bash
+        run: cargo fmt --check
+        working-directory: 3.Software/src-tauri
+
+      - name: Clippy
+        shell: bash
+        run: cargo clippy --all-targets ${{ matrix.features }} -- -D warnings
+        working-directory: 3.Software/src-tauri
+
+      - name: Backend tests
+        shell: bash
+        run: cargo test
+        working-directory: 3.Software/src-tauri
