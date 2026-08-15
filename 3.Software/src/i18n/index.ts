@@ -79,6 +79,11 @@ const zh: MessageRecord = {
   'common.yes': '是',
   'common.no': '否',
 
+  // Experimental warning
+  'experimental.title': '实验性功能',
+  'experimental.body': '该功能尚未经过真机验证，可能无法正常工作或造成数据异常。',
+  'experimental.continue': '仍然继续',
+
   // SPI NAND settings
   'section.nand': 'NAND 设置',
   'nand.readBadBlockFirst': '读写前默认先读坏块',
@@ -248,6 +253,12 @@ const en: MessageRecord = {
   // Common
   'common.yes': 'Yes',
   'common.no': 'No',
+
+  // Experimental warning
+  'experimental.title': 'Experimental Feature',
+  'experimental.body':
+    'This feature has not been validated on real hardware and may malfunction or corrupt data.',
+  'experimental.continue': 'Continue Anyway',
 
   // SPI NAND settings
   'section.nand': 'NAND Settings',

@@ -103,9 +103,10 @@ export function useSpiNor() {
     }
     store.isRunning = true
     store.currentOp = label
+    store.addLog(`${label}：实验性功能，开始执行`, 'functionTest')
     try {
       const result = (await invoke(command)) as { length: number; hex: string }
-      store.addLog(`${label} 完成（${result.length} 字节，实验性命令，需真机验证）`, 'success')
+      store.addLog(`${label} 完成（${result.length} 字节，实验性命令，需真机验证）`, 'functionTest')
       store.addLog(result.hex, 'info')
     } catch (e: unknown) {
       store.addLog(`${label} 失败: ${String(e)}`, 'error')
@@ -130,13 +131,14 @@ export function useSpiNor() {
     }
     store.isRunning = true
     store.currentOp = '读取 NAND BBM 映射表'
+    store.addLog('读取 NAND BBM 映射表：实验性功能，开始执行', 'functionTest')
     try {
       const result = (await invoke('read_nand_bbm_lut')) as {
         length: number
         hex: string
         entries: { index: number; lba: number; pba: number; free: boolean; valid: boolean }[]
       }
-      store.addLog(`BBM 映射表读取完成（${result.length} 字节，实验性）`, 'success')
+      store.addLog(`BBM 映射表读取完成（${result.length} 字节，实验性）`, 'functionTest')
       for (const e of result.entries) {
         const status = e.free ? '空闲' : e.valid ? '有效替换' : '失效/保留'
         store.addLog(
@@ -160,12 +162,13 @@ export function useSpiNor() {
     }
     store.isRunning = true
     store.currentOp = `读取 NAND OTP 页 ${page}`
+    store.addLog(`读取 NAND OTP 页 ${page}：实验性功能，开始执行`, 'functionTest')
     try {
       const result = (await invoke('read_nand_otp_page', { page })) as {
         length: number
         hex: string
       }
-      store.addLog(`NAND OTP 页 ${page} 读取完成（${result.length} 字节，实验性）`, 'success')
+      store.addLog(`NAND OTP 页 ${page} 读取完成（${result.length} 字节，实验性）`, 'functionTest')
       store.addLog(result.hex, 'info')
     } catch (e: unknown) {
       store.addLog(`NAND OTP 页 ${page} 读取失败: ${String(e)}`, 'error')
@@ -182,9 +185,13 @@ export function useSpiNor() {
     }
     store.isRunning = true
     store.currentOp = enable ? '开启硬件 ECC' : '关闭硬件 ECC'
+    store.addLog(`${store.currentOp}：实验性功能，开始执行`, 'functionTest')
     try {
       const enabled = (await invoke('set_nand_ecc', { enable })) as boolean
-      store.addLog(`芯片内置 ECC 已${enabled ? '开启' : '关闭'}（实验性，需真机验证）`, 'success')
+      store.addLog(
+        `芯片内置 ECC 已${enabled ? '开启' : '关闭'}（实验性，需真机验证）`,
+        'functionTest',
+      )
     } catch (e: unknown) {
       store.addLog(`ECC 设置失败: ${String(e)}`, 'error')
     } finally {
@@ -201,13 +208,14 @@ export function useSpiNor() {
     }
     store.isRunning = true
     store.currentOp = kind === 'page' ? '读45页面模式' : '读45芯片模式'
+    store.addLog(`${store.currentOp}：实验性功能，开始执行`, 'functionTest')
     try {
       const result = (await invoke('read_at45_page_mode')) as { raw: number; binaryPage: boolean }
       store.addLog(
         `45 状态寄存器原始值：0x${result.raw.toString(16).padStart(2, '0')}；当前模式：${
           result.binaryPage ? '二进制页面（2 的幂）' : '标准 DataFlash 页面'
         }（实验性，需真机验证）`,
-        'success',
+        'functionTest',
       )
     } catch (e: unknown) {
       store.addLog(`45 页面模式读取失败: ${String(e)}`, 'error')
@@ -217,15 +225,20 @@ export function useSpiNor() {
     }
   }
 
-  async function setAt45PageMode(binary: boolean) {
+  async function setAt45PageMode(binary: boolean, skipConfirm = false) {
     if (store.selectedType !== 'SPI_DATA_45' || !store.canOperate) {
       store.addLog('45 页面模式设置仅支持已连接的 DataFlash 芯片', 'warn')
       return
     }
-    const confirmed = window.confirm(binary ? t('at45.confirmBinary') : t('at45.confirmDataFlash'))
-    if (!confirmed) return
+    if (!skipConfirm) {
+      const confirmed = window.confirm(
+        binary ? t('at45.confirmBinary') : t('at45.confirmDataFlash'),
+      )
+      if (!confirmed) return
+    }
     store.isRunning = true
     store.currentOp = binary ? '切换为二进制页面模式' : '切换为 DataFlash 页面模式'
+    store.addLog(`${store.currentOp}：实验性功能，开始执行`, 'functionTest')
     try {
       const result = (await invoke('set_at45_page_mode', { binary })) as {
         raw: number
@@ -235,7 +248,7 @@ export function useSpiNor() {
         `45 芯片页面模式切换完成，状态寄存器原始值：0x${result.raw
           .toString(16)
           .padStart(2, '0')}（实验性，需真机验证）`,
-        'success',
+        'functionTest',
       )
     } catch (e: unknown) {
       store.addLog(`45 页面模式切换失败: ${String(e)}`, 'error')
@@ -255,6 +268,7 @@ export function useSpiNor() {
     store.currentOp = '读取坏块'
     store.progress = 0
     store.progressMessage = '正在扫描坏块...'
+    store.addLog('坏块扫描：实验性功能，开始执行', 'functionTest')
     const unlisten = await listenProgress('bad_block_progress', (done, total) => {
       const pct = total > 0 ? Math.floor((done / total) * 100) : 0
       store.progress = pct
@@ -268,11 +282,11 @@ export function useSpiNor() {
       }
       store.progress = 100
       if (result.badCount === 0) {
-        store.addLog(`坏块扫描完成：共 ${result.totalBlocks} 块，未发现坏块`, 'success')
+        store.addLog(`坏块扫描完成：共 ${result.totalBlocks} 块，未发现坏块`, 'functionTest')
       } else {
         store.addLog(
           `坏块扫描完成：共 ${result.totalBlocks} 块，发现 ${result.badCount} 个坏块`,
-          'warn',
+          'functionTest',
         )
         const page = store.chipDetails?.page ?? 1
         const block = store.chipDetails?.block ?? page

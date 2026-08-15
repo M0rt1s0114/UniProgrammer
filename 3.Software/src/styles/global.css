@@ -181,6 +181,16 @@ html.linux body {
   border-color: var(--color-danger);
 }
 
+.btn-warn {
+  background: rgba(240, 165, 0, 0.1);
+  color: var(--color-warn);
+  border-color: rgba(240, 165, 0, 0.35);
+}
+.btn-warn:hover {
+  background: rgba(240, 165, 0, 0.2);
+  border-color: var(--color-warn);
+}
+
 .btn-ghost {
   background: transparent;
   color: var(--text-secondary);
@@ -361,6 +371,14 @@ select.input {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.modal-warn .modal-icon {
+  color: var(--color-warn);
+}
+
+.modal-warn .modal-title {
+  color: var(--color-warn);
 }
 
 .modal-title {

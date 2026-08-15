@@ -11,6 +11,28 @@ const spiNor = useSpiNor()
 const programmerType = ref<'ch341' | 'ch347' | 'ch347f' | 'serprog' | 'hidprog'>('ch341')
 const serialPort = ref('')
 
+type ExperimentalRequest = {
+  title: string
+  body: string
+  run: () => void | Promise<void>
+}
+const experimentalRequest = ref<ExperimentalRequest | null>(null)
+
+function requestExperimental(title: string, body: string, run: () => void | Promise<void>) {
+  experimentalRequest.value = { title, body, run }
+}
+
+function confirmExperimentalAction(labelKey: string, run: () => void | Promise<void>) {
+  requestExperimental(t('experimental.title'), `${t(labelKey)}：${t('experimental.body')}`, run)
+}
+
+async function confirmExperimental() {
+  const request = experimentalRequest.value
+  if (!request) return
+  experimentalRequest.value = null
+  await request.run()
+}
+
 const programmerOptions: UiOption[] = [
   { value: 'ch341', label: 'CH341A' },
   { value: 'ch347', label: 'CH347T' },
@@ -362,7 +384,7 @@ onMounted(async () => {
           class="btn btn-ghost btn-sm"
           style="flex: 1"
           :disabled="!store.canOperate || store.isRunning"
-          @click="spiNor.readNandUid()"
+          @click="confirmExperimentalAction('nand.readUid', () => spiNor.readNandUid())"
         >
           {{ t('nand.readUid') }}{{ t('nand.experimental') }}
         </button>
@@ -370,7 +392,7 @@ onMounted(async () => {
           class="btn btn-ghost btn-sm"
           style="flex: 1"
           :disabled="!store.canOperate || store.isRunning"
-          @click="spiNor.readNandParamPage()"
+          @click="confirmExperimentalAction('nand.readParamPage', () => spiNor.readNandParamPage())"
         >
           {{ t('nand.readParamPage') }}{{ t('nand.experimental') }}
         </button>
@@ -380,7 +402,7 @@ onMounted(async () => {
           class="btn btn-ghost btn-sm"
           style="flex: 1"
           :disabled="!store.canOperate || store.isRunning"
-          @click="spiNor.readNandBbmLut()"
+          @click="confirmExperimentalAction('nand.readBbmLut', () => spiNor.readNandBbmLut())"
         >
           {{ t('nand.readBbmLut') }}{{ t('nand.experimental') }}
         </button>
@@ -388,7 +410,7 @@ onMounted(async () => {
           class="btn btn-ghost btn-sm"
           style="flex: 1"
           :disabled="!store.canOperate || store.isRunning"
-          @click="spiNor.setNandEcc(true)"
+          @click="confirmExperimentalAction('nand.eccEnable', () => spiNor.setNandEcc(true))"
         >
           {{ t('nand.eccEnable') }}{{ t('nand.experimental') }}
         </button>
@@ -397,7 +419,7 @@ onMounted(async () => {
         class="btn btn-ghost btn-sm w-full"
         style="margin-top: 6px"
         :disabled="!store.canOperate || store.isRunning"
-        @click="spiNor.setNandEcc(false)"
+        @click="confirmExperimentalAction('nand.eccDisable', () => spiNor.setNandEcc(false))"
       >
         {{ t('nand.eccDisable') }}{{ t('nand.experimental') }}
       </button>
@@ -443,7 +465,9 @@ onMounted(async () => {
           class="btn btn-ghost btn-sm"
           style="flex: 1"
           :disabled="!store.canOperate || store.isRunning"
-          @click="spiNor.readNandOtpPage(nandOtpPage)"
+          @click="
+            confirmExperimentalAction('nand.readOtpPage', () => spiNor.readNandOtpPage(nandOtpPage))
+          "
         >
           {{ t('nand.readOtpPage') }}{{ t('nand.experimental') }}
         </button>
@@ -461,7 +485,9 @@ onMounted(async () => {
           class="btn btn-ghost btn-sm"
           style="flex: 1"
           :disabled="!store.canOperate || store.isRunning"
-          @click="spiNor.readAt45PageMode('page')"
+          @click="
+            confirmExperimentalAction('at45.readPageMode', () => spiNor.readAt45PageMode('page'))
+          "
         >
           {{ t('at45.readPageMode') }}{{ t('nand.experimental') }}
         </button>
@@ -469,7 +495,9 @@ onMounted(async () => {
           class="btn btn-ghost btn-sm"
           style="flex: 1"
           :disabled="!store.canOperate || store.isRunning"
-          @click="spiNor.readAt45PageMode('chip')"
+          @click="
+            confirmExperimentalAction('at45.readChipMode', () => spiNor.readAt45PageMode('chip'))
+          "
         >
           {{ t('at45.readChipMode') }}{{ t('nand.experimental') }}
         </button>
@@ -479,7 +507,11 @@ onMounted(async () => {
           class="btn btn-secondary"
           style="flex: 1"
           :disabled="!store.canOperate || store.isRunning"
-          @click="spiNor.setAt45PageMode(false)"
+          @click="
+            confirmExperimentalAction('at45.setDataFlashPage', () =>
+              spiNor.setAt45PageMode(false, true),
+            )
+          "
         >
           {{ t('at45.setDataFlashPage') }}
         </button>
@@ -487,7 +519,11 @@ onMounted(async () => {
           class="btn btn-secondary"
           style="flex: 1"
           :disabled="!store.canOperate || store.isRunning"
-          @click="spiNor.setAt45PageMode(true)"
+          @click="
+            confirmExperimentalAction('at45.setBinaryPage', () =>
+              spiNor.setAt45PageMode(true, true),
+            )
+          "
         >
           {{ t('at45.setBinaryPage') }}
         </button>
@@ -609,6 +645,42 @@ onMounted(async () => {
       </div>
     </Transition>
   </div>
+
+  <!-- 实验性功能警告弹窗（黄色等级，低于 VCC 高危红色） -->
+  <Transition name="fade">
+    <div v-if="experimentalRequest" class="modal-backdrop" @click.self="experimentalRequest = null">
+      <div class="modal modal-warn">
+        <div class="modal-icon">
+          <svg
+            width="22"
+            height="22"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path
+              d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"
+            />
+            <line x1="12" y1="9" x2="12" y2="13" />
+            <line x1="12" y1="17" x2="12.01" y2="17" />
+          </svg>
+        </div>
+        <h3 class="modal-title">{{ experimentalRequest.title }}</h3>
+        <p class="modal-body">{{ experimentalRequest.body }}</p>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" @click="experimentalRequest = null">
+            {{ t('action.cancel') }}
+          </button>
+          <button class="btn btn-warn" @click="confirmExperimental">
+            {{ t('experimental.continue') }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </Transition>
 
   <!-- VCC 输出确认弹窗（高危） -->
   <Transition name="fade">
