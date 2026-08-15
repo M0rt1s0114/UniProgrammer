@@ -48,6 +48,8 @@ export const useProgStore = defineStore('prog', () => {
   const vccOutputEnabled = ref(false)
   const vccTargetMv = ref(3300)
   const vccFollowChip = ref(false)
+  // 芯片信息必须声明在 vccChipMv 之前，否则 computed 初始化时会触发 TDZ 错误
+  const chipDetails = ref<DetectedChipInfo | null>(null)
   const VCC_LEVELS = [1200, 1800, 2500, 3300]
   const vccChipMv = computed<number | null>(() => {
     const vcc = chipDetails.value?.vcc
@@ -72,7 +74,6 @@ export const useProgStore = defineStore('prog', () => {
   // 芯片检测状态
   const detectStatus = ref<DetectStatus>('idle')
   const chipInfo = ref<string[]>([])
-  const chipDetails = ref<DetectedChipInfo | null>(null)
 
   // 当前操作状态（进度等）
   const isRunning = ref(false)
