@@ -39,7 +39,7 @@ jobs:
           $out = "portable-windows"
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item "$rel/chip-validator.exe" $out
-          Copy-Item "$rel/../chiplib.bin" $out
+          Copy-Item "$rel/../../chiplib.bin" $out
           Compress-Archive -Path "$out/*" -DestinationPath "UniProgrammer-windows-x64-portable.zip"
 
       - name: Upload portable zip
