@@ -10,9 +10,9 @@ jobs:
   windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
 
@@ -43,7 +43,7 @@ jobs:
           Compress-Archive -Path "$out/*" -DestinationPath "UniProgrammer-windows-x64-portable.zip"
 
       - name: Upload portable zip
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: UniProgrammer-windows-portable-libusb
           path: UniProgrammer-windows-x64-portable.zip
@@ -51,7 +51,7 @@ jobs:
   linux:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Tauri Linux dependencies
         run: |
@@ -60,7 +60,7 @@ jobs:
             libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev \
             libusb-1.0-0-dev libudev-dev pkg-config
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
 
@@ -78,7 +78,7 @@ jobs:
         working-directory: 3.Software
 
       - name: Upload Linux binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: UniProgrammer-linux-x64
           path: |
@@ -92,12 +92,12 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: artifacts
 
       - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: artifacts/**/*
           generate_release_notes: true
