@@ -583,40 +583,91 @@ fn nand_block_erase(dev: &Ch34xDevice, block_no: u32) -> Result<(), String> {
     nand_wait_ready(dev, 2000)
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum NandBadBlockMode {
+    Skip,
+    Bypass,
+    Ignore,
+}
+
 pub fn nand_read(
     dev: &Ch34xDevice,
     params: &ChipParams,
     size: u64,
+    bad_blocks: &[u32],
     progress: &mut dyn FnMut(u64, u64),
 ) -> Result<Vec<u8>, String> {
-    let page_size = params.page.max(1);
-    let pages = size.div_ceil(page_size as u64) as usize;
+    let page_size = params.page.max(1) as u64;
+    let block_size = (params.block as u64).max(page_size);
+    let pages_per_block = (block_size / page_size).max(1) as u32;
+    let mut bad_set: std::collections::HashSet<u32> = bad_blocks.iter().copied().collect();
     let mut out = Vec::with_capacity(size as usize);
-    for page_no in 0..pages {
-        let mut page = nand_page_read(dev, page_size, page_no as u32)?;
-        if page.len() > (size as usize - out.len()) {
-            page.truncate(size as usize - out.len());
+
+    if bad_set.is_empty() {
+        bad_set = std::collections::HashSet::new();
+    }
+
+    let total_blocks = size.div_ceil(block_size);
+    for block_no in 0..total_blocks {
+        if bad_set.contains(&(block_no as u32)) {
+            let fill = block_size.min(size - out.len() as u64) as usize;
+            out.resize(out.len() + fill, 0xFF);
+            progress(out.len() as u64, size);
+            continue;
         }
-        out.extend_from_slice(&page);
-        progress(out.len() as u64, size);
+        for page_in_block in 0..pages_per_block {
+            let page_no = block_no as u32 * pages_per_block + page_in_block;
+            let mut page = nand_page_read(dev, params.page.max(1), page_no)?;
+            if page.len() > size as usize - out.len() {
+                page.truncate(size as usize - out.len());
+            }
+            out.extend_from_slice(&page);
+            progress(out.len() as u64, size);
+            if out.len() as u64 >= size {
+                return Ok(out);
+            }
+        }
     }
     Ok(out)
 }
 
+#[allow(clippy::too_many_arguments)] // caller-owned NAND write flags, grouped later with BBM work
 pub fn nand_write(
     dev: &Ch34xDevice,
     params: &ChipParams,
     data: &[u8],
+    size: u64,
+    bad_blocks: &[u32],
+    mode: NandBadBlockMode,
     force_segmented: bool,
     progress: &mut dyn FnMut(u64, u64),
 ) -> Result<(), String> {
-    let page_size = params.page.max(1);
+    if mode == NandBadBlockMode::Bypass && !bad_blocks.is_empty() {
+        return Err(
+            "Bypass(BBM LUT) 写入将在坏块映射表功能完成后启用，请暂时使用 Skip 或 Ignore".into(),
+        );
+    }
+    let page_size = params.page.max(1) as u64;
+    let block_size = (params.block as u64).max(page_size);
+    let pages_per_block = (block_size / page_size).max(1) as u32;
+    let bad_set: std::collections::HashSet<u32> = bad_blocks.iter().copied().collect();
     let total = data.len() as u64;
+    let total_pages = size.div_ceil(page_size);
+
     let mut offset = 0usize;
     let mut page_no = 0u32;
     while offset < data.len() {
-        let chunk = (data.len() - offset).min(page_size);
-        let mut page = vec![0xFFu8; page_size];
+        let block_no = page_no / pages_per_block;
+        if bad_set.contains(&block_no) {
+            // Skip the whole physical block; logical data advances unchanged.
+            page_no += pages_per_block;
+            continue;
+        }
+        if page_no as u64 >= total_pages {
+            return Err("写入数据超过 NAND 可用物理容量（Skip 模式会跳过坏块）".into());
+        }
+        let chunk = (data.len() - offset).min(params.page.max(1));
+        let mut page = vec![0xFFu8; params.page.max(1)];
         page[..chunk].copy_from_slice(&data[offset..offset + chunk]);
         if 3 + page.len() > dev.spi_frame_limit() {
             if force_segmented {
@@ -640,10 +691,19 @@ pub fn nand_write(
     Ok(())
 }
 
-pub fn nand_erase(dev: &Ch34xDevice, params: &ChipParams, size: u64) -> Result<(), String> {
+pub fn nand_erase(
+    dev: &Ch34xDevice,
+    params: &ChipParams,
+    size: u64,
+    bad_blocks: &[u32],
+) -> Result<(), String> {
     let block_size = params.block.max(1) as u64;
     let blocks = size.div_ceil(block_size) as u32;
+    let bad_set: std::collections::HashSet<u32> = bad_blocks.iter().copied().collect();
     for block_no in 0..blocks {
+        if bad_set.contains(&block_no) {
+            continue;
+        }
         nand_block_erase(dev, block_no)?;
     }
     Ok(())

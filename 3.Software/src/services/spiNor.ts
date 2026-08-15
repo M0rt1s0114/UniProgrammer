@@ -137,7 +137,9 @@ export function useSpiNor() {
     store.progressMessage = '正在擦除...'
     store.addLog('开始全片擦除...')
     try {
-      const msg = (await invoke('chip_erase')) as string
+      const msg = (await invoke('chip_erase', {
+        badBlockMode: store.nandBadBlockMode,
+      })) as string
       store.addLog(msg, 'success')
       if (store.detectedChipSize > 0) {
         fillHexWithFF(store.detectedChipSize)
@@ -181,6 +183,7 @@ export function useSpiNor() {
       const raw = await invoke<number[]>('read_chip', {
         size: store.detectedChipSize,
         startAddr: 0,
+        badBlockMode: store.nandBadBlockMode,
       })
       store.hexData = new Uint8Array(raw)
       store.progress = 100
@@ -230,6 +233,7 @@ export function useSpiNor() {
         data: Array.from(store.hexData),
         startAddr: 0,
         forceSegmented,
+        badBlockMode: store.nandBadBlockMode,
       })
       store.progress = 100
       store.progressMessage = '写入完成'
@@ -282,6 +286,7 @@ export function useSpiNor() {
       const msg = await invoke<string>('verify_chip', {
         data: Array.from(store.hexData),
         startAddr: 0,
+        badBlockMode: store.nandBadBlockMode,
       })
       store.progress = 100
       store.progressMessage = '校验完成'

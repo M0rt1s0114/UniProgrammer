@@ -234,6 +234,31 @@ fn open_ch34x_mode(state: &AppState, mode: DeviceMode) -> Result<Ch34xDevice, St
     Ch34xDevice::open_with_mode(settings, mode)
 }
 
+fn parse_nand_bad_block_mode(value: Option<&str>) -> protocols::NandBadBlockMode {
+    match value {
+        Some("skip") => protocols::NandBadBlockMode::Skip,
+        Some("bypass") => protocols::NandBadBlockMode::Bypass,
+        Some("ignore") => protocols::NandBadBlockMode::Ignore,
+        _ => protocols::NandBadBlockMode::Ignore,
+    }
+}
+
+fn scan_nand_bad_blocks_for_mode(
+    dev: &Ch34xDevice,
+    info: &chiplib::ChipInfo,
+    app: &tauri::AppHandle,
+    mode: protocols::NandBadBlockMode,
+) -> Result<Vec<u32>, String> {
+    if mode == protocols::NandBadBlockMode::Ignore {
+        return Ok(Vec::new());
+    }
+    let params = protocols::ChipParams::from_info(info);
+    protocols::nand_scan_bad_blocks(dev, &params, info.size, &mut |done, total| {
+        app.emit("bad_block_progress", BadBlockProgressEvent { done, total })
+            .ok();
+    })
+}
+
 // ═══════════════════════════════ serprog helpers ═════════════════════════════
 
 fn serprog_wait_ready(ser: &mut serprog::Serprog, timeout_ms: u64) -> Result<(), String> {
@@ -409,7 +434,11 @@ fn scan_bad_blocks(
 }
 
 #[tauri::command]
-fn chip_erase(state: State<'_, Mutex<AppState>>) -> Result<String, String> {
+fn chip_erase(
+    state: State<'_, Mutex<AppState>>,
+    app: tauri::AppHandle,
+    bad_block_mode: Option<String>,
+) -> Result<String, String> {
     let mut s = state.lock().map_err(|e| e.to_string())?;
 
     if s.ch34x.is_some() {
@@ -456,7 +485,13 @@ fn chip_erase(state: State<'_, Mutex<AppState>>) -> Result<String, String> {
             "SPI_NAND" => {
                 let dev = open_ch34x_mode(&s, bus)?;
                 let params = protocols::ChipParams::from_info(&info);
-                protocols::nand_erase(&dev, &params, info.size)?;
+                let mode = parse_nand_bad_block_mode(bad_block_mode.as_deref());
+                let bad_blocks = if s.ch34x.is_some() {
+                    scan_nand_bad_blocks_for_mode(&dev, &info, &app, mode)?
+                } else {
+                    Vec::new()
+                };
+                protocols::nand_erase(&dev, &params, info.size, &bad_blocks)?;
             }
             "I2C" | "I2C_F-RAM" | "I2C_SPD" => {
                 let dev = open_ch34x_mode(&s, bus)?;
@@ -489,6 +524,7 @@ fn read_chip(
     app: tauri::AppHandle,
     size: u64,
     start_addr: u64,
+    bad_block_mode: Option<String>,
 ) -> Result<Vec<u8>, String> {
     let mut s = state.lock().map_err(|e| e.to_string())?;
 
@@ -576,10 +612,18 @@ fn read_chip(
             "SPI_NAND" => {
                 let dev = open_ch34x_mode(&s, bus)?;
                 let params = protocols::ChipParams::from_info(info);
-                return protocols::nand_read(&dev, &params, size, &mut |done, total| {
-                    app.emit("read_progress", ReadProgressEvent { done, total })
-                        .ok();
-                });
+                let mode = parse_nand_bad_block_mode(bad_block_mode.as_deref());
+                let bad_blocks = scan_nand_bad_blocks_for_mode(&dev, info, &app, mode)?;
+                return protocols::nand_read(
+                    &dev,
+                    &params,
+                    size,
+                    &bad_blocks,
+                    &mut |done, total| {
+                        app.emit("read_progress", ReadProgressEvent { done, total })
+                            .ok();
+                    },
+                );
             }
             "I2C" | "I2C_F-RAM" | "I2C_SPD" => {
                 let dev = open_ch34x_mode(&s, bus)?;
@@ -683,6 +727,7 @@ fn write_chip(
     data: Vec<u8>,
     start_addr: u64,
     force_segmented: Option<bool>,
+    bad_block_mode: Option<String>,
 ) -> Result<String, String> {
     let mut s = state.lock().map_err(|e| e.to_string())?;
     let total = data.len();
@@ -764,10 +809,15 @@ fn write_chip(
             "SPI_NAND" => {
                 let dev = open_ch34x_mode(&s, bus)?;
                 let params = protocols::ChipParams::from_info(info);
+                let mode = parse_nand_bad_block_mode(bad_block_mode.as_deref());
+                let bad_blocks = scan_nand_bad_blocks_for_mode(&dev, info, &app, mode)?;
                 return protocols::nand_write(
                     &dev,
                     &params,
                     &data,
+                    info.size,
+                    &bad_blocks,
+                    mode,
                     force_segmented.unwrap_or(false),
                     &mut |done, total| {
                         app.emit("write_progress", WriteProgressEvent { done, total })
@@ -876,6 +926,7 @@ fn verify_chip(
     app: tauri::AppHandle,
     data: Vec<u8>,
     start_addr: u64,
+    bad_block_mode: Option<String>,
 ) -> Result<String, String> {
     let mut s = state.lock().map_err(|e| e.to_string())?;
     let total = data.len() as u64;
@@ -951,7 +1002,9 @@ fn verify_chip(
             }
             "SPI_NAND" => {
                 let dev = open_ch34x_mode(&s, bus)?;
-                protocols::nand_read(&dev, &params, total, &mut |_, _| {})?
+                let mode = parse_nand_bad_block_mode(bad_block_mode.as_deref());
+                let bad_blocks = scan_nand_bad_blocks_for_mode(&dev, info, &app, mode)?;
+                protocols::nand_read(&dev, &params, total, &bad_blocks, &mut |_, _| {})?
             }
             "I2C" | "I2C_F-RAM" | "I2C_SPD" => {
                 let dev = open_ch34x_mode(&s, bus)?;
