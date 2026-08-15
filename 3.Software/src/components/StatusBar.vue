@@ -37,6 +37,9 @@ const fileName = computed(() => {
       <span v-if="store.status === 'success' && store.connectedDevice" class="device-name text-muted">
         · {{ store.connectedDevice }}
       </span>
+      <span v-if="store.vccOutputEnabled" class="vcc-badge">
+        ⚡ {{ t('vcc.statusOn') }} {{ (store.vccTargetMv / 1000).toFixed(1) }} {{ t('vcc.voltageUnit') }}
+      </span>
     </div>
 
     <div v-if="store.isRunning" class="status-progress">
@@ -97,6 +100,16 @@ const fileName = computed(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 200px;
+}
+.vcc-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  color: #f05050;
+  border: 1px solid rgba(240, 80, 80, 0.6);
+  background: rgba(240, 80, 80, 0.1);
+  border-radius: var(--radius-sm);
+  padding: 1px 6px;
 }
 .status-progress {
   display: flex;

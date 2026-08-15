@@ -43,6 +43,9 @@ export const useProgStore = defineStore('prog', () => {
   const vcc18v = ref(false)
   const spiMode = ref(3)
   const spiFreq = ref(15000)
+  // VCC 输出（高危功能）：默认关闭，连接编程器时重置，不持久化
+  const vccOutputEnabled = ref(false)
+  const vccTargetMv = ref(3300)
 
   // 芯片检测状态
   const detectStatus = ref<DetectStatus>('idle')
@@ -193,6 +196,10 @@ export const useProgStore = defineStore('prog', () => {
   async function initCh34x(kind: 'ch341' | 'ch347' | 'ch347f') {
     status.value = 'running'
     currentOp.value = '初始化 CH34X'
+    if (vccOutputEnabled.value) {
+      vccOutputEnabled.value = false
+      addLog('VCC 输出已重置为关闭', 'warn')
+    }
     addLog('正在初始化 CH34X...')
     try {
       const msg = await invoke('initialize', {
@@ -220,6 +227,10 @@ export const useProgStore = defineStore('prog', () => {
   async function connectSerprog(port: string) {
     status.value = 'running'
     currentOp.value = '连接 Serprog'
+    if (vccOutputEnabled.value) {
+      vccOutputEnabled.value = false
+      addLog('VCC 输出已重置为关闭', 'warn')
+    }
     addLog(`正在连接 serprog (${port})...`)
     try {
       const msg = await invoke('connect_serprog', { port }) as string
@@ -281,6 +292,7 @@ export const useProgStore = defineStore('prog', () => {
   return {
     status, connectedDevice,
     vcc18v, spiMode, spiFreq,
+    vccOutputEnabled, vccTargetMv,
     detectStatus, chipInfo, chipDetails,
     isRunning, currentOp, progress, progressMessage,
     hexData,

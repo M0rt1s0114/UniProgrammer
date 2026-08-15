@@ -41,6 +41,69 @@ const chipTypeOptions = computed<UiOption[]>(() => store.chipTypes.map(v => ({ v
 const chipVendorOptions = computed<UiOption[]>(() => store.chipVendors.map(v => ({ value: v, label: v })))
 const chipModelOptions = computed<UiOption[]>(() => store.chipModels.map(v => ({ value: v, label: v })))
 
+// VCC 输出（高危功能，默认关闭）
+const vccVoltageOptions: UiOption[] = [1200, 1800, 2500, 3300].map(mv => ({
+  value: mv,
+  label: `${(mv / 1000).toFixed(1)} V`,
+}))
+const vccModal = ref<'enable' | 'change' | null>(null)
+const vccConfirmText = ref('')
+const pendingVccTarget = ref<number | null>(null)
+const voltageLabel = computed(() => (store.vccTargetMv / 1000).toFixed(1))
+const vccEnableHint = computed(() =>
+  t('vcc.typeHint').replace('{0}', t('vcc.enablePhrase')),
+)
+const vccChangeHint = computed(() => {
+  if (pendingVccTarget.value === null) return ''
+  return t('vcc.changePhraseHint').replace('{0}', (pendingVccTarget.value / 1000).toFixed(1))
+})
+
+function requestVccEnable() {
+  if (store.isRunning) return
+  vccConfirmText.value = ''
+  vccModal.value = 'enable'
+}
+
+function confirmVccEnable() {
+  if (vccConfirmText.value.trim() !== t('vcc.enablePhrase')) {
+    store.addLog(t('vcc.wrongPhrase'), 'warn')
+    return
+  }
+  vccModal.value = null
+  store.vccOutputEnabled = true
+  store.addLog(`${t('vcc.enabledLog')}: ${voltageLabel.value} ${t('vcc.voltageUnit')}`, 'warn')
+}
+
+function disableVccOutput() {
+  store.vccOutputEnabled = false
+  store.addLog(t('vcc.disabledLog'), 'warn')
+}
+
+function requestVccTarget(mv: number) {
+  if (!store.vccOutputEnabled || store.isRunning) return
+  pendingVccTarget.value = mv
+  vccConfirmText.value = ''
+  vccModal.value = 'change'
+}
+
+function confirmVccTarget() {
+  const target = pendingVccTarget.value
+  if (target === null) return
+  const expected = (target / 1000).toFixed(1)
+  if (vccConfirmText.value.trim() !== expected) {
+    store.addLog(t('vcc.wrongPhrase'), 'warn')
+    return
+  }
+  const old = voltageLabel.value
+  vccModal.value = null
+  store.vccTargetMv = target
+  store.addLog(`${t('vcc.changedLog')}: ${old} -> ${expected} ${t('vcc.voltageUnit')}`, 'warn')
+}
+
+function closeVccModal() {
+  vccModal.value = null
+}
+
 const fileInput = ref<HTMLInputElement | null>(null)
 
 function openFileDialog() {
@@ -135,6 +198,38 @@ onMounted(async () => {
       <div v-if="programmerType === 'ch347' || programmerType === 'ch347f'" class="field" style="margin-top: 6px;">
         <label class="field-label">{{ t('label.spiClock') }}</label>
         <UiSelect v-model="store.spiFreq" :options="spiFreqOptions" />
+      </div>
+
+      <div
+        v-if="programmerType === 'ch341' || programmerType === 'ch347' || programmerType === 'ch347f'"
+        class="vcc-box"
+        :class="{ 'vcc-active': store.vccOutputEnabled }"
+        style="margin-top: 8px;"
+      >
+        <div class="vcc-row">
+          <span class="vcc-title">{{ t('section.vcc') }}</span>
+          <button
+            class="vcc-toggle"
+            :class="{ 'is-on': store.vccOutputEnabled }"
+            :disabled="store.isRunning"
+            @click="store.vccOutputEnabled ? disableVccOutput() : requestVccEnable()"
+          >
+            {{ store.vccOutputEnabled ? t('vcc.disableAction') : t('vcc.enableAction') }}
+          </button>
+          <span v-if="store.vccOutputEnabled" class="vcc-status">
+            {{ t('vcc.statusOn') }} · {{ voltageLabel }} {{ t('vcc.voltageUnit') }}
+          </span>
+        </div>
+        <div v-if="!store.vccOutputEnabled" class="vcc-hint">{{ t('vcc.offHint') }}</div>
+        <div v-if="store.vccOutputEnabled" class="field" style="margin-top: 6px;">
+          <label class="field-label">{{ t('vcc.target') }}</label>
+          <UiSelect
+            :model-value="store.vccTargetMv"
+            :options="vccVoltageOptions"
+            :disabled="store.isRunning"
+            @change="requestVccTarget"
+          />
+        </div>
       </div>
 
       <div v-if="programmerType === 'serprog'" class="field" style="margin-top: 6px;">
@@ -252,6 +347,35 @@ onMounted(async () => {
     </Transition>
 
   </div>
+
+  <!-- VCC 输出确认弹窗（高危） -->
+  <Transition name="fade">
+    <div v-if="vccModal" class="modal-backdrop" @click.self="closeVccModal">
+      <div class="modal vcc-modal">
+        <div class="modal-icon">⚡</div>
+        <h3 class="modal-title">
+          {{ vccModal === 'enable' ? t('vcc.modalTitle') : t('vcc.changeTitle') }}
+        </h3>
+        <p class="modal-body">
+          {{ vccModal === 'enable' ? t('vcc.modalBody') : t('vcc.changeBody') }}
+        </p>
+        <p v-if="vccModal === 'enable'" class="vcc-confirm-hint">{{ vccEnableHint }}</p>
+        <p v-else class="vcc-confirm-hint">{{ vccChangeHint }}</p>
+        <input
+          v-model="vccConfirmText"
+          class="input vcc-confirm-input"
+          :placeholder="vccModal === 'enable' ? t('vcc.enablePhrase') : (pendingVccTarget ? (pendingVccTarget / 1000).toFixed(1) : '')"
+          @keydown.enter="vccModal === 'enable' ? confirmVccEnable() : confirmVccTarget()"
+        />
+        <div class="modal-actions">
+          <button class="btn btn-secondary" @click="closeVccModal">{{ t('action.cancel') }}</button>
+          <button class="btn btn-danger" @click="vccModal === 'enable' ? confirmVccEnable() : confirmVccTarget()">
+            {{ vccModal === 'enable' ? t('vcc.enableAction') : t('vcc.apply') }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </Transition>
 
   <!-- 擦除确认弹窗 -->
   <Transition name="fade">
@@ -410,6 +534,71 @@ onMounted(async () => {
   color: #4a9eff;
   text-transform: capitalize;
 }
+
+.vcc-box {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 8px;
+  background: var(--bg-surface);
+}
+.vcc-box.vcc-active {
+  border-color: rgba(240, 80, 80, 0.65);
+  background: rgba(240, 80, 80, 0.08);
+}
+
+.vcc-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.vcc-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.vcc-toggle {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+.vcc-toggle:hover { border-color: var(--border-focus); }
+.vcc-toggle.is-on {
+  border-color: rgba(240, 80, 80, 0.8);
+  background: rgba(240, 80, 80, 0.15);
+  color: #f05050;
+  font-weight: 600;
+}
+
+.vcc-status {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #f05050;
+  font-weight: 600;
+}
+
+.vcc-hint {
+  margin-top: 4px;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.vcc-confirm-hint {
+  font-size: 11px;
+  color: var(--color-danger);
+}
+
+.vcc-confirm-input {
+  text-align: center;
+}
+
+.vcc-modal .modal-icon { color: var(--color-warn); }
 
 .modal-backdrop {
   position: fixed;

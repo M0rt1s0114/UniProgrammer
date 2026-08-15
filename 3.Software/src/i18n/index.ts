@@ -77,6 +77,27 @@ const zh: MessageRecord = {
   'common.yes': '是',
   'common.no': '否',
 
+  // VCC output
+  'section.vcc': 'VCC 输出',
+  'vcc.offHint': '电压输出已关闭（硬件上电默认不输出电压）',
+  'vcc.enableAction': '开启输出',
+  'vcc.disableAction': '紧急关闭',
+  'vcc.target': '目标电压',
+  'vcc.statusOn': 'VCC ON',
+  'vcc.modalTitle': '启用 VCC 输出？',
+  'vcc.modalBody': '输出电压可能损坏目标芯片、编程器或电脑 USB 端口。请先确认目标芯片的供电电压。',
+  'vcc.typeHint': '请输入“{0}”以确认开启',
+  'vcc.enablePhrase': '确认开启',
+  'vcc.changeTitle': '更改目标电压',
+  'vcc.changeBody': '请输入目标电压数值以确认（例如 1.8）。',
+  'vcc.changePhraseHint': '请输入 {0} 以确认',
+  'vcc.apply': '应用',
+  'vcc.wrongPhrase': '输入不匹配，操作已取消',
+  'vcc.enabledLog': 'VCC 输出已开启',
+  'vcc.disabledLog': 'VCC 输出已关闭',
+  'vcc.changedLog': 'VCC 目标电压已更改',
+  'vcc.voltageUnit': 'V',
+
   // Erase confirm modal
   'modal.eraseTitle': '确认全片擦除',
   'modal.eraseBody': '此操作将不可逆地擦除整个芯片，所有数据将变为 FF。\n请确保已备份重要数据。',
@@ -180,6 +201,27 @@ const en: MessageRecord = {
   // Common
   'common.yes': 'Yes',
   'common.no': 'No',
+
+  // VCC output
+  'section.vcc': 'VCC Output',
+  'vcc.offHint': 'Voltage output disabled (hardware defaults to no output at power-up)',
+  'vcc.enableAction': 'Enable Output',
+  'vcc.disableAction': 'Emergency Off',
+  'vcc.target': 'Target Voltage',
+  'vcc.statusOn': 'VCC ON',
+  'vcc.modalTitle': 'Enable VCC Output?',
+  'vcc.modalBody': 'Enabling voltage output may damage the target chip, the programmer, or the computer USB port. Verify the target chip supply voltage first.',
+  'vcc.typeHint': 'Type "{0}" to enable',
+  'vcc.enablePhrase': 'Enable',
+  'vcc.changeTitle': 'Change Target Voltage',
+  'vcc.changeBody': 'Type the target voltage value to confirm (for example 1.8).',
+  'vcc.changePhraseHint': 'Type {0} to confirm',
+  'vcc.apply': 'Apply',
+  'vcc.wrongPhrase': 'Input does not match, operation cancelled',
+  'vcc.enabledLog': 'VCC output enabled',
+  'vcc.disabledLog': 'VCC output disabled',
+  'vcc.changedLog': 'VCC target voltage changed',
+  'vcc.voltageUnit': 'V',
 
   // Erase confirm modal
   'modal.eraseTitle': 'Confirm Full Chip Erase',
