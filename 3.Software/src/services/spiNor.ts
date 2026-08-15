@@ -153,6 +153,58 @@ export function useSpiNor() {
     }
   }
 
+  // ── 45 系列 DataFlash 页面模式（实验性，需真机验证）─────────────────────────
+  async function readAt45PageMode(kind: 'page' | 'chip') {
+    if (store.selectedType !== 'SPI_DATA_45' || !store.canOperate) {
+      store.addLog('45 页面模式读取仅支持已连接的 DataFlash 芯片', 'warn')
+      return
+    }
+    store.isRunning = true
+    store.currentOp = kind === 'page' ? '读45页面模式' : '读45芯片模式'
+    try {
+      const result = (await invoke('read_at45_page_mode')) as { raw: number; binaryPage: boolean }
+      store.addLog(
+        `45 状态寄存器原始值：0x${result.raw.toString(16).padStart(2, '0')}；当前模式：${
+          result.binaryPage ? '二进制页面（2 的幂）' : '标准 DataFlash 页面'
+        }（实验性，需真机验证）`,
+        'success',
+      )
+    } catch (e: unknown) {
+      store.addLog(`45 页面模式读取失败: ${String(e)}`, 'error')
+    } finally {
+      store.isRunning = false
+      store.currentOp = ''
+    }
+  }
+
+  async function setAt45PageMode(binary: boolean) {
+    if (store.selectedType !== 'SPI_DATA_45' || !store.canOperate) {
+      store.addLog('45 页面模式设置仅支持已连接的 DataFlash 芯片', 'warn')
+      return
+    }
+    const confirmed = window.confirm(binary ? t('at45.confirmBinary') : t('at45.confirmDataFlash'))
+    if (!confirmed) return
+    store.isRunning = true
+    store.currentOp = binary ? '切换为二进制页面模式' : '切换为 DataFlash 页面模式'
+    try {
+      const result = (await invoke('set_at45_page_mode', { binary })) as {
+        raw: number
+        binaryPage: boolean
+      }
+      store.addLog(
+        `45 芯片页面模式切换完成，状态寄存器原始值：0x${result.raw
+          .toString(16)
+          .padStart(2, '0')}（实验性，需真机验证）`,
+        'success',
+      )
+    } catch (e: unknown) {
+      store.addLog(`45 页面模式切换失败: ${String(e)}`, 'error')
+    } finally {
+      store.isRunning = false
+      store.currentOp = ''
+    }
+  }
+
   // ── 坏块扫描（SPI NAND）────────────────────────────────────────────────────
   async function scanBadBlocks(): Promise<{ totalBlocks: number; badBlocks: number[] }> {
     if (store.selectedType !== 'SPI_NAND' || !store.canOperate) {
@@ -477,6 +529,8 @@ export function useSpiNor() {
     readNandParamPage,
     readNandBbmLut,
     setNandEcc,
+    readAt45PageMode,
+    setAt45PageMode,
     eraseChip,
     readChip,
     writeChip,

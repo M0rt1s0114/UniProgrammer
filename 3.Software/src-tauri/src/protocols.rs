@@ -351,6 +351,23 @@ pub fn at45_write(
     Ok(())
 }
 
+/// Read the AT45 status register byte. Bit 0 reports the configured page
+/// size (experimental interpretation: 1 = power-of-two binary page).
+pub fn at45_read_page_mode(dev: &Ch34xDevice) -> Result<u8, String> {
+    at45_read_sr(dev)
+}
+
+/// Configure the AT45 page size. `binary = true` issues 3Dh/2Ah/80h/A6h
+/// (power-of-two page, e.g. 256/512 bytes); `binary = false` issues
+/// 3Dh/2Ah/80h/A7h (standard DataFlash page, e.g. 264/528 bytes).
+/// The setting is nonvolatile and requires hardware validation.
+pub fn at45_set_page_mode(dev: &Ch34xDevice, binary: bool) -> Result<(), String> {
+    at45_wait_ready(dev, 2000)?;
+    let last = if binary { 0xA6 } else { 0xA7 };
+    cs_cmd(dev, &[0x3D, 0x2A, 0x80, last])?;
+    at45_wait_ready(dev, 5000)
+}
+
 pub fn at45_erase(dev: &Ch34xDevice) -> Result<(), String> {
     at45_wait_ready(dev, 2000)?;
     cs_cmd(dev, &[0xC7, 0x94, 0x80, 0x9A])?;

@@ -520,6 +520,58 @@ fn set_nand_ecc(state: State<'_, Mutex<AppState>>, enable: bool) -> Result<bool,
     protocols::nand_get_ecc(&dev)
 }
 
+#[derive(Serialize)]
+struct At45PageModeResult {
+    raw: u8,
+    binary_page: bool,
+}
+
+#[tauri::command]
+fn read_at45_page_mode(state: State<'_, Mutex<AppState>>) -> Result<At45PageModeResult, String> {
+    let s = state.lock().map_err(|e| e.to_string())?;
+    let info = s
+        .detected
+        .as_ref()
+        .ok_or("请先检测或选择 45 系列 DataFlash 芯片")?;
+    if info.protocol != "SPI_DATA_45" {
+        return Err("当前芯片不是 45 系列 DataFlash".into());
+    }
+    if s.ch34x.is_none() {
+        return Err("此功能目前仅支持 CH34X 后端".into());
+    }
+    let dev = open_ch34x_mode(&s, DeviceMode::Spi)?;
+    let raw = protocols::at45_read_page_mode(&dev)?;
+    Ok(At45PageModeResult {
+        raw,
+        binary_page: (raw & 0x01) != 0,
+    })
+}
+
+#[tauri::command]
+fn set_at45_page_mode(
+    state: State<'_, Mutex<AppState>>,
+    binary: bool,
+) -> Result<At45PageModeResult, String> {
+    let s = state.lock().map_err(|e| e.to_string())?;
+    let info = s
+        .detected
+        .as_ref()
+        .ok_or("请先检测或选择 45 系列 DataFlash 芯片")?;
+    if info.protocol != "SPI_DATA_45" {
+        return Err("当前芯片不是 45 系列 DataFlash".into());
+    }
+    if s.ch34x.is_none() {
+        return Err("此功能目前仅支持 CH34X 后端".into());
+    }
+    let dev = open_ch34x_mode(&s, DeviceMode::Spi)?;
+    protocols::at45_set_page_mode(&dev, binary)?;
+    let raw = protocols::at45_read_page_mode(&dev)?;
+    Ok(At45PageModeResult {
+        raw,
+        binary_page: (raw & 0x01) != 0,
+    })
+}
+
 fn require_nand_ch34x(state: &AppState) -> Result<(), String> {
     let info = state
         .detected
@@ -1400,6 +1452,8 @@ fn main() {
             read_nand_bbm_lut,
             get_nand_ecc,
             set_nand_ecc,
+            read_at45_page_mode,
+            set_at45_page_mode,
             chip_erase,
             read_chip,
             write_chip,

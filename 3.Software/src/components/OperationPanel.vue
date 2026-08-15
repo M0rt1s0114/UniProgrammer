@@ -397,6 +397,50 @@ onMounted(async () => {
       </button>
     </section>
 
+    <div v-if="store.selectedType === 'SPI_DATA_45'" class="divider" />
+
+    <!-- ── 45 芯片模式（DataFlash 专属）── -->
+    <section v-if="store.selectedType === 'SPI_DATA_45'" class="panel-section">
+      <div class="section-label">{{ t('section.at45') }}</div>
+
+      <div style="display: flex; gap: 8px">
+        <button
+          class="btn btn-ghost btn-sm"
+          style="flex: 1"
+          :disabled="!store.canOperate || store.isRunning"
+          @click="spiNor.readAt45PageMode('page')"
+        >
+          {{ t('at45.readPageMode') }}{{ t('nand.experimental') }}
+        </button>
+        <button
+          class="btn btn-ghost btn-sm"
+          style="flex: 1"
+          :disabled="!store.canOperate || store.isRunning"
+          @click="spiNor.readAt45PageMode('chip')"
+        >
+          {{ t('at45.readChipMode') }}{{ t('nand.experimental') }}
+        </button>
+      </div>
+      <div style="display: flex; gap: 8px; margin-top: 6px">
+        <button
+          class="btn btn-secondary"
+          style="flex: 1"
+          :disabled="!store.canOperate || store.isRunning"
+          @click="spiNor.setAt45PageMode(false)"
+        >
+          {{ t('at45.setDataFlashPage') }}
+        </button>
+        <button
+          class="btn btn-secondary"
+          style="flex: 1"
+          :disabled="!store.canOperate || store.isRunning"
+          @click="spiNor.setAt45PageMode(true)"
+        >
+          {{ t('at45.setBinaryPage') }}
+        </button>
+      </div>
+    </section>
+
     <div class="divider" />
 
     <!-- ── 芯片信息 ── -->

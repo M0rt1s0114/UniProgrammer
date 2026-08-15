@@ -101,6 +101,15 @@ const zh: MessageRecord = {
   'nand.pagesPerBlock': '每块页数',
   'nand.isBmm': '支持 BBM',
 
+  // 45-series DataFlash page mode
+  'section.at45': '45 芯片模式',
+  'at45.readPageMode': '读45页面模式',
+  'at45.readChipMode': '读45芯片模式',
+  'at45.setDataFlashPage': 'DataFlash页面',
+  'at45.setBinaryPage': '二进制页面',
+  'at45.confirmDataFlash': '确认将芯片设置为 DataFlash 页面模式？此功能非必要慎用',
+  'at45.confirmBinary': '确认将芯片设置为二进制页面模式？此功能非必要慎用',
+
   // VCC output
   'section.vcc': '电压调节',
   'label.vccVoltage': 'VCC 电压',
@@ -253,6 +262,15 @@ const en: MessageRecord = {
   'nand.spare': 'OOB Size',
   'nand.pagesPerBlock': 'Pages Per Block',
   'nand.isBmm': 'Supports BBM',
+
+  // 45-series DataFlash page mode
+  'section.at45': '45 Chip Mode',
+  'at45.readPageMode': 'Read Page Mode',
+  'at45.readChipMode': 'Read Chip Mode',
+  'at45.setDataFlashPage': 'DataFlash Page',
+  'at45.setBinaryPage': 'Binary Page',
+  'at45.confirmDataFlash': 'Configure the chip for DataFlash page mode? Use with caution.',
+  'at45.confirmBinary': 'Configure the chip for binary page mode? Use with caution.',
 
   // VCC output
   'section.vcc': 'Voltage Regulation',
