@@ -79,6 +79,22 @@ const zh: MessageRecord = {
   'common.yes': '是',
   'common.no': '否',
 
+  // SPI NAND settings
+  'section.nand': 'NAND 设置',
+  'nand.readBadBlockFirst': '读写前默认先读坏块',
+  'nand.badBlockMode': '坏块处理模式',
+  'nand.mode.skip': '跳过坏块 (Skip)',
+  'nand.mode.bypass': '绕过坏块 (Bypass)',
+  'nand.mode.ignore': '忽略坏块 (Ignore)',
+  'nand.programMode': '编程模式',
+  'nand.prog.main': '操作主数据区',
+  'nand.prog.oobAuto': 'OOB 区域数据自动处理',
+  'nand.prog.mainOob': '操作主数据区+OOB备份区',
+  'nand.scanBadBlocks': '读取坏块',
+  'nand.spare': 'OOB 容量',
+  'nand.pagesPerBlock': '每块页数',
+  'nand.isBmm': '支持 BBM',
+
   // VCC output
   'section.vcc': '电压调节',
   'label.vccVoltage': 'VCC 电压',
@@ -209,6 +225,22 @@ const en: MessageRecord = {
   // Common
   'common.yes': 'Yes',
   'common.no': 'No',
+
+  // SPI NAND settings
+  'section.nand': 'NAND Settings',
+  'nand.readBadBlockFirst': 'Scan bad blocks before read/write',
+  'nand.badBlockMode': 'Bad Block Mode',
+  'nand.mode.skip': 'Skip',
+  'nand.mode.bypass': 'Bypass (BBM)',
+  'nand.mode.ignore': 'Ignore',
+  'nand.programMode': 'Program Mode',
+  'nand.prog.main': 'Main data area only',
+  'nand.prog.oobAuto': 'OOB area handled automatically',
+  'nand.prog.mainOob': 'Main + OOB backup area',
+  'nand.scanBadBlocks': 'Scan Bad Blocks',
+  'nand.spare': 'OOB Size',
+  'nand.pagesPerBlock': 'Pages Per Block',
+  'nand.isBmm': 'Supports BBM',
 
   // VCC output
   'section.vcc': 'Voltage Regulation',

@@ -421,6 +421,79 @@ fn nand_page_read(dev: &Ch34xDevice, page_size: usize, page_no: u32) -> Result<V
     Ok(buf)
 }
 
+fn nand_load_page(dev: &Ch34xDevice, page_no: u32) -> Result<(), String> {
+    nand_wait_ready(dev, 200)?;
+    cs_cmd(
+        dev,
+        &[
+            0x13,
+            ((page_no >> 16) & 0xFF) as u8,
+            ((page_no >> 8) & 0xFF) as u8,
+            (page_no & 0xFF) as u8,
+        ],
+    )?;
+    nand_wait_ready(dev, 200)
+}
+
+/// Read `len` bytes from the page cache at an arbitrary 16-bit column.
+/// SPI NAND exposes main area first, then the spare/OOB area, so the spare
+/// area starts at column `page_size`.
+fn nand_read_cache(dev: &Ch34xDevice, column: usize, len: usize) -> Result<Vec<u8>, String> {
+    let mut out = vec![0xFFu8; len];
+    let chunk_limit = dev.spi_frame_limit().saturating_sub(4).max(1);
+    let mut offset = 0usize;
+    while offset < len {
+        let chunk = (len - offset).min(chunk_limit);
+        let col = column + offset;
+        dev.cs_low()?;
+        dev.spi_tx(&[0x03, ((col >> 8) & 0xFF) as u8, (col & 0xFF) as u8, 0x00])?;
+        dev.spi_rx(&mut out[offset..offset + chunk])?;
+        dev.cs_high()?;
+        offset += chunk;
+    }
+    Ok(out)
+}
+
+/// Read the spare/OOB area of one NAND page.
+pub fn nand_read_spare(
+    dev: &Ch34xDevice,
+    page_no: u32,
+    page_size: usize,
+    spare_size: usize,
+) -> Result<Vec<u8>, String> {
+    nand_load_page(dev, page_no)?;
+    nand_read_cache(dev, page_size, spare_size)
+}
+
+/// Scan every block's first page spare area and report factory bad-block
+/// markers. The standard marker is any value other than 0xFF at spare[0];
+/// a fully erased 0xFF spare area means the block is good.
+pub fn nand_scan_bad_blocks(
+    dev: &Ch34xDevice,
+    params: &ChipParams,
+    size: u64,
+    progress: &mut dyn FnMut(u32, u32),
+) -> Result<Vec<u32>, String> {
+    let page_size = params.page.max(1) as u64;
+    let block_size = (params.block as u64).max(page_size);
+    let pages_per_block = (block_size / page_size).max(1) as u32;
+    let total_blocks = size.div_ceil(block_size).min(u32::MAX as u64) as u32;
+    // IMSProg does not carry spare size for every NAND part; 64 bytes is the
+    // most common default and the bad marker is at byte 0 either way.
+    let spare_size = if params.spare > 0 { params.spare } else { 64 };
+
+    let mut bad_blocks = Vec::new();
+    for block_no in 0..total_blocks {
+        let page_no = block_no * pages_per_block;
+        let spare = nand_read_spare(dev, page_no, page_size as usize, spare_size)?;
+        if spare.first().copied().unwrap_or(0xFF) != 0xFF {
+            bad_blocks.push(block_no);
+        }
+        progress(block_no + 1, total_blocks);
+    }
+    Ok(bad_blocks)
+}
+
 fn nand_page_write(dev: &Ch34xDevice, page: &[u8], page_no: u32) -> Result<(), String> {
     if 3 + page.len() > dev.spi_frame_limit() {
         return Err(format!(

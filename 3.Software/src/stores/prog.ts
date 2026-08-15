@@ -14,6 +14,9 @@ export interface DetectedChipInfo {
   block?: number | null
   addr4bit?: number | null
   vcc?: string | null
+  spare?: number | null
+  pagesPerBlock?: number | null
+  isBmm?: boolean | null
 }
 
 export interface LogEntry {
@@ -32,6 +35,24 @@ export function formatBytes(bytes: number): string {
   const sizes = ['B', 'KB', 'MB', 'GB']
   const i = Math.floor(Math.log(bytes) / Math.log(k))
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
+}
+
+function loadBoolSetting(key: string, fallback: boolean): boolean {
+  try {
+    const raw = localStorage.getItem(key)
+    return raw === null ? fallback : JSON.parse(raw) === true
+  } catch {
+    return fallback
+  }
+}
+
+function loadStringSetting(key: string, fallback: string): string {
+  try {
+    const raw = localStorage.getItem(key)
+    return raw === null ? fallback : JSON.parse(raw)
+  } catch {
+    return fallback
+  }
 }
 
 let _logId = 0
@@ -94,6 +115,24 @@ export const useProgStore = defineStore('prog', () => {
 
   // 校验
   const verifyAfterWrite = ref(false)
+
+  // SPI NAND 设置（持久化；语义对齐 reference tool）
+  const nandReadBadBlockFirst = ref(loadBoolSetting('nand.readBadBlockFirst', true))
+  const nandBadBlockMode = ref<'skip' | 'bypass' | 'ignore'>(
+    loadStringSetting('nand.badBlockMode', 'skip') as 'skip' | 'bypass' | 'ignore',
+  )
+  const nandProgramMode = ref<'main' | 'oob_auto' | 'main_oob'>(
+    loadStringSetting('nand.programMode', 'main') as 'main' | 'oob_auto' | 'main_oob',
+  )
+  watch([nandReadBadBlockFirst, nandBadBlockMode, nandProgramMode], () => {
+    try {
+      localStorage.setItem('nand.readBadBlockFirst', JSON.stringify(nandReadBadBlockFirst.value))
+      localStorage.setItem('nand.badBlockMode', JSON.stringify(nandBadBlockMode.value))
+      localStorage.setItem('nand.programMode', JSON.stringify(nandProgramMode.value))
+    } catch {
+      // WebView 禁用存储时忽略，仅本次会话生效
+    }
+  })
 
   // 日志
   const logs = ref<LogEntry[]>([])
@@ -335,6 +374,9 @@ export const useProgStore = defineStore('prog', () => {
     startAddr,
     lengthVal,
     verifyAfterWrite,
+    nandReadBadBlockFirst,
+    nandBadBlockMode,
+    nandProgramMode,
     logs,
     chipTypes,
     chipVendors,

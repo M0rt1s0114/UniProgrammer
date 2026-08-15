@@ -47,6 +47,18 @@ const chipModelOptions = computed<UiOption[]>(() =>
   store.chipModels.map((v) => ({ value: v, label: v })),
 )
 
+// SPI NAND 设置选项
+const nandBadBlockOptions = computed<UiOption[]>(() => [
+  { value: 'skip', label: t('nand.mode.skip') },
+  { value: 'bypass', label: t('nand.mode.bypass') },
+  { value: 'ignore', label: t('nand.mode.ignore') },
+])
+const nandProgramModeOptions = computed<UiOption[]>(() => [
+  { value: 'main', label: t('nand.prog.main') },
+  { value: 'oob_auto', label: t('nand.prog.oobAuto') },
+  { value: 'main_oob', label: t('nand.prog.mainOob') },
+])
+
 // VCC 输出（高危功能，默认关闭）
 const vccVoltageOptions: UiOption[] = [1200, 1800, 2500, 3300].map((mv) => ({
   value: mv,
@@ -309,6 +321,37 @@ onMounted(async () => {
       </div>
     </section>
 
+    <div v-if="store.selectedType === 'SPI_NAND'" class="divider" />
+
+    <!-- ── NAND 设置（SPI NAND 专属）── -->
+    <section v-if="store.selectedType === 'SPI_NAND'" class="panel-section">
+      <div class="section-label">{{ t('section.nand') }}</div>
+
+      <label class="toggle-row">
+        <input v-model="store.nandReadBadBlockFirst" type="checkbox" class="toggle-check" />
+        <span class="toggle-text">{{ t('nand.readBadBlockFirst') }}</span>
+      </label>
+
+      <div class="field">
+        <label class="field-label">{{ t('nand.badBlockMode') }}</label>
+        <UiSelect v-model="store.nandBadBlockMode" :options="nandBadBlockOptions" />
+      </div>
+
+      <div class="field" style="margin-top: 6px">
+        <label class="field-label">{{ t('nand.programMode') }}</label>
+        <UiSelect v-model="store.nandProgramMode" :options="nandProgramModeOptions" />
+      </div>
+
+      <button
+        class="btn btn-secondary w-full"
+        style="margin-top: 6px"
+        :disabled="!store.canOperate || store.isRunning"
+        @click="spiNor.scanBadBlocks()"
+      >
+        {{ t('nand.scanBadBlocks') }}
+      </button>
+    </section>
+
     <div class="divider" />
 
     <!-- ── 芯片信息 ── -->
@@ -331,6 +374,19 @@ onMounted(async () => {
         </div>
         <div v-if="store.chipDetails.block" class="chip-info-line">
           {{ t('chipInfo.block') }} {{ formatBytes(store.chipDetails.block) }}
+        </div>
+        <div v-if="store.chipDetails.spare" class="chip-info-line">
+          {{ t('nand.spare') }} {{ store.chipDetails.spare }} B
+        </div>
+        <div v-if="store.chipDetails.pagesPerBlock" class="chip-info-line">
+          {{ t('nand.pagesPerBlock') }} {{ store.chipDetails.pagesPerBlock }}
+        </div>
+        <div
+          v-if="store.chipDetails.isBmm !== null && store.chipDetails.isBmm !== undefined"
+          class="chip-info-line"
+        >
+          {{ t('nand.isBmm') }}:
+          {{ store.chipDetails.isBmm ? t('common.yes') : t('common.no') }}
         </div>
         <div v-if="store.chipDetails.vcc" class="chip-info-line">
           {{ t('chipInfo.vcc') }} {{ store.chipDetails.vcc }} V

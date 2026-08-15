@@ -74,6 +74,61 @@ export function useSpiNor() {
     }
   }
 
+  // ── 坏块扫描（SPI NAND）────────────────────────────────────────────────────
+  async function scanBadBlocks(): Promise<{ totalBlocks: number; badBlocks: number[] }> {
+    if (store.selectedType !== 'SPI_NAND' || !store.canOperate) {
+      store.addLog('坏块扫描仅支持已连接的 SPI NAND 芯片', 'warn')
+      throw new Error('bad block scan requires SPI NAND')
+    }
+    store.isRunning = true
+    store.currentOp = '读取坏块'
+    store.progress = 0
+    store.progressMessage = '正在扫描坏块...'
+    const unlisten = await listenProgress('bad_block_progress', (done, total) => {
+      const pct = total > 0 ? Math.floor((done / total) * 100) : 0
+      store.progress = pct
+      store.progressMessage = `坏块扫描 ${done} / ${total}`
+    })
+    try {
+      const result = (await invoke('scan_bad_blocks')) as {
+        totalBlocks: number
+        badBlocks: number[]
+        badCount: number
+      }
+      store.progress = 100
+      if (result.badCount === 0) {
+        store.addLog(`坏块扫描完成：共 ${result.totalBlocks} 块，未发现坏块`, 'success')
+      } else {
+        store.addLog(
+          `坏块扫描完成：共 ${result.totalBlocks} 块，发现 ${result.badCount} 个坏块`,
+          'warn',
+        )
+        const page = store.chipDetails?.page ?? 1
+        const block = store.chipDetails?.block ?? page
+        const pagesPerBlock =
+          store.chipDetails?.pagesPerBlock ?? Math.max(1, Math.floor(block / page))
+        const spare = store.chipDetails?.spare ?? 64
+        result.badBlocks.forEach((blockNo, index) => {
+          const main = blockNo * block
+          const withOob = main + blockNo * pagesPerBlock * spare
+          store.addLog(
+            `坏块 ${index + 1}: 块号 0x${blockNo.toString(16)}, 主数据区起始 0x${main.toString(16)}, 含OOB起始 0x${withOob.toString(16)}`,
+            'warn',
+          )
+        })
+      }
+      return result
+    } catch (e: unknown) {
+      store.addLog(`坏块扫描失败: ${String(e)}`, 'error')
+      throw e
+    } finally {
+      unlisten()
+      store.isRunning = false
+      store.currentOp = ''
+      store.progressMessage = ''
+    }
+  }
+
   // ── 全片擦除 ────────────────────────────────────────────────────────────────
   async function eraseChip() {
     store.isRunning = true
@@ -102,6 +157,13 @@ export function useSpiNor() {
     if (!store.chipDetected || store.detectedChipSize === 0) {
       store.addLog('请先检测芯片', 'warn')
       return
+    }
+    if (store.selectedType === 'SPI_NAND' && store.nandReadBadBlockFirst) {
+      try {
+        await scanBadBlocks()
+      } catch {
+        return
+      }
     }
     store.isRunning = true
     store.currentOp = '读取芯片'
@@ -142,6 +204,13 @@ export function useSpiNor() {
     if (!store.hexData || store.hexData.length === 0) {
       store.addLog('HexViewer 中没有数据，请先加载文件或读取芯片', 'warn')
       return
+    }
+    if (!forceSegmented && store.selectedType === 'SPI_NAND' && store.nandReadBadBlockFirst) {
+      try {
+        await scanBadBlocks()
+      } catch {
+        return
+      }
     }
     store.isRunning = true
     store.currentOp = '写入芯片'
@@ -319,6 +388,7 @@ export function useSpiNor() {
 
   return {
     detectChip,
+    scanBadBlocks,
     eraseChip,
     readChip,
     writeChip,

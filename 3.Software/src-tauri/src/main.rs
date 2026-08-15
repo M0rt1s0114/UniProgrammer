@@ -31,6 +31,11 @@ struct ChipDetectInfo {
     block: Option<u64>,
     addr4bit: Option<u32>,
     vcc: Option<String>,
+    spare: Option<u64>,
+    #[serde(rename = "pagesPerBlock")]
+    pages_per_block: Option<u32>,
+    #[serde(rename = "isBmm")]
+    is_bmm: Option<bool>,
 }
 
 #[derive(Clone, Serialize)]
@@ -49,6 +54,19 @@ struct WriteProgressEvent {
 struct VerifyProgressEvent {
     done: u64,
     total: u64,
+}
+
+#[derive(Clone, Serialize)]
+struct BadBlockProgressEvent {
+    done: u32,
+    total: u32,
+}
+
+#[derive(Serialize)]
+struct BadBlockScanResult {
+    total_blocks: u32,
+    bad_blocks: Vec<u32>,
+    bad_count: u32,
 }
 
 struct AppState {
@@ -357,6 +375,37 @@ fn detect_chip(state: State<'_, Mutex<AppState>>) -> Result<ChipDetectResult, St
             })
         }
     }
+}
+
+#[tauri::command]
+fn scan_bad_blocks(
+    state: State<'_, Mutex<AppState>>,
+    app: tauri::AppHandle,
+) -> Result<BadBlockScanResult, String> {
+    let s = state.lock().map_err(|e| e.to_string())?;
+    let info = s.detected.clone().ok_or("请先检测或选择 SPI NAND 芯片")?;
+    if info.protocol != "SPI_NAND" {
+        return Err("当前芯片不是 SPI NAND".into());
+    }
+    if s.ch34x.is_none() {
+        return Err("坏块扫描目前仅支持 CH34X 后端，serprog 后端待实现".into());
+    }
+
+    let dev = open_ch34x_mode(&s, DeviceMode::Spi)?;
+    let params = protocols::ChipParams::from_info(&info);
+    let block_size = (params.block as u64).max(params.page as u64);
+    let total_blocks = info.size.div_ceil(block_size).min(u32::MAX as u64) as u32;
+    let bad_blocks =
+        protocols::nand_scan_bad_blocks(&dev, &params, info.size, &mut |done, total| {
+            app.emit("bad_block_progress", BadBlockProgressEvent { done, total })
+                .ok();
+        })?;
+    let bad_count = bad_blocks.len() as u32;
+    Ok(BadBlockScanResult {
+        total_blocks,
+        bad_blocks,
+        bad_count,
+    })
 }
 
 #[tauri::command]
@@ -1031,6 +1080,15 @@ fn chip_info_to_detect(info: &chiplib::ChipInfo) -> ChipDetectInfo {
         block: info.attr_u64("block"),
         addr4bit: info.attr_u32("addr4bit"),
         vcc: info.attr("vcc").map(|v| v.to_string()),
+        spare: info.attr_u64("spare"),
+        pages_per_block: info.attr_u32("pagesPerBlock").or_else(|| {
+            info.attr_u64("block")
+                .map(|block| (block / info.page.max(1) as u64).max(1) as u32)
+        }),
+        is_bmm: info
+            .attr("IsBMM")
+            .or_else(|| info.attr("isbmm"))
+            .map(|v| v != "0"),
     }
 }
 
@@ -1155,6 +1213,7 @@ fn main() {
             initialize,
             connect_serprog,
             detect_chip,
+            scan_bad_blocks,
             chip_erase,
             read_chip,
             write_chip,
