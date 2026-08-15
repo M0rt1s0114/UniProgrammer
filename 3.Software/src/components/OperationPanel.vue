@@ -82,6 +82,7 @@ const nandProgramModeOptions = computed<UiOption[]>(() => [
 ])
 
 const nandOtpPage = ref(0)
+const nandAdvancedOpen = ref(false)
 
 // VCC 输出（高危功能，默认关闭）
 const vccVoltageOptions: UiOption[] = [1200, 1800, 2500, 3300].map((mv) => ({
@@ -379,51 +380,6 @@ onMounted(async () => {
         {{ t('nand.scanBadBlocks') }}
       </button>
 
-      <div style="display: flex; gap: 8px; margin-top: 6px">
-        <button
-          class="btn btn-ghost btn-sm"
-          style="flex: 1"
-          :disabled="!store.canOperate || store.isRunning"
-          @click="confirmExperimentalAction('nand.readUid', () => spiNor.readNandUid())"
-        >
-          {{ t('nand.readUid') }}{{ t('nand.experimental') }}
-        </button>
-        <button
-          class="btn btn-ghost btn-sm"
-          style="flex: 1"
-          :disabled="!store.canOperate || store.isRunning"
-          @click="confirmExperimentalAction('nand.readParamPage', () => spiNor.readNandParamPage())"
-        >
-          {{ t('nand.readParamPage') }}{{ t('nand.experimental') }}
-        </button>
-      </div>
-      <div style="display: flex; gap: 8px; margin-top: 6px">
-        <button
-          class="btn btn-ghost btn-sm"
-          style="flex: 1"
-          :disabled="!store.canOperate || store.isRunning"
-          @click="confirmExperimentalAction('nand.readBbmLut', () => spiNor.readNandBbmLut())"
-        >
-          {{ t('nand.readBbmLut') }}{{ t('nand.experimental') }}
-        </button>
-        <button
-          class="btn btn-ghost btn-sm"
-          style="flex: 1"
-          :disabled="!store.canOperate || store.isRunning"
-          @click="confirmExperimentalAction('nand.eccEnable', () => spiNor.setNandEcc(true))"
-        >
-          {{ t('nand.eccEnable') }}{{ t('nand.experimental') }}
-        </button>
-      </div>
-      <button
-        class="btn btn-ghost btn-sm w-full"
-        style="margin-top: 6px"
-        :disabled="!store.canOperate || store.isRunning"
-        @click="confirmExperimentalAction('nand.eccDisable', () => spiNor.setNandEcc(false))"
-      >
-        {{ t('nand.eccDisable') }}{{ t('nand.experimental') }}
-      </button>
-
       <div class="nand-options-grid">
         <label class="toggle-row">
           <input v-model="store.nandBatchBurn" type="checkbox" class="toggle-check" />
@@ -451,26 +407,89 @@ onMounted(async () => {
         </label>
       </div>
 
-      <div style="display: flex; gap: 8px; margin-top: 6px">
-        <input
-          v-model.number="nandOtpPage"
-          type="number"
-          min="0"
-          max="63"
-          class="input"
-          style="width: 80px"
-          :title="t('nand.otpPage')"
-        />
-        <button
-          class="btn btn-ghost btn-sm"
-          style="flex: 1"
-          :disabled="!store.canOperate || store.isRunning"
-          @click="
-            confirmExperimentalAction('nand.readOtpPage', () => spiNor.readNandOtpPage(nandOtpPage))
-          "
+      <button
+        class="btn btn-ghost btn-sm w-full adv-toggle"
+        :class="{ open: nandAdvancedOpen }"
+        style="margin-top: 6px"
+        @click="nandAdvancedOpen = !nandAdvancedOpen"
+      >
+        <span class="adv-toggle-label">
+          <span class="adv-warn-dot" />{{ t('nand.advanced') }}
+        </span>
+        <svg
+          class="adv-chevron"
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
         >
-          {{ t('nand.readOtpPage') }}{{ t('nand.experimental') }}
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+
+      <div v-show="nandAdvancedOpen" class="adv-panel">
+        <button
+          class="btn btn-ghost btn-sm w-full adv-btn"
+          :disabled="!store.canOperate || store.isRunning"
+          @click="confirmExperimentalAction('nand.readUid', () => spiNor.readNandUid())"
+        >
+          {{ t('nand.readUid') }}
         </button>
+        <button
+          class="btn btn-ghost btn-sm w-full adv-btn"
+          :disabled="!store.canOperate || store.isRunning"
+          @click="confirmExperimentalAction('nand.readParamPage', () => spiNor.readNandParamPage())"
+        >
+          {{ t('nand.readParamPage') }}
+        </button>
+        <button
+          class="btn btn-ghost btn-sm w-full adv-btn"
+          :disabled="!store.canOperate || store.isRunning"
+          @click="confirmExperimentalAction('nand.readBbmLut', () => spiNor.readNandBbmLut())"
+        >
+          {{ t('nand.readBbmLut') }}
+        </button>
+        <button
+          class="btn btn-ghost btn-sm w-full adv-btn"
+          :disabled="!store.canOperate || store.isRunning"
+          @click="confirmExperimentalAction('nand.eccEnable', () => spiNor.setNandEcc(true))"
+        >
+          {{ t('nand.eccEnable') }}
+        </button>
+        <button
+          class="btn btn-ghost btn-sm w-full adv-btn"
+          :disabled="!store.canOperate || store.isRunning"
+          @click="confirmExperimentalAction('nand.eccDisable', () => spiNor.setNandEcc(false))"
+        >
+          {{ t('nand.eccDisable') }}
+        </button>
+        <div style="display: flex; gap: 8px; margin-top: 6px">
+          <input
+            v-model.number="nandOtpPage"
+            type="number"
+            min="0"
+            max="63"
+            class="input"
+            style="width: 80px"
+            :title="t('nand.otpPage')"
+          />
+          <button
+            class="btn btn-ghost btn-sm"
+            style="flex: 1"
+            :disabled="!store.canOperate || store.isRunning"
+            @click="
+              confirmExperimentalAction('nand.readOtpPage', () =>
+                spiNor.readNandOtpPage(nandOtpPage),
+              )
+            "
+          >
+            {{ t('nand.readOtpPage') }}
+          </button>
+        </div>
       </div>
     </section>
 
@@ -489,7 +508,7 @@ onMounted(async () => {
             confirmExperimentalAction('at45.readPageMode', () => spiNor.readAt45PageMode('page'))
           "
         >
-          {{ t('at45.readPageMode') }}{{ t('nand.experimental') }}
+          {{ t('at45.readPageMode') }}
         </button>
         <button
           class="btn btn-ghost btn-sm"
@@ -499,7 +518,7 @@ onMounted(async () => {
             confirmExperimentalAction('at45.readChipMode', () => spiNor.readAt45PageMode('chip'))
           "
         >
-          {{ t('at45.readChipMode') }}{{ t('nand.experimental') }}
+          {{ t('at45.readChipMode') }}
         </button>
       </div>
       <div style="display: flex; gap: 8px; margin-top: 6px">
@@ -805,6 +824,50 @@ onMounted(async () => {
   grid-template-columns: 1fr 1fr;
   gap: 2px 10px;
   margin-top: 6px;
+}
+
+.adv-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px !important;
+  color: var(--color-warn);
+}
+.adv-toggle:hover {
+  color: var(--color-warn);
+}
+.adv-toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+}
+.adv-warn-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-warn);
+  box-shadow: 0 0 6px rgba(240, 165, 0, 0.7);
+}
+.adv-chevron {
+  transition: transform 150ms ease;
+}
+.adv-toggle.open .adv-chevron {
+  transform: rotate(180deg);
+}
+.adv-panel {
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid rgba(240, 165, 0, 0.2);
+  border-radius: var(--radius-md);
+  background: rgba(240, 165, 0, 0.04);
+}
+.adv-btn {
+  text-align: left;
+  padding-left: 10px !important;
 }
 
 .toggle-check {
