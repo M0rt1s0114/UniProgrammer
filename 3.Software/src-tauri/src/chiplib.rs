@@ -856,6 +856,9 @@ mod tests {
         assert_eq!(nand.model, "W25N02KWZEIR");
         assert_eq!(nand.page, 2048);
         assert_eq!(nand.size, 256 * 1024 * 1024);
+        assert_eq!(nand.attr_u32("spare"), Some(128));
+        assert_eq!(nand.attr_u32("pagePerBlock"), Some(64));
+        assert!(nand.attr("IsBMM").is_some());
 
         let dataflash = lib
             .find_by_id("1F2200")
