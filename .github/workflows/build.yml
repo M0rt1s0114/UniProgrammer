@@ -1,0 +1,103 @@
+name: Build UniProgrammer
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install frontend dependencies
+        run: npm install
+        working-directory: 3.Software
+
+      - name: Build frontend
+        run: npm run build
+        working-directory: 3.Software
+
+      # CH34X.DLL 是闭源二进制，不进仓库。CI 上构建 libusb 后端便携版；
+      # Windows DLL 后端安装包由维护者在本地放置 CH34X.DLL 后构建。
+      - name: Build Windows release (libusb backend)
+        run: cargo build --release --features hal-libusb
+        working-directory: 3.Software/src-tauri
+
+      - name: Package portable zip
+        shell: pwsh
+        run: |
+          $rel = "3.Software/src-tauri/target/release"
+          $out = "portable-windows"
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          Copy-Item "$rel/chip-validator.exe" $out
+          Copy-Item "$rel/../chiplib.bin" $out
+          Compress-Archive -Path "$out/*" -DestinationPath "UniProgrammer-windows-x64-portable.zip"
+
+      - name: Upload portable zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: UniProgrammer-windows-portable-libusb
+          path: UniProgrammer-windows-x64-portable.zip
+
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Tauri Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file \
+            libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev \
+            libusb-1.0-0-dev libudev-dev pkg-config
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install frontend dependencies
+        run: npm install
+        working-directory: 3.Software
+
+      - name: Build Linux release (libusb backend)
+        run: |
+          npm run build
+          cd src-tauri
+          cargo build --release
+        working-directory: 3.Software
+
+      - name: Upload Linux binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: UniProgrammer-linux-x64
+          path: |
+            3.Software/src-tauri/target/release/chip-validator
+            3.Software/src-tauri/chiplib.bin
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [windows, linux]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*
+          generate_release_notes: true

@@ -1,0 +1,42 @@
+# ── UniProgrammer ────────────────────────────────────────────────
+# 依赖
+node_modules/
+dist/
+
+# 闭源厂商二进制（不在仓库分发，本地构建时自行放置）
+CH34X.DLL
+**/CH34X.DLL
+
+# Rust / Tauri 构建产物
+3.Software/src-tauri/target/
+
+# 环境文件
+.env
+.env.local
+.env.*.local
+
+# 日志与临时文件
+*.log
+*.tmp
+*.bak
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# STM32 固件编译产物（源码保留）
+2.Firmware/**/*.o
+2.Firmware/**/*.elf
+2.Firmware/**/*.bin
+2.Firmware/**/*.hex
+2.Firmware/**/*.map
+
+# 参考项目（仅本地查阅，不进仓库）
+example/
+
+# 安装包产物（正式发布走 GitHub Actions）
+*.msi
+*.dmg
+*.AppImage

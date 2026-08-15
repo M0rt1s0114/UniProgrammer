@@ -1,0 +1,301 @@
+import { ref, computed } from 'vue'
+import { defineStore } from 'pinia'
+import { invoke } from '@tauri-apps/api/core'
+
+export interface DetectedChipInfo {
+  id: string
+  vendor: string
+  model: string
+  protocol: string
+  size: number
+  page: number
+  sector?: number | null
+  block?: number | null
+  addr4bit?: number | null
+  vcc?: string | null
+}
+
+export interface LogEntry {
+  id: number
+  time: string
+  message: string
+  level: 'info' | 'warn' | 'error' | 'success'
+}
+
+export type OperationStatus = 'idle' | 'running' | 'success' | 'error'
+export type DetectStatus = 'idle' | 'detecting' | 'success' | 'programmer_fail' | 'chip_rule_fail'
+
+export function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
+}
+
+let _logId = 0
+
+export const useProgStore = defineStore('prog', () => {
+  // 编程器连接
+  const status = ref<OperationStatus>('idle')
+  const connectedDevice = ref('')
+  // CH34X 设置（IMPROG 语义：1.8V 适配器、SPI 模式/时钟）
+  const vcc18v = ref(false)
+  const spiMode = ref(3)
+  const spiFreq = ref(15000)
+
+  // 芯片检测状态
+  const detectStatus = ref<DetectStatus>('idle')
+  const chipInfo = ref<string[]>([])
+  const chipDetails = ref<DetectedChipInfo | null>(null)
+
+  // 当前操作状态（进度等）
+  const isRunning = ref(false)
+  const currentOp = ref('')
+  const progress = ref(0)
+  const progressMessage = ref('')
+
+  // Hex 查看器数据
+  const hexData = ref<Uint8Array | null>(null)
+
+  // 文件信息
+  const filePath = ref('')
+  const fileSize = ref(0)
+
+  // 地址范围（预留）
+  const startAddr = ref('0x00000000')
+  const lengthVal = ref('')
+
+  // 校验
+  const verifyAfterWrite = ref(false)
+
+  // 日志
+  const logs = ref<LogEntry[]>([])
+
+  // 芯片库级联菜单数据
+  const chipTypes = ref<string[]>([])
+  const chipVendors = ref<string[]>([])
+  const chipModels = ref<string[]>([])
+
+  const selectedType = ref('')
+  const selectedVendor = ref('')
+  const selectedModel = ref('')
+
+  // 芯片检测结果
+  const chipDetected = ref(false)
+  const detectedChipSize = ref(0)
+
+  // 计算属性
+  const isConnected = computed(() => status.value === 'success')
+  // 硬件检测只对带 JEDEC ID 的 SPI 芯片有意义；未选类型时也允许检测
+  // （连接后直接点“检测”是最常用的路径，与 IMSProg 一致）
+  const canDetect = computed(
+    () =>
+      isConnected.value &&
+      (selectedType.value === '' ||
+        ['SPI_EC', 'SPI_DATA_45', 'SPI_NAND', 'SPI_NOR', 'SPI_EEPROM', 'SPI_F-RAM'].includes(
+          selectedType.value,
+        )),
+  )
+  const canSearch = computed(() => !!selectedModel.value)
+  const canOperate = computed(() => isConnected.value && chipDetected.value)
+  // SPI NOR 专属操作标记（保留给后续 UI 使用）
+  const isSpiNor = computed(() => selectedType.value === 'SPI_NOR')
+
+  // 日志操作
+  function addLog(message: string, level: LogEntry['level'] = 'info') {
+    const now = new Date().toLocaleTimeString()
+    logs.value.push({ id: ++_logId, time: now, message, level })
+    if (logs.value.length > 1000) logs.value.shift()
+  }
+
+  function clearLogs() {
+    logs.value = []
+  }
+
+  // 芯片库加载
+  async function loadLibAndTypes() {
+    try {
+      await invoke('load_chip_lib')
+      chipTypes.value = await invoke('get_chip_types')
+    } catch (e: any) {
+      addLog(`芯片库初始化失败: ${e}`, 'error')
+    }
+  }
+
+  // 级联菜单辅助
+  async function loadChipVendorsDirect(protocol: string): Promise<string[]> {
+    try {
+      return await invoke('get_chip_vendors', { protocol })
+    } catch (e: any) {
+      addLog(`加载厂商失败: ${e}`, 'error')
+      return []
+    }
+  }
+
+  async function loadChipModelsDirect(protocol: string, vendor: string): Promise<string[]> {
+    try {
+      return await invoke('get_chip_models', { protocol, vendor })
+    } catch (e: any) {
+      addLog(`加载型号失败: ${e}`, 'error')
+      return []
+    }
+  }
+
+  async function onTypeChanged() {
+    if (selectedType.value) {
+      chipVendors.value = await loadChipVendorsDirect(selectedType.value)
+    } else {
+      chipVendors.value = []
+    }
+    selectedVendor.value = ''
+    chipModels.value = []
+    selectedModel.value = ''
+    chipDetected.value = false
+    detectedChipSize.value = 0
+    chipDetails.value = null
+  }
+
+  async function onVendorChanged() {
+    if (selectedType.value && selectedVendor.value) {
+      chipModels.value = await loadChipModelsDirect(selectedType.value, selectedVendor.value)
+    } else {
+      chipModels.value = []
+    }
+    selectedModel.value = ''
+    chipDetected.value = false
+    detectedChipSize.value = 0
+    chipDetails.value = null
+  }
+
+  // 手动选择型号：I2C/Microwire/EEPROM 无 JEDEC ID，走数据库查询路径
+  async function onModelChanged() {
+    chipDetected.value = false
+    detectedChipSize.value = 0
+    chipDetails.value = null
+    if (!selectedType.value || !selectedVendor.value || !selectedModel.value) return
+    try {
+      const info = await invoke('get_chip_info', {
+        protocol: selectedType.value,
+        vendor: selectedVendor.value,
+        model: selectedModel.value,
+      }) as DetectedChipInfo
+      chipDetected.value = true
+      detectedChipSize.value = info.size
+      chipDetails.value = info
+      addLog(`已选择: ${info.vendor} ${info.model} (${formatBytes(info.size)})`, 'success')
+    } catch (e: any) {
+      addLog(`加载芯片参数失败: ${e}`, 'error')
+    }
+  }
+
+  // 连接编程器
+  async function initCh34x(kind: 'ch341' | 'ch347' | 'ch347f') {
+    status.value = 'running'
+    currentOp.value = '初始化 CH34X'
+    addLog('正在初始化 CH34X...')
+    try {
+      const msg = await invoke('initialize', {
+        kind,
+        vcc18v: vcc18v.value,
+        spiMode: spiMode.value,
+        freqKhz: spiFreq.value,
+      }) as string
+      status.value = 'success'
+      connectedDevice.value = msg
+      addLog(msg, 'success')
+      chipDetected.value = false
+      detectedChipSize.value = 0
+      chipDetails.value = null
+      if (chipTypes.value.length === 0) {
+        await loadLibAndTypes()
+      }
+    } catch (e: any) {
+      status.value = 'error'
+      connectedDevice.value = ''
+      addLog(`初始化失败: ${e}`, 'error')
+    }
+  }
+
+  async function connectSerprog(port: string) {
+    status.value = 'running'
+    currentOp.value = '连接 Serprog'
+    addLog(`正在连接 serprog (${port})...`)
+    try {
+      const msg = await invoke('connect_serprog', { port }) as string
+      status.value = 'success'
+      connectedDevice.value = msg
+      addLog(msg, 'success')
+      chipDetected.value = false
+      detectedChipSize.value = 0
+      chipDetails.value = null
+      if (chipTypes.value.length === 0) {
+        await loadLibAndTypes()
+      }
+    } catch (e: any) {
+      status.value = 'error'
+      addLog(`serprog 连接失败: ${e}`, 'error')
+    }
+  }
+
+  // 加载文件（浏览器 <input> 兜底）
+  async function loadFile(file: File) {
+    try {
+      const buffer = await file.arrayBuffer()
+      const data = new Uint8Array(buffer)
+      hexData.value = data
+      filePath.value = file.name
+      fileSize.value = file.size
+      addLog(`已加载文件: ${file.name} (${formatBytes(file.size)})`, 'success')
+    } catch (e: any) {
+      addLog(`文件加载失败: ${e}`, 'error')
+    }
+  }
+
+  // 原生文件对话框打开文件（Windows IFileDialog + std::fs）
+  async function openFileViaDialog() {
+    try {
+      const path = await invoke<string | null>('open_file_dialog')
+      if (!path) return
+      const bytes = await invoke<number[]>('read_file', { path })
+      hexData.value = new Uint8Array(bytes)
+      filePath.value = path
+      fileSize.value = bytes.length
+      addLog(`已加载文件: ${path} (${formatBytes(bytes.length)})`, 'success')
+    } catch (e: any) {
+      addLog(`文件加载失败: ${e}`, 'error')
+    }
+  }
+
+  // 转换芯片库
+  async function convertLib() {
+    addLog('正在转换芯片库...')
+    try {
+      const msg = await invoke('convert_chip_lib') as string
+      addLog(msg, 'success')
+    } catch (e: any) {
+      addLog(`转换失败: ${e}`, 'error')
+    }
+  }
+
+  return {
+    status, connectedDevice,
+    vcc18v, spiMode, spiFreq,
+    detectStatus, chipInfo, chipDetails,
+    isRunning, currentOp, progress, progressMessage,
+    hexData,
+    filePath, fileSize,
+    startAddr, lengthVal,
+    verifyAfterWrite,
+    logs,
+    chipTypes, chipVendors, chipModels,
+    selectedType, selectedVendor, selectedModel,
+    chipDetected, detectedChipSize,
+    isConnected, canDetect, canSearch, canOperate, isSpiNor,
+    addLog, clearLogs,
+    loadLibAndTypes, loadChipVendorsDirect, loadChipModelsDirect,
+    onTypeChanged, onVendorChanged, onModelChanged,
+    initCh34x, connectSerprog,
+    loadFile, openFileViaDialog, convertLib,
+  }
+})
