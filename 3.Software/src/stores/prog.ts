@@ -18,6 +18,10 @@ export interface DetectedChipInfo {
   spare?: number | null
   pagesPerBlock?: number | null
   isBmm?: boolean | null
+  dummyMode?: string | null
+  readMode?: string | null
+  writeMode?: string | null
+  feature?: number | null
 }
 
 export interface LogEntry {
@@ -158,6 +162,36 @@ export const useProgStore = defineStore('prog', () => {
     (mv) => {
       if (mv !== vccTargetMv.value) {
         vccTargetMv.value = mv
+      }
+    },
+  )
+
+  // 实验性/未完整实现的通用选项：勾选时写入 FunctionTest 日志，避免用户误以为已生效
+  watch(
+    () => settings.batchBurn,
+    (value, oldValue) => {
+      if (settings.hydrated && value && !oldValue) {
+        addLog(t('settings.expEnabledLog').replace('{0}', t('settings.batchBurn')), 'functionTest')
+      }
+    },
+  )
+  watch(
+    () => settings.autoDetectEeprom,
+    (value, oldValue) => {
+      if (settings.hydrated && value && !oldValue) {
+        addLog(
+          t('settings.expEnabledLog').replace('{0}', t('settings.autoDetectEeprom')),
+          'functionTest',
+        )
+      }
+    },
+  )
+  // 电压控制总开关：UI/状态可用，但实际硬件输出控制尚未实现
+  watch(
+    () => settings.vccControlEnabled,
+    (value, oldValue) => {
+      if (settings.hydrated && value && !oldValue) {
+        addLog(t('settings.expEnabledLog').replace('{0}', t('settings.vccControl')), 'functionTest')
       }
     },
   )

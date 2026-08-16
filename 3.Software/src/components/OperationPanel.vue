@@ -542,6 +542,18 @@ onMounted(async () => {
         <div v-if="store.chipDetails.vcc" class="chip-info-line">
           {{ t('chipInfo.vcc') }} {{ store.chipDetails.vcc }} V
         </div>
+        <div v-if="store.chipDetails.dummyMode" class="chip-info-line">
+          {{ t('chipInfo.dummyMode') }} {{ store.chipDetails.dummyMode }}
+        </div>
+        <div v-if="store.chipDetails.readMode" class="chip-info-line">
+          {{ t('chipInfo.readMode') }} {{ store.chipDetails.readMode }}
+        </div>
+        <div v-if="store.chipDetails.writeMode" class="chip-info-line">
+          {{ t('chipInfo.writeMode') }} {{ store.chipDetails.writeMode }}
+        </div>
+        <div v-if="store.chipDetails.feature" class="chip-info-line">
+          {{ t('chipInfo.feature') }} 0x{{ store.chipDetails.feature.toString(16) }}
+        </div>
         <div class="chip-info-line">
           {{ t('chipInfo.addr4') }}
           {{

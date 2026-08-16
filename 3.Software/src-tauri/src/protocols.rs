@@ -32,8 +32,10 @@ pub enum NandWriteMode {
 }
 
 /// feature bit 0 = plane select, bit 1 = die select #1, bit 2 = die select #2
-/// (mirrors SNANDer table semantics; only plane select is implemented today).
+/// (mirrors SNANDer table semantics).
 const NAND_FEATURE_PLANE_SELECT: u32 = 0x01;
+const NAND_FEATURE_DIE_SELECT_1: u32 = 0x02;
+const NAND_FEATURE_DIE_SELECT_2: u32 = 0x04;
 
 pub struct ChipParams {
     #[allow(dead_code)]
@@ -452,6 +454,56 @@ fn nand_wait_ready(dev: &Ch34xDevice, timeout_ms: u64) -> Result<(), String> {
     }
 }
 
+fn nand_get_feature(dev: &Ch34xDevice, addr: u8) -> Result<u8, String> {
+    dev.cs_low()?;
+    dev.spi_tx(&[0x0F, addr])?;
+    let mut value = [0u8; 1];
+    dev.spi_rx(&mut value)?;
+    dev.cs_high()?;
+    Ok(value[0])
+}
+
+fn nand_set_feature(dev: &Ch34xDevice, addr: u8, value: u8) -> Result<(), String> {
+    cs_cmd(dev, &[0x1F, addr, value])
+}
+
+/// Select the target die before page read / program / block erase.
+/// Type 1 issues C2h+die-id; type 2 toggles bit 6 of feature register D0h.
+fn nand_select_die(dev: &Ch34xDevice, params: &ChipParams, page_no: u32) -> Result<(), String> {
+    if (params.feature & NAND_FEATURE_DIE_SELECT_1) != 0 {
+        let die_id = ((page_no >> 16) & 0xFF) as u8;
+        return cs_cmd(dev, &[0xC2, die_id]);
+    }
+    if (params.feature & NAND_FEATURE_DIE_SELECT_2) != 0 {
+        let die_id = (page_no >> 17) & 0xFF;
+        let mut feature = nand_get_feature(dev, 0xD0)?;
+        if die_id == 0 {
+            feature &= !0x40;
+        } else {
+            feature |= 0x40;
+        }
+        return nand_set_feature(dev, 0xD0, feature);
+    }
+    Ok(())
+}
+
+/// Main status register C0h: bit2 = erase fail, bit3 = program fail.
+fn nand_check_erase_fail(dev: &Ch34xDevice) -> Result<(), String> {
+    let sr = nand_read_main_sr(dev)?;
+    if (sr & 0x04) != 0 {
+        return Err("NAND 擦除失败（E_FAIL）".into());
+    }
+    Ok(())
+}
+
+fn nand_check_program_fail(dev: &Ch34xDevice) -> Result<(), String> {
+    let sr = nand_read_main_sr(dev)?;
+    if (sr & 0x08) != 0 {
+        return Err("NAND 编程失败（P_FAIL）".into());
+    }
+    Ok(())
+}
+
 fn nand_write_enable(dev: &Ch34xDevice) -> Result<(), String> {
     cs_cmd(dev, &[0x06])
 }
@@ -473,6 +525,7 @@ fn nand_cache_read_header(params: &ChipParams, page_no: u32, column: usize) -> [
 fn nand_page_read(dev: &Ch34xDevice, params: &ChipParams, page_no: u32) -> Result<Vec<u8>, String> {
     let page_size = params.page;
     nand_wait_ready(dev, 200)?;
+    nand_select_die(dev, params, page_no)?;
     cs_cmd(
         dev,
         &[
@@ -509,8 +562,9 @@ fn nand_page_read(dev: &Ch34xDevice, params: &ChipParams, page_no: u32) -> Resul
     Ok(buf)
 }
 
-fn nand_load_page(dev: &Ch34xDevice, page_no: u32) -> Result<(), String> {
+fn nand_load_page(dev: &Ch34xDevice, params: &ChipParams, page_no: u32) -> Result<(), String> {
     nand_wait_ready(dev, 200)?;
+    nand_select_die(dev, params, page_no)?;
     cs_cmd(
         dev,
         &[
@@ -558,7 +612,7 @@ pub fn nand_read_spare(
 ) -> Result<Vec<u8>, String> {
     let page_size = params.page;
     let spare_size = if params.spare > 0 { params.spare } else { 64 };
-    nand_load_page(dev, page_no)?;
+    nand_load_page(dev, params, page_no)?;
     nand_read_cache(dev, params, page_no, page_size, spare_size)
 }
 
@@ -614,7 +668,7 @@ pub fn nand_read_otp_page(
     nand_wait_ready(dev, 200)?;
 
     let result = (|| {
-        nand_load_page(dev, page_no)?;
+        nand_load_page(dev, params, page_no)?;
         let mut out = nand_read_cache(dev, params, page_no, 0, page_size)?;
         out.extend_from_slice(&nand_read_cache(
             dev, params, page_no, page_size, spare_size,
@@ -827,6 +881,7 @@ fn nand_page_write(
         ));
     }
     nand_wait_ready(dev, 1000)?;
+    nand_select_die(dev, params, page_no)?;
     nand_write_enable(dev)?;
     let hdr = nand_program_load_header(params, page_no, 0);
     dev.cs_low()?;
@@ -845,7 +900,8 @@ fn nand_page_write(
             (page_no & 0xFF) as u8,
         ],
     )?;
-    nand_wait_ready(dev, 1000)
+    nand_wait_ready(dev, 1000)?;
+    nand_check_program_fail(dev)
 }
 
 /// 单帧放不下整页时的“强制尝试”：把 0x02 缓冲区加载拆成多个列地址段，
@@ -857,6 +913,7 @@ fn nand_page_write_segmented(
     page_no: u32,
 ) -> Result<(), String> {
     nand_wait_ready(dev, 1000)?;
+    nand_select_die(dev, params, page_no)?;
     let chunk_limit = dev.spi_frame_limit().saturating_sub(3).max(1);
     let mut offset = 0usize;
     while offset < page.len() {
@@ -879,7 +936,8 @@ fn nand_page_write_segmented(
             (page_no & 0xFF) as u8,
         ],
     )?;
-    nand_wait_ready(dev, 1000)
+    nand_wait_ready(dev, 1000)?;
+    nand_check_program_fail(dev)
 }
 
 fn nand_unprotect(dev: &Ch34xDevice) -> Result<(), String> {
@@ -895,9 +953,15 @@ fn nand_unprotect(dev: &Ch34xDevice) -> Result<(), String> {
     Ok(())
 }
 
-fn nand_block_erase(dev: &Ch34xDevice, block_no: u32, pages_per_block: u32) -> Result<(), String> {
+fn nand_block_erase(
+    dev: &Ch34xDevice,
+    params: &ChipParams,
+    block_no: u32,
+    pages_per_block: u32,
+) -> Result<(), String> {
     nand_wait_ready(dev, 2000)?;
     let row = block_no.saturating_mul(pages_per_block);
+    nand_select_die(dev, params, row)?;
     nand_write_enable(dev)?;
     nand_unprotect(dev)?;
     cs_cmd(
@@ -909,7 +973,8 @@ fn nand_block_erase(dev: &Ch34xDevice, block_no: u32, pages_per_block: u32) -> R
             (row & 0xFF) as u8,
         ],
     )?;
-    nand_wait_ready(dev, 2000)
+    nand_wait_ready(dev, 2000)?;
+    nand_check_erase_fail(dev)
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -1035,7 +1100,7 @@ pub fn nand_erase(
         if bad_set.contains(&block_no) {
             continue;
         }
-        nand_block_erase(dev, block_no, pages_per_block)?;
+        nand_block_erase(dev, params, block_no, pages_per_block)?;
     }
     Ok(())
 }

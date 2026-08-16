@@ -37,6 +37,13 @@ struct ChipDetectInfo {
     pages_per_block: Option<u32>,
     #[serde(rename = "isBmm")]
     is_bmm: Option<bool>,
+    #[serde(rename = "dummyMode")]
+    dummy_mode: Option<String>,
+    #[serde(rename = "readMode")]
+    read_mode: Option<String>,
+    #[serde(rename = "writeMode")]
+    write_mode: Option<String>,
+    feature: Option<u32>,
 }
 
 #[derive(Clone, Serialize)]
@@ -1370,6 +1377,10 @@ fn chip_info_to_detect(info: &chiplib::ChipInfo) -> ChipDetectInfo {
             .attr("IsBMM")
             .or_else(|| info.attr("isbmm"))
             .map(|v| v != "0"),
+        dummy_mode: info.attr("dummyMode").map(|v| v.to_string()),
+        read_mode: info.attr("readMode").map(|v| v.to_string()),
+        write_mode: info.attr("writeMode").map(|v| v.to_string()),
+        feature: info.attr_u32("feature"),
     }
 }
 

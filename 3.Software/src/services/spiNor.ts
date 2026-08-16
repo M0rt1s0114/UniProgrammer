@@ -26,6 +26,24 @@ export function useSpiNor() {
     }
   }
 
+  // 通用设置“进度条估算(速度快)”：按已处理字节和耗时线性估算剩余时间。
+  // 只追加到进度文本，不改变真实进度事件。
+  function formatEstimatedRemaining(startMs: number, done: number, total: number): string {
+    if (done <= 0 || total <= 0) return '--'
+    const elapsed = Math.max(0, Date.now() - startMs) / 1000
+    const remaining = Math.max(0, (elapsed / done) * (total - done))
+    if (remaining < 1) return '<1s'
+    if (remaining < 60) return `${Math.ceil(remaining)}s`
+    const minutes = Math.floor(remaining / 60)
+    const seconds = Math.round(remaining % 60)
+    return `${minutes}m${seconds.toString().padStart(2, '0')}s`
+  }
+
+  function withEstimate(base: string, startMs: number, done: number, total: number): string {
+    if (!store.nandProgressEstimate) return base
+    return `${base} · 预计 ${formatEstimatedRemaining(startMs, done, total)}`
+  }
+
   function fillHexWithFF(size: number) {
     if (size > MAX_PREFILL) {
       store.hexData = null
@@ -268,11 +286,12 @@ export function useSpiNor() {
     store.currentOp = '读取坏块'
     store.progress = 0
     store.progressMessage = '正在扫描坏块...'
+    const opStart = Date.now()
     store.addLog('坏块扫描：实验性功能，开始执行', 'functionTest')
     const unlisten = await listenProgress('bad_block_progress', (done, total) => {
       const pct = total > 0 ? Math.floor((done / total) * 100) : 0
       store.progress = pct
-      store.progressMessage = `坏块扫描 ${done} / ${total}`
+      store.progressMessage = withEstimate(`坏块扫描 ${done} / ${total}`, opStart, done, total)
     })
     try {
       const result = (await invoke('scan_bad_blocks')) as {
@@ -356,6 +375,7 @@ export function useSpiNor() {
     store.currentOp = '读取芯片'
     store.progress = 0
     store.progressMessage = '准备读取...'
+    const opStart = Date.now()
     store.addLog(`开始读取，容量 ${store.detectedChipSize} 字节...`)
 
     let unlisten: UnlistenFn | null = null
@@ -363,7 +383,12 @@ export function useSpiNor() {
       unlisten = await listenProgress('read_progress', (done, total) => {
         const pct = Math.floor((done / total) * 100)
         store.progress = pct
-        store.progressMessage = `已读取 ${done} / ${total} 字节 (${pct}%)`
+        store.progressMessage = withEstimate(
+          `已读取 ${done} / ${total} 字节 (${pct}%)`,
+          opStart,
+          done,
+          total,
+        )
       })
       const raw = await invoke<number[]>('read_chip', {
         size: store.detectedChipSize,
@@ -404,6 +429,7 @@ export function useSpiNor() {
     store.currentOp = '写入芯片'
     store.progress = 0
     store.progressMessage = '准备写入...'
+    const opStart = Date.now()
     store.addLog(`开始写入，${store.hexData.length} 字节...`)
 
     let unlisten: UnlistenFn | null = null
@@ -411,7 +437,12 @@ export function useSpiNor() {
       unlisten = await listenProgress('write_progress', (done, total) => {
         const pct = Math.floor((done / total) * 100)
         store.progress = pct
-        store.progressMessage = `已写入 ${done} / ${total} 字节 (${pct}%)`
+        store.progressMessage = withEstimate(
+          `已写入 ${done} / ${total} 字节 (${pct}%)`,
+          opStart,
+          done,
+          total,
+        )
       })
       // Tauri 传 Vec<u8> 需要 Array<number>，从 Uint8Array 转一下
       const msg = await invoke<string>('write_chip', {
@@ -459,6 +490,7 @@ export function useSpiNor() {
     store.currentOp = '校验芯片'
     store.progress = 0
     store.progressMessage = '准备校验...'
+    const opStart = Date.now()
     store.addLog(`开始校验，${store.hexData.length} 字节...`)
 
     let unlisten: UnlistenFn | null = null
@@ -466,7 +498,12 @@ export function useSpiNor() {
       unlisten = await listenProgress('verify_progress', (done, total) => {
         const pct = Math.floor((done / total) * 100)
         store.progress = pct
-        store.progressMessage = `已校验 ${done} / ${total} 字节 (${pct}%)`
+        store.progressMessage = withEstimate(
+          `已校验 ${done} / ${total} 字节 (${pct}%)`,
+          opStart,
+          done,
+          total,
+        )
       })
       const msg = await invoke<string>('verify_chip', {
         data: Array.from(store.hexData),
