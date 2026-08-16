@@ -469,10 +469,9 @@ onMounted(async () => {
     <section v-if="store.selectedType === 'SPI_DATA_45'" class="panel-section">
       <div class="section-label">{{ t('section.at45') }}</div>
 
-      <div style="display: flex; gap: 8px">
+      <div class="at45-btn-col">
         <button
-          class="btn btn-ghost btn-sm"
-          style="flex: 1"
+          class="btn btn-ghost btn-sm w-full"
           :disabled="!store.canOperate || store.isRunning"
           @click="
             confirmExperimentalAction('at45.readPageMode', () => spiNor.readAt45PageMode('page'))
@@ -481,8 +480,7 @@ onMounted(async () => {
           {{ t('at45.readPageMode') }}
         </button>
         <button
-          class="btn btn-ghost btn-sm"
-          style="flex: 1"
+          class="btn btn-ghost btn-sm w-full"
           :disabled="!store.canOperate || store.isRunning"
           @click="
             confirmExperimentalAction('at45.readChipMode', () => spiNor.readAt45PageMode('chip'))
@@ -490,11 +488,8 @@ onMounted(async () => {
         >
           {{ t('at45.readChipMode') }}
         </button>
-      </div>
-      <div style="display: flex; gap: 8px; margin-top: 6px">
         <button
-          class="btn btn-secondary"
-          style="flex: 1"
+          class="btn btn-secondary w-full"
           :disabled="!store.canOperate || store.isRunning"
           @click="
             confirmExperimentalAction('at45.setDataFlashPage', () =>
@@ -505,8 +500,7 @@ onMounted(async () => {
           {{ t('at45.setDataFlashPage') }}
         </button>
         <button
-          class="btn btn-secondary"
-          style="flex: 1"
+          class="btn btn-secondary w-full"
           :disabled="!store.canOperate || store.isRunning"
           @click="
             confirmExperimentalAction('at45.setBinaryPage', () =>
@@ -776,6 +770,13 @@ onMounted(async () => {
   grid-template-columns: 1fr 1fr;
   gap: 2px 10px;
   margin-top: 6px;
+}
+
+/* 45 模式按钮改为纵向全宽排列，避免中文标签超出 230px 侧栏 */
+.at45-btn-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .adv-toggle {

@@ -117,6 +117,28 @@ fn exe_dir() -> PathBuf {
     }
 }
 
+fn format_human_size(size: u64) -> String {
+    const KB: u64 = 1024;
+    const MB: u64 = KB * 1024;
+    const GB: u64 = MB * 1024;
+
+    let (unit, label) = if size >= GB {
+        (GB, "GB")
+    } else if size >= MB {
+        (MB, "MB")
+    } else if size >= KB {
+        (KB, "KB")
+    } else {
+        return format!("{} B", size);
+    };
+
+    if size.is_multiple_of(unit) {
+        format!("{} {}", size / unit, label)
+    } else {
+        format!("{:.1} {}", size as f64 / unit as f64, label)
+    }
+}
+
 fn get_lib(state: &AppState) -> Result<&chiplib::Chiplib, String> {
     state.lib.as_ref().ok_or("芯片库未加载".into())
 }
@@ -424,10 +446,10 @@ fn detect_chip(state: State<'_, Mutex<AppState>>) -> Result<ChipDetectResult, St
     match lib.find_by_id(&id_hex) {
         Some(info) => {
             let text = format!(
-                "✅ 芯片匹配成功！\n厂商: {}\n型号: {}\n容量: {} MB\n页大小: {} 字节\n协议: {}\n（设备: {}）",
+                "✅ 芯片匹配成功！\n厂商: {}\n型号: {}\n容量: {}\n页大小: {} 字节\n协议: {}\n（设备: {}）",
                 info.vendor,
                 info.model,
-                info.size / 1024 / 1024,
+                format_human_size(info.size),
                 info.page,
                 info.protocol,
                 s.connected_device.as_deref().unwrap_or("未知")
