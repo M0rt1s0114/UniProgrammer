@@ -46,6 +46,24 @@ fn dir_is_writable(dir: &Path) -> bool {
     }
 }
 
+/// 识别常见的安装版目录：即使以管理员运行（目录可写），也按安装版规则
+/// 使用 ~/UniProgrammer/Setting.set。
+fn looks_installed(dir: &Path) -> bool {
+    #[cfg(windows)]
+    {
+        let path = dir.to_string_lossy().to_lowercase();
+        path.contains("\\program files") || path.contains("\\program files (x86)")
+    }
+    #[cfg(not(windows))]
+    {
+        let path = dir.to_string_lossy();
+        path.starts_with("/usr/")
+            || path.starts_with("/opt/")
+            || path.starts_with("/snap/")
+            || path.starts_with("/Applications/")
+    }
+}
+
 /// 选择设置文件位置：
 /// - 已存在 exe 同级的 Setting.set：便携版模式，继续使用。
 /// - 已存在用户主目录下的 Setting.set：安装版模式，继续使用。
@@ -53,6 +71,11 @@ fn dir_is_writable(dir: &Path) -> bool {
 pub fn settings_file() -> PathBuf {
     let exe = exe_dir();
     let portable = exe.join(FILE_NAME);
+
+    // 安装版目录固定使用用户主目录，即使管理员运行或 exe 旁遗留旧文件
+    if looks_installed(&exe) {
+        return home_settings_file().unwrap_or(portable);
+    }
 
     if portable.exists() {
         return portable;

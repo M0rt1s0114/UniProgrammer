@@ -20,6 +20,10 @@ CH34X.DLL
 *.tmp
 *.bak
 
+# 本地设置文件（便携版运行后生成）
+Setting.set
+**/Setting.set
+
 # 编辑器 / 系统
 .vscode/
 .idea/

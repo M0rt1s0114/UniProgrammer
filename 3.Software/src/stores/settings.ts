@@ -395,7 +395,9 @@ export const useSettingsStore = defineStore('settings', () => {
     // 首次启动时把迁移结果落盘为 Setting.set，随后清理旧 localStorage
     if (legacyFound) {
       await save()
-      clearLegacySettings()
+      if (lastSaveError.value === '') {
+        clearLegacySettings()
+      }
     }
   }
 
