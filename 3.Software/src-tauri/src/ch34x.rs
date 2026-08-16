@@ -723,11 +723,12 @@ mod dll_hal {
     use super::{Ch34xSettings, ChipKind, DeviceMode, ProgrammerHal};
     use std::cell::RefCell;
     use std::ffi::CString;
+    use std::os::windows::ffi::OsStrExt;
     use std::path::PathBuf;
 
-    use windows::core::PCSTR;
+    use windows::core::{PCSTR, PCWSTR};
     use windows::Win32::Foundation::{FreeLibrary, HMODULE};
-    use windows::Win32::System::LibraryLoader::{GetProcAddress, LoadLibraryA};
+    use windows::Win32::System::LibraryLoader::{GetProcAddress, LoadLibraryW};
 
     type FnOpen = unsafe extern "system" fn(u32) -> *mut std::ffi::c_void;
     type FnGetProc = unsafe extern "system" fn() -> isize;
@@ -820,8 +821,14 @@ mod dll_hal {
 
         pub fn open(settings: &Ch34xSettings, mode: DeviceMode) -> Result<Self, String> {
             let path = Self::find_dll("CH34X.DLL")?;
-            let c_path = CString::new(path.to_str().unwrap()).map_err(|e| e.to_string())?;
-            let lib = unsafe { LoadLibraryA(PCSTR(c_path.as_ptr() as *const u8)) }
+            // 路径可能包含中文等非 ASCII 字符：LoadLibraryA 会按系统 ANSI
+            // 代码页解释字节，UTF-8 路径会失败，因此必须使用宽字符版本。
+            let wide: Vec<u16> = path
+                .as_os_str()
+                .encode_wide()
+                .chain(std::iter::once(0))
+                .collect();
+            let lib = unsafe { LoadLibraryW(PCWSTR(wide.as_ptr())) }
                 .map_err(|e| format!("加载 CH34X.DLL 失败: {e}"))?;
 
             let prefix = match settings.kind {
