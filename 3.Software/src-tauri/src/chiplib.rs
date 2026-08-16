@@ -6,6 +6,41 @@ use std::mem::size_of;
 const MAGIC: u32 = 0x50494843;
 const MAX_ID_LEN: usize = 16;
 
+// ── 轻量混淆 ────────────────────────────────────────────────────────────────
+// 参考 FFW_Decode_Tool 的逐字节算法：按位置异或掩码后循环左移。
+// 只用于防止芯片库被直接 strings/hexdump 读取，不提供密码学强度。
+
+fn obf_rol(value: u8, r: usize) -> u8 {
+    let r = r % 8;
+    let v = value as u16;
+    (((v << r) | (v >> (8 - r))) & 0xFF) as u8
+}
+
+fn obf_ror(value: u8, r: usize) -> u8 {
+    let r = r % 8;
+    let v = value as u16;
+    (((v >> r) | (v << (8 - r))) & 0xFF) as u8
+}
+
+fn obf_mask(i: usize) -> u8 {
+    let mask = (1u32 << (i & 3)) ^ (1u32 << (i % 7)) ^ (1u32 << ((i % 13) + 4));
+    (mask & 0xFF) as u8
+}
+
+fn obfuscate(data: &[u8]) -> Vec<u8> {
+    data.iter()
+        .enumerate()
+        .map(|(i, &byte)| obf_rol(byte ^ obf_mask(i), i % 8))
+        .collect()
+}
+
+fn deobfuscate(data: &[u8]) -> Vec<u8> {
+    data.iter()
+        .enumerate()
+        .map(|(i, &byte)| obf_ror(byte, i % 8) ^ obf_mask(i))
+        .collect()
+}
+
 #[repr(C)]
 struct Header {
     magic: u32,
@@ -430,7 +465,14 @@ impl Chiplib {
     }
 
     pub fn load_bin(path: &str) -> Result<Self, String> {
-        let file = fs::read(path).map_err(|e| e.to_string())?;
+        let raw = fs::read(path).map_err(|e| e.to_string())?;
+        // 兼容旧版明文 bin：以 CHIP magic 开头则直接解析，否则视为混淆数据。
+        // 解码只在内存中进行，绝不写回明文文件。
+        let file = if raw.starts_with(b"CHIP") {
+            raw
+        } else {
+            deobfuscate(&raw)
+        };
         if file.len() < size_of::<Header>() {
             return Err("bin 文件太小".into());
         }
@@ -461,7 +503,18 @@ impl Chiplib {
     }
 
     fn load_xml(path: &str) -> Result<Self, String> {
-        let xml_data = fs::read_to_string(path).map_err(|e| e.to_string())?;
+        let raw = fs::read(path).map_err(|e| e.to_string())?;
+        // 兼容旧版明文 XML；混淆后的 XML 先解码再解析，解码结果不落盘。
+        let file_bytes = if raw.starts_with(b"<") {
+            raw
+        } else {
+            let decoded = deobfuscate(&raw);
+            if !decoded.starts_with(b"<") {
+                return Err("XML 混淆数据无效".into());
+            }
+            decoded
+        };
+        let xml_data = String::from_utf8_lossy(&file_bytes).into_owned();
         let mut entries = Vec::new();
         let mut data_blob = Vec::new();
         let protocol_map: HashMap<&str, u16> = [
@@ -619,23 +672,24 @@ impl Chiplib {
             index_entry_size: size_of::<IndexEntry>() as u16,
             padding: 0,
         };
-        let mut file = fs::File::create(path).map_err(|e| e.to_string())?;
-        use std::io::Write;
-        file.write_all(unsafe {
+
+        // 先在内存中生成明文二进制，混淆后一次性写盘；工作目录中不会出现明文库。
+        let mut plain = Vec::with_capacity(data_offset as usize + self.data.len());
+        plain.extend_from_slice(unsafe {
             std::slice::from_raw_parts(&header as *const Header as *const u8, size_of::<Header>())
-        })
-        .map_err(|e| e.to_string())?;
+        });
         for e in &self.entries {
-            file.write_all(unsafe {
+            plain.extend_from_slice(unsafe {
                 std::slice::from_raw_parts(
                     e as *const IndexEntry as *const u8,
                     size_of::<IndexEntry>(),
                 )
-            })
-            .map_err(|e| e.to_string())?;
+            });
         }
-        file.write_all(&self.data).map_err(|e| e.to_string())?;
-        Ok(())
+        plain.extend_from_slice(&self.data);
+
+        let sealed = obfuscate(&plain);
+        fs::write(path, &sealed).map_err(|e| e.to_string())
     }
 
     /// Insert or replace one chip entry by JEDEC ID while keeping every
@@ -874,6 +928,15 @@ fn protocol_name_to_id(name: &str) -> u16 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn obfuscation_round_trip() {
+        let original = b"CHIP-vendor=WINBOND-model=W25Q64-size=8388608";
+        let sealed = obfuscate(original);
+        assert_ne!(sealed.as_slice(), original.as_slice());
+        assert!(!String::from_utf8_lossy(&sealed).contains("WINBOND"));
+        assert_eq!(deobfuscate(&sealed), original);
+    }
 
     #[test]
     fn xml_fallback_contains_new_chip() {

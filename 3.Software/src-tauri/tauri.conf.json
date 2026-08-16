@@ -33,6 +33,6 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "resources": ["chiplib.bin", "chiplib.xml", "CH34X.DLL"]
+    "resources": ["chiplib.bin", "CH34X.DLL"]
   }
 }
