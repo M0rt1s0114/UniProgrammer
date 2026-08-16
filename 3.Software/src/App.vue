@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref, nextTick } from 'vue'
 import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window'
+import { getVersion } from '@tauri-apps/api/app'
 import { useProgStore } from '@/stores/prog'
 import { t } from '@/i18n'
 import OperationPanel from '@/components/OperationPanel.vue'
@@ -11,6 +12,15 @@ import StatusBar from '@/components/StatusBar.vue'
 
 const store = useProgStore()
 const appWindow = getCurrentWindow()
+const appVersion = ref('')
+
+async function loadVersion() {
+  try {
+    appVersion.value = await getVersion()
+  } catch {
+    appVersion.value = ''
+  }
+}
 
 function minimizeWindow() {
   appWindow.minimize()
@@ -44,6 +54,7 @@ function onDividerMouseDown(e: MouseEvent) {
 
 onMounted(() => {
   store.addLog('UnProg 已启动')
+  loadVersion()
   fitWindowToSidebar()
 })
 
@@ -80,7 +91,7 @@ async function fitWindowToSidebar() {
         </svg>
       </div>
       <span class="titlebar-title">{{ t('app.title') }}</span>
-      <span class="titlebar-version text-muted">v0.1.0-alpha.2</span>
+      <span v-if="appVersion" class="titlebar-version text-muted">v{{ appVersion }}</span>
       <div class="titlebar-spacer" />
       <div class="wc-group">
         <button class="wc-btn wc-minimize" :title="t('app.minimize')" @click="minimizeWindow">
