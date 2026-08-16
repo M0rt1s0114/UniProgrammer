@@ -284,6 +284,47 @@ fn spi_read_jedec(dev: &Ch34xDevice) -> Result<[u8; 5], String> {
     Ok(id)
 }
 
+/// SPI NAND read-ID variant: 9Fh + manufacturer-ID address byte 00h.
+/// Some NAND vendors only output the ID after receiving the address byte;
+/// the plain 9Fh probe then returns a leading FF byte.
+fn spi_read_jedec_with_addr(dev: &Ch34xDevice) -> Result<[u8; 5], String> {
+    dev.cs_low()?;
+    dev.spi_tx(&[0x9F, 0x00])?;
+    let mut id = [0xFFu8; 5];
+    dev.spi_rx(&mut id)?;
+    dev.cs_high()?;
+    Ok(id)
+}
+
+/// Build candidate ID strings from a raw ID probe.
+///
+/// The chip database contains both 6-hex JEDEC IDs (`C84015`) and legacy
+/// 4-hex manufacturer+device IDs (`0125`). Some NAND devices shift the real
+/// ID by one dummy byte, so the probe is matched both directly and with the
+/// first byte skipped.
+fn jedec_id_candidates(raw: &[u8]) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut push = |s: String| {
+        if !out.contains(&s) {
+            out.push(s);
+        }
+    };
+
+    if raw.len() >= 3 {
+        push(format!("{:02X}{:02X}{:02X}", raw[0], raw[1], raw[2]));
+    }
+    if raw.len() >= 2 {
+        push(format!("{:02X}{:02X}", raw[0], raw[1]));
+    }
+    if raw.len() >= 4 {
+        push(format!("{:02X}{:02X}{:02X}", raw[1], raw[2], raw[3]));
+    }
+    if raw.len() >= 3 {
+        push(format!("{:02X}{:02X}", raw[1], raw[2]));
+    }
+    out
+}
+
 /// Open the selected programmer. The returned handle owns the USB device and
 /// closes it on drop (per-operation lifecycle, same as IMSProg).
 fn open_ch34x(state: &AppState) -> Result<Ch34xDevice, String> {
@@ -441,31 +482,56 @@ fn connect_serprog(state: State<'_, Mutex<AppState>>, port: String) -> Result<St
 #[tauri::command]
 fn detect_chip(state: State<'_, Mutex<AppState>>) -> Result<ChipDetectResult, String> {
     let mut s = state.lock().map_err(|e| e.to_string())?;
-    let mut id = [0xFFu8; 5];
+    let mut probes: Vec<[u8; 5]> = Vec::new();
 
     if s.ch34x.is_some() {
         let dev = open_ch34x(&s)?;
-        id = spi_read_jedec(&dev)?;
+        probes.push(spi_read_jedec(&dev)?);
+        probes.push(spi_read_jedec_with_addr(&dev)?);
     } else if let Some(ser) = &mut s.serprog {
-        let id_bytes = ser.spi_command(&[0x9F], 3)?;
-        id[0] = id_bytes[0];
-        id[1] = id_bytes[1];
-        id[2] = id_bytes[2];
+        let first = ser.spi_command(&[0x9F], 3)?;
+        let mut raw = [0xFFu8; 5];
+        raw[0] = first[0];
+        raw[1] = first[1];
+        raw[2] = first[2];
+        probes.push(raw);
+
+        let second = ser.spi_command(&[0x9F, 0x00], 3)?;
+        let mut raw2 = [0xFFu8; 5];
+        raw2[0] = second[0];
+        raw2[1] = second[1];
+        raw2[2] = second[2];
+        probes.push(raw2);
     } else {
         return Err("没有可用的编程器，请先初始化或连接 serprog".into());
     }
 
-    let id_hex = format!("{:02X}{:02X}{:02X}", id[0], id[1], id[2]);
     let lib = get_lib(&s)?;
-    match lib.find_by_id(&id_hex) {
+    let mut matched: Option<chiplib::ChipInfo> = None;
+    let mut matched_id = String::new();
+    for probe in &probes {
+        for candidate in jedec_id_candidates(probe) {
+            if let Some(info) = lib.find_by_id(&candidate) {
+                matched_id = candidate;
+                matched = Some(info);
+                break;
+            }
+        }
+        if matched.is_some() {
+            break;
+        }
+    }
+
+    match matched {
         Some(info) => {
             let text = format!(
-                "✅ 芯片匹配成功！\n厂商: {}\n型号: {}\n容量: {}\n页大小: {} 字节\n协议: {}\n（设备: {}）",
+                "✅ 芯片匹配成功！\n厂商: {}\n型号: {}\n容量: {}\n页大小: {} 字节\n协议: {}\nJEDEC: {}\n（设备: {}）",
                 info.vendor,
                 info.model,
                 format_human_size(info.size),
                 info.page,
                 info.protocol,
+                matched_id,
                 s.connected_device.as_deref().unwrap_or("未知")
             );
             let detected = info.clone();
@@ -477,9 +543,19 @@ fn detect_chip(state: State<'_, Mutex<AppState>>) -> Result<ChipDetectResult, St
             Ok(result)
         }
         None => {
+            let raw = probes
+                .iter()
+                .map(|p| {
+                    format!(
+                        "{:02X}{:02X}{:02X}{:02X}{:02X}",
+                        p[0], p[1], p[2], p[3], p[4]
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(" / ");
             s.detected = None;
             Ok(ChipDetectResult {
-                text: format!("❌ 未在芯片库中找到 ID: {}", id_hex),
+                text: format!("❌ 未在芯片库中找到 ID（原始: {}）", raw),
                 info: None,
             })
         }
@@ -1598,5 +1674,14 @@ mod tests {
         assert!(!nor_requires_4byte(0x0100_0000)); // exactly 16 MiB: 3-byte mode
         assert!(nor_requires_4byte(0x0100_0001)); // above 16 MiB: 4-byte mode
         assert!(nor_requires_4byte(0x0200_0000));
+    }
+
+    #[test]
+    fn jedec_candidates_cover_shifted_nand_id() {
+        let raw = [0xFF, 0x01, 0x25, 0xFF, 0xFF];
+        let ids = jedec_id_candidates(&raw);
+        assert!(ids.contains(&"0125".to_string()));
+        assert!(ids.contains(&"FF0125".to_string()));
+        assert!(ids.contains(&"0125FF".to_string()));
     }
 }
