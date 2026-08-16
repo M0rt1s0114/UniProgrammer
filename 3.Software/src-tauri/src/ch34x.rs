@@ -737,6 +737,7 @@ mod dll_hal {
     type FnInit = unsafe extern "system" fn(u32, *const SpiCfg) -> i32;
     type FnGetChipType = unsafe extern "system" fn(u32) -> u8;
     type FnSetStream = unsafe extern "system" fn(u32, u32) -> i32;
+    type FnSetDataBits = unsafe extern "system" fn(u32, u8) -> i32;
     type FnWriteData = unsafe extern "system" fn(u32, *mut std::ffi::c_void, *mut u32) -> i32;
     type FnReadData = unsafe extern "system" fn(u32, *mut std::ffi::c_void, *mut u32) -> i32;
 
@@ -858,6 +859,14 @@ mod dll_hal {
             let read_data: FnReadData =
                 unsafe { std::mem::transmute(get_fn!(&format!("{}ReadData", prefix))) };
 
+            // 官方头文件：CH347F 可设置 SPI 数据位宽（0=8bit, 1=16bit）。
+            // 旧 DLL 可能没有该导出，因此按可选函数处理。
+            let set_data_bits: Option<FnSetDataBits> = {
+                let name = CString::new("CH347SPI_SetDataBits").unwrap();
+                unsafe { GetProcAddress(lib, PCSTR(name.as_ptr() as *const u8)) }
+                    .map(|ptr| unsafe { std::mem::transmute::<FnGetProc, FnSetDataBits>(ptr) })
+            };
+
             // 芯片类型函数：新 DLL 用 CH347GetChipType，旧纯 CH341 DLL 只有 CH341GetChipType
             let get_type: FnGetChipType = {
                 let name = format!("{}GetChipType", prefix);
@@ -943,6 +952,15 @@ mod dll_hal {
                     let cfg_copy = cfg;
                     if unsafe { init(0, &cfg_copy as *const SpiCfg) } == 0 {
                         return Err(format!("{:?} SPI 初始化失败", settings.kind));
+                    }
+                    // 官方 API：CH347F 需要显式设置 8bit 数据位宽，避免
+                    // 默认 16bit 模式导致 Flash 收发数据全部错位。
+                    if settings.kind == ChipKind::Ch347F {
+                        let set_bits = set_data_bits
+                            .ok_or("CH34X.DLL 缺少导出函数 CH347SPI_SetDataBits（CH347F 必需）")?;
+                        if unsafe { set_bits(0, 0) } == 0 {
+                            return Err("CH347F SPI 数据位宽设置失败".into());
+                        }
                     }
                 }
             }
