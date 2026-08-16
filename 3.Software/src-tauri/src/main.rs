@@ -152,6 +152,13 @@ fn get_lib(state: &AppState) -> Result<&chiplib::Chiplib, String> {
 
 // ═══════════════════════════════ CH34X SPI helpers (IMPROG style) ═════════════
 
+/// 3-byte addressing covers exactly 16 MiB (addresses 0x000000..0xFFFFFF).
+/// 4-byte mode is only required above 16 MiB; 16 MiB chips such as
+/// EN25QH128 must stay in 3-byte mode.
+fn nor_requires_4byte(size: u64) -> bool {
+    size > 0x0100_0000
+}
+
 /// NOR parameters used by the read/write/erase paths. Missing fields fall back
 /// to safe defaults until the chip database is enriched with IMSProg fields.
 struct NorParams {
@@ -168,7 +175,7 @@ fn nor_params(info: &chiplib::ChipInfo) -> NorParams {
     // addr4bit: low nibble 1 = use 4-byte addressing, high nibble = algorithm
     // (0 default B7/E9, 1 Winbond, 2 Spansion BRWR).
     let addr4bit = info.attr_u32("addr4bit").unwrap_or(0) as u8;
-    let addr4b = (addr4bit & 0x0F) != 0 || info.size > 0x00FF_FFFF;
+    let addr4b = (addr4bit & 0x0F) != 0 || nor_requires_4byte(info.size);
     let alg = (addr4bit >> 4) & 0x0F;
     NorParams {
         page,
@@ -747,7 +754,7 @@ fn read_chip(
     if s.serprog.is_some() && s.ch34x.is_none() {
         // serprog path: two-phase write-then-read, unchanged.
         let ser = s.serprog.as_mut().unwrap();
-        let use_4b = size > 0x00FF_FFFF;
+        let use_4b = size > 0x0100_0000;
         let cmd_read: u8 = if use_4b { 0x13 } else { 0x03 };
         let make_header = |addr: u64| -> Vec<u8> {
             let mut h = vec![cmd_read];
@@ -880,7 +887,7 @@ fn read_chip(
             page: 256,
             _sector: 4096,
             _block: 64 * 1024,
-            addr4b: size > 0x00FF_FFFF,
+            addr4b: size > 0x0100_0000,
             alg: 0,
         },
     };
@@ -950,7 +957,7 @@ fn write_chip(
 
     if s.serprog.is_some() && s.ch34x.is_none() {
         let ser = s.serprog.as_mut().unwrap();
-        let use_4b = (start_addr + total as u64) > 0x00FF_FFFF;
+        let use_4b = (start_addr + total as u64) > 0x0100_0000;
         let make_header = |addr: u64| -> Vec<u8> {
             let mut h = vec![0x02u8];
             if use_4b {
@@ -1097,7 +1104,7 @@ fn write_chip(
             page: 256,
             _sector: 4096,
             _block: 64 * 1024,
-            addr4b: (start_addr + total as u64) > 0x00FF_FFFF,
+            addr4b: (start_addr + total as u64) > 0x0100_0000,
             alg: 0,
         },
     };
@@ -1162,7 +1169,7 @@ fn verify_chip(
 
     if s.serprog.is_some() && s.ch34x.is_none() {
         let ser = s.serprog.as_mut().unwrap();
-        let use_4b = (start_addr + total) > 0x00FF_FFFF;
+        let use_4b = (start_addr + total) > 0x0100_0000;
         let cmd_read: u8 = if use_4b { 0x13 } else { 0x03 };
         let make_header = |addr: u64| -> Vec<u8> {
             let mut h = vec![cmd_read];
@@ -1294,7 +1301,7 @@ fn verify_chip(
             page: 256,
             _sector: 4096,
             _block: 64 * 1024,
-            addr4b: (start_addr + total) > 0x00FF_FFFF,
+            addr4b: (start_addr + total) > 0x0100_0000,
             alg: 0,
         },
     };
@@ -1580,4 +1587,16 @@ fn main() {
         ])
         .run(tauri::generate_context!())
         .expect("启动失败");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn nor_4byte_boundary() {
+        assert!(!nor_requires_4byte(0x0100_0000)); // exactly 16 MiB: 3-byte mode
+        assert!(nor_requires_4byte(0x0100_0001)); // above 16 MiB: 4-byte mode
+        assert!(nor_requires_4byte(0x0200_0000));
+    }
 }
