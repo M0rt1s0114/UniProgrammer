@@ -39,9 +39,21 @@ First release runs on **V5F only**; V3F is compiled as a minimal placeholder.
 
 - USB-HS first: vendor class 0xFF, EP1 OUT + EP1 IN bulk, 512-byte HS
   packets (FS fallback 64 bytes).
-- USB3 and USBSS are intentionally deferred.
+- USB3 and USBSS are intentionally deferred in **firmware**, but the first
+  PCB must already reserve the hardware paths (see below).
 - The transport API is a small `up_usb` bridge around the EVT
   `CH372Device` endpoint model.
+
+## One-PCB rule: reserve USB3 at board level from day one
+
+- Select a CH32H417 package that exposes the USB SuperSpeed pins
+  (`USBSS_TXN/TXP/RXN/RXP`); the EVT `CH32H417QEU-R1` schematic shows these
+  nets alongside `USBHS_DP/DM`.
+- Route the USB3 SS differential pairs and a Type-C connector path on the
+  first board, even if the first firmware only uses USBHS.
+- Firmware stays transport-agnostic: `up_usb` is the only place that
+  changes when moving from USBHS to USBSS.
+- Goal: later USB3 enablement is a **firmware-only change**, not a re-spin.
 
 ## Frame protocol
 

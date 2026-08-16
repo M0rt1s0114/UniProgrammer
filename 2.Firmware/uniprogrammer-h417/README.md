@@ -9,6 +9,9 @@ WCH CH32H417 (RISC-V dual core, USB2 HS/FS + USB3, 4x SPI, 2x QSPI, FMC).
 - No vendor SDK files are committed here. You must point the build at the
   official WCH CH32H417 EVT (currently kept outside the repository).
 - First milestone is single-core V5F with USB-HS vendor bulk transport.
+- USB3 is deferred in firmware, but the first PCB must route the USB3 SS
+  differential pairs so later USB3 is firmware-only (see
+  `docs/architecture.md`).
 
 ## Directory layout
 
