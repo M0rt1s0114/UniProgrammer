@@ -358,6 +358,21 @@ impl Chiplib {
         self.entries.len()
     }
 
+    /// Number of entries per protocol, ordered by the fixed protocol id.
+    pub fn protocol_counts(&self) -> Vec<(String, usize)> {
+        let mut counts: Vec<(u16, usize)> = (0..=11).map(|id| (id, 0)).collect();
+        for entry in &self.entries {
+            if (entry.protocol as usize) < counts.len() {
+                counts[entry.protocol as usize].1 += 1;
+            }
+        }
+        counts
+            .into_iter()
+            .filter(|(_, count)| *count > 0)
+            .map(|(id, count)| (protocol_id_to_name(id), count))
+            .collect()
+    }
+
     // 新增：列出所有协议类型（去重，按原数字顺序）
     pub fn list_protocols(&self) -> Vec<String> {
         let mut protos = Vec::new();

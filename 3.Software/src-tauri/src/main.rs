@@ -1428,6 +1428,41 @@ fn get_chip_models(
 }
 
 #[derive(Serialize)]
+struct ChipLibStatItem {
+    protocol: String,
+    count: usize,
+}
+
+#[derive(Serialize)]
+struct ChipLibStats {
+    total: usize,
+    counts: Vec<ChipLibStatItem>,
+}
+
+#[tauri::command]
+fn get_chip_lib_stats(state: State<'_, Mutex<AppState>>) -> Result<ChipLibStats, String> {
+    let s = state.lock().map_err(|e| e.to_string())?;
+    let lib = get_lib(&s)?;
+    let counts = lib
+        .protocol_counts()
+        .into_iter()
+        .map(|(protocol, count)| ChipLibStatItem { protocol, count })
+        .collect::<Vec<_>>();
+    Ok(ChipLibStats {
+        total: lib.entry_count(),
+        counts,
+    })
+}
+
+#[tauri::command]
+fn open_external_url(url: String) -> Result<(), String> {
+    if !url.starts_with("https://") && !url.starts_with("http://") {
+        return Err("仅允许打开 http/https 链接".into());
+    }
+    open::that(&url).map_err(|e| format!("打开链接失败: {}", e))
+}
+
+#[derive(Serialize)]
 struct ChipDbImportReport {
     dat_records: usize,
     matched_by_id: usize,
@@ -1532,6 +1567,8 @@ fn main() {
             get_chip_vendors,
             get_chip_models,
             get_chip_info,
+            get_chip_lib_stats,
+            open_external_url,
             convert_chip_lib,
             import_chip_db,
             open_file_dialog,
