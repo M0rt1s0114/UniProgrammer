@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 const FILE_NAME: &str = "Setting.set";
 
@@ -35,7 +35,7 @@ fn home_settings_file() -> Option<PathBuf> {
 }
 
 /// 检查目录是否可写：写入并删除一个探测文件。
-fn dir_is_writable(dir: &PathBuf) -> bool {
+fn dir_is_writable(dir: &Path) -> bool {
     let probe = dir.join(format!(".uniprogrammer-write-test-{}", std::process::id()));
     match fs::File::create(&probe) {
         Ok(_) => {

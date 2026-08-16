@@ -118,7 +118,11 @@ function parseSettingsFile(text: string): PartialSettings {
 
   const controlEnabled = parseBool(vcc['controlenabled'])
   if (controlEnabled !== undefined) parsed.vccControlEnabled = controlEnabled
-  parsed.vccTargetMv = validVccMv(parseNumber(vcc['targetmv']))
+  // 仅当“保存设置电压”开启时才跨启动记忆目标电压；文件缺省时保持默认
+  if (parseBool(auto['savevoltage']) === true) {
+    const targetMv = parseNumber(vcc['targetmv'])
+    if (targetMv !== undefined) parsed.vccTargetMv = validVccMv(targetMv)
+  }
 
   return parsed
 }
@@ -376,7 +380,11 @@ export const useSettingsStore = defineStore('settings', () => {
       ...fromFile,
     })
 
-    if (legacy && legacy.vccTargetMv !== undefined && fromFile.vccTargetMv === undefined) {
+    if (
+      saveVoltage.value &&
+      legacy.vccTargetMv !== undefined &&
+      fromFile.vccTargetMv === undefined
+    ) {
       vccTargetMv.value = legacy.vccTargetMv
     }
 

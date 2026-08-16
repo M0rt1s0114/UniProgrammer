@@ -114,8 +114,11 @@ pub struct Ch34xSettings {
     /// Requested SPI clock in kHz (CH347 only; CH341 ignores it).
     /// IMSProg: 30 MHz for CH347T v1.0, 15 MHz for v1.1.
     pub freq_khz: u32,
-    /// 1.8 V adapter enabled (UI switch; CH341A v1.7 / CH347T v1.1).
-    pub vcc_18v: bool,
+    /// Target rail voltage in mV. VCC supply and SPI/IO signal level are bound
+    /// to the same target rail (1200 / 1800 / 2500 / 3300).
+    /// 当前硬件 HAL 尚未切换电平，先保留参数供后续驱动使用。
+    #[allow(dead_code)]
+    pub io_level_mv: u32,
 }
 
 impl Default for Ch34xSettings {
@@ -124,7 +127,7 @@ impl Default for Ch34xSettings {
             kind: ChipKind::Ch341A,
             spi_mode: 3,
             freq_khz: 15_000,
-            vcc_18v: false,
+            io_level_mv: 3300,
         }
     }
 }

@@ -46,8 +46,7 @@ export const useProgStore = defineStore('prog', () => {
   // 编程器连接
   const status = ref<OperationStatus>('idle')
   const connectedDevice = ref('')
-  // CH34X 设置（IMPROG 语义：1.8V 适配器、SPI 模式/时钟）
-  const vcc18v = ref(false)
+  // CH34X 设置：SPI 模式/时钟；目标电平与 VCC 目标轨绑定
   const spiMode = ref(3)
   const spiFreq = ref(15000)
   // VCC 输出（高危功能）：默认关闭，连接编程器时重置，不持久化
@@ -295,7 +294,7 @@ export const useProgStore = defineStore('prog', () => {
     try {
       const msg = (await invoke('initialize', {
         kind,
-        vcc18v: vcc18v.value,
+        ioLevelMv: vccTargetMv.value,
         spiMode: spiMode.value,
         freqKhz: spiFreq.value,
       })) as string
@@ -383,7 +382,6 @@ export const useProgStore = defineStore('prog', () => {
   return {
     status,
     connectedDevice,
-    vcc18v,
     spiMode,
     spiFreq,
     vccOutputEnabled,

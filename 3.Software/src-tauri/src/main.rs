@@ -336,7 +336,7 @@ fn load_chip_lib(state: State<'_, Mutex<AppState>>) -> Result<String, String> {
 fn initialize(
     state: State<'_, Mutex<AppState>>,
     kind: String,
-    vcc_18v: bool,
+    io_level_mv: u32,
     spi_mode: u8,
     freq_khz: u32,
 ) -> Result<String, String> {
@@ -354,12 +354,16 @@ fn initialize(
     if !(469..=60_000).contains(&freq_khz) {
         return Err("SPI 频率超出范围".into());
     }
+    if ![1200, 1800, 2500, 3300].contains(&io_level_mv) {
+        return Err("目标电平电压无效（支持 1.2/1.8/2.5/3.3V）".into());
+    }
 
     let settings = Ch34xSettings {
         kind: chip_kind,
         spi_mode,
         freq_khz,
-        vcc_18v,
+        // VCC 供电与 SPI/IO 信号电平绑定到同一目标轨
+        io_level_mv,
     };
 
     // Per-operation lifecycle: verify that the device opens now, then close.
@@ -369,7 +373,6 @@ fn initialize(
         let _ = spi_read_jedec(&dev)?;
     }
 
-    let vcc_label = if settings.vcc_18v { " (1.8V)" } else { "" };
     s.ch34x = Some(settings);
     s.serprog = None;
     let base_name = match chip_kind {
@@ -377,9 +380,13 @@ fn initialize(
         ChipKind::Ch347T => "CH347T Programmer",
         ChipKind::Ch347F => "CH347F Programmer",
     };
-    let name = format!("{}{}", base_name, vcc_label);
+    let name = base_name.to_string();
+    let io_level_v = io_level_mv as f64 / 1000.0;
     s.connected_device = Some(name.clone());
-    Ok(format!("已连接: {}", name))
+    Ok(format!(
+        "已连接: {}（目标 VCC/IO 电平 {:.1}V）",
+        name, io_level_v
+    ))
 }
 
 #[tauri::command]

@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed, ref, onMounted } from 'vue'
 import { useProgStore, formatBytes } from '@/stores/prog'
+import { useSettingsStore } from '@/stores/settings'
 import { useSpiNor } from '@/services/spiNor'
 import { t } from '@/i18n'
 import UiSelect, { type UiOption } from '@/components/UiSelect.vue'
 
 const store = useProgStore()
+const settings = useSettingsStore()
 const spiNor = useSpiNor()
 
 const programmerType = ref<'ch341' | 'ch347' | 'ch347f' | 'serprog' | 'hidprog'>('ch341')
@@ -89,28 +91,17 @@ const vccVoltageOptions: UiOption[] = [1200, 1800, 2500, 3300].map((mv) => ({
   value: mv,
   label: `${(mv / 1000).toFixed(1)} V`,
 }))
-const vccModal = ref<'enable' | 'change' | null>(null)
-const vccConfirmText = ref('')
-const pendingVccTarget = ref<number | null>(null)
+const vccModal = ref(false)
 const voltageLabel = computed(() => (store.vccTargetMv / 1000).toFixed(1))
-const vccEnableHint = computed(() => t('vcc.typeHint').replace('{0}', t('vcc.enablePhrase')))
-const vccChangeHint = computed(() => {
-  if (pendingVccTarget.value === null) return ''
-  return t('vcc.changePhraseHint').replace('{0}', (pendingVccTarget.value / 1000).toFixed(1))
-})
+const vccPowerHint = computed(() => t('vcc.modalBodyVoltage').replace('{0}', voltageLabel.value))
 
 function requestVccEnable() {
   if (store.isRunning) return
-  vccConfirmText.value = ''
-  vccModal.value = 'enable'
+  vccModal.value = true
 }
 
 function confirmVccEnable() {
-  if (vccConfirmText.value.trim() !== t('vcc.enablePhrase')) {
-    store.addLog(t('vcc.wrongPhrase'), 'warn')
-    return
-  }
-  vccModal.value = null
+  vccModal.value = false
   store.vccOutputEnabled = true
   store.addLog(t('vcc.testEnabled').replace('{0}', voltageLabel.value), 'functionTest')
 }
@@ -120,11 +111,15 @@ function disableVccOutput() {
   store.addLog(t('vcc.testDisabled'), 'functionTest')
 }
 
-function requestVccTarget(mv: number) {
-  if (!store.vccOutputEnabled || store.vccFollowChip || store.isRunning) return
-  pendingVccTarget.value = mv
-  vccConfirmText.value = ''
-  vccModal.value = 'change'
+// 电压调整：断电状态下直接生效，无需数字输入确认；接通电源后由 UI 锁定
+function onVccTargetChange(value: string | number) {
+  if (store.vccOutputEnabled || store.vccFollowChip || store.isRunning) return
+  const target = Number(value)
+  if (![1200, 1800, 2500, 3300].includes(target)) return
+  const old = voltageLabel.value
+  const next = (target / 1000).toFixed(1)
+  store.vccTargetMv = target
+  store.addLog(t('vcc.testChanged').replace('{0}', old).replace('{1}', next), 'functionTest')
 }
 
 function onVccFollowChange() {
@@ -137,22 +132,8 @@ function onVccFollowChange() {
   }
 }
 
-function confirmVccTarget() {
-  const target = pendingVccTarget.value
-  if (target === null) return
-  const expected = (target / 1000).toFixed(1)
-  if (vccConfirmText.value.trim() !== expected) {
-    store.addLog(t('vcc.wrongPhrase'), 'warn')
-    return
-  }
-  const old = voltageLabel.value
-  vccModal.value = null
-  store.vccTargetMv = target
-  store.addLog(t('vcc.testChanged').replace('{0}', old).replace('{1}', expected), 'functionTest')
-}
-
 function closeVccModal() {
-  vccModal.value = null
+  vccModal.value = false
 }
 
 async function connect() {
@@ -223,17 +204,6 @@ onMounted(async () => {
           :options="programmerOptions"
           :disabled="store.status === 'running'"
         />
-      </div>
-
-      <div
-        v-if="programmerType === 'ch341' || programmerType === 'ch347'"
-        class="field"
-        style="margin-top: 6px"
-      >
-        <label class="toggle-row" style="cursor: pointer">
-          <input v-model="store.vcc18v" type="checkbox" class="toggle-check" />
-          <span class="toggle-text">{{ t('label.vcc18Adapter') }}</span>
-        </label>
       </div>
 
       <div
@@ -600,10 +570,10 @@ onMounted(async () => {
       <div v-else class="chip-placeholder">{{ t('chipInfo.none') }}</div>
     </section>
 
-    <div class="divider" />
+    <div v-if="settings.vccControlEnabled" class="divider" />
 
-    <!-- ── 电压调节 ── -->
-    <section class="panel-section">
+    <!-- ── 电压调节（设置总开关开启后显示）── -->
+    <section v-if="settings.vccControlEnabled" class="panel-section">
       <div class="section-label">
         <svg
           width="13"
@@ -623,8 +593,8 @@ onMounted(async () => {
         <UiSelect
           :model-value="store.vccTargetMv"
           :options="vccVoltageOptions"
-          :disabled="!store.vccOutputEnabled || store.vccFollowChip || store.isRunning"
-          @change="requestVccTarget"
+          :disabled="store.vccOutputEnabled || store.vccFollowChip || store.isRunning"
+          @change="onVccTargetChange"
         />
       </div>
 
@@ -633,7 +603,7 @@ onMounted(async () => {
           v-model="store.vccFollowChip"
           type="checkbox"
           class="toggle-check"
-          :disabled="!store.vccChipMv || store.isRunning"
+          :disabled="!store.vccChipMv || store.vccOutputEnabled || store.isRunning"
           @change="onVccFollowChange"
         />
         <span class="toggle-text">{{ t('vcc.followChip') }}</span>
@@ -701,38 +671,20 @@ onMounted(async () => {
     </div>
   </Transition>
 
-  <!-- VCC 输出确认弹窗（高危） -->
+  <!-- VCC 接通电源确认弹窗（高危，无需输入，必须显示目标电压） -->
   <Transition name="fade">
     <div v-if="vccModal" class="modal-backdrop" @click.self="closeVccModal">
       <div class="modal vcc-modal">
         <div class="modal-icon">⚡</div>
-        <h3 class="modal-title">
-          {{ vccModal === 'enable' ? t('vcc.modalTitle') : t('vcc.changeTitle') }}
-        </h3>
-        <p class="modal-body">
-          {{ vccModal === 'enable' ? t('vcc.modalBody') : t('vcc.changeBody') }}
-        </p>
-        <p v-if="vccModal === 'enable'" class="vcc-confirm-hint">{{ vccEnableHint }}</p>
-        <p v-else class="vcc-confirm-hint">{{ vccChangeHint }}</p>
-        <input
-          v-model="vccConfirmText"
-          class="input vcc-confirm-input"
-          :placeholder="
-            vccModal === 'enable'
-              ? t('vcc.enablePhrase')
-              : pendingVccTarget
-                ? (pendingVccTarget / 1000).toFixed(1)
-                : ''
-          "
-          @keydown.enter="vccModal === 'enable' ? confirmVccEnable() : confirmVccTarget()"
-        />
+        <h3 class="modal-title">{{ t('vcc.modalTitle') }}</h3>
+        <p class="modal-body">{{ vccPowerHint }}</p>
+        <div class="vcc-voltage-target">{{ voltageLabel }} {{ t('vcc.voltageUnit') }}</div>
         <div class="modal-actions">
-          <button class="btn btn-secondary" @click="closeVccModal">{{ t('action.cancel') }}</button>
-          <button
-            class="btn btn-danger"
-            @click="vccModal === 'enable' ? confirmVccEnable() : confirmVccTarget()"
-          >
-            {{ vccModal === 'enable' ? t('vcc.connectPower') : t('vcc.apply') }}
+          <button class="btn btn-secondary" @click="closeVccModal">
+            {{ t('action.cancel') }}
+          </button>
+          <button class="btn btn-danger" @click="confirmVccEnable">
+            {{ t('vcc.connectPower') }}
           </button>
         </div>
       </div>
@@ -961,16 +913,22 @@ onMounted(async () => {
   color: var(--text-muted);
 }
 
-.vcc-confirm-hint {
-  font-size: 11px;
+.vcc-voltage-target {
+  margin: 2px auto 0;
+  font-family: var(--font-mono);
+  font-size: 22px;
+  font-weight: 700;
   color: var(--color-danger);
-}
-
-.vcc-confirm-input {
-  text-align: center;
+  border: 1px solid var(--danger-border);
+  background: var(--danger-soft);
+  border-radius: var(--radius-md);
+  padding: 6px 16px;
 }
 
 .vcc-modal .modal-icon {
-  color: var(--color-warn);
+  color: var(--color-danger);
+}
+.vcc-modal .modal-title {
+  color: var(--color-danger);
 }
 </style>
