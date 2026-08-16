@@ -79,7 +79,7 @@ Examples:
 feat(hal): add Windows DLL backend
 fix(serprog): correct S_BUSTYPE and O_SPIOP opcodes
 refactor(chiplib): replace XML fallback with typed loader
-chore(release): 0.2.1-alpha.1
+chore(release): 0.2.1-alpha.2
 ```
 
 Breaking changes use `!` or a `BREAKING CHANGE:` footer:
@@ -178,7 +178,7 @@ Hardware changes require manual validation. Use the table below as a checklist:
 ## Versioning
 
 - Semantic Versioning 2.0.0
-- Git tags use a `v` prefix: `v0.2.1-alpha.1`
+- Git tags use a `v` prefix: `v0.2.1-alpha.2`
 - Pre-releases: `-alpha.N`, `-beta.N`, `-rc.N`
 - Pushing a `v*` tag triggers the release workflow
 
