@@ -544,11 +544,10 @@ fn read_nand_otp_page(
     let s = state.lock().map_err(|e| e.to_string())?;
     require_nand_ch34x(&s)?;
     let info = s.detected.as_ref().unwrap();
-    let page_size = info.page.max(1) as usize;
-    let spare_size = info.attr_u64("spare").unwrap_or(64).max(1) as usize;
+    let params = protocols::ChipParams::from_info(info);
     let dev = open_ch34x_mode(&s, DeviceMode::Spi)?;
     Ok(raw_bytes_result(protocols::nand_read_otp_page(
-        &dev, page, page_size, spare_size,
+        &dev, &params, page,
     )?))
 }
 

@@ -350,7 +350,12 @@ onMounted(async () => {
 
       <div class="field" style="margin-top: 6px">
         <label class="field-label">{{ t('nand.programMode') }}</label>
-        <UiSelect v-model="store.nandProgramMode" :options="nandProgramModeOptions" />
+        <UiSelect
+          v-model="store.nandProgramMode"
+          :options="nandProgramModeOptions"
+          :disabled="true"
+        />
+        <div class="vcc-hint">{{ t('nand.programModeHint') }}</div>
       </div>
 
       <button

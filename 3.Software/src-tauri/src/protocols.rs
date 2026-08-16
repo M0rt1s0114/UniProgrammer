@@ -9,6 +9,32 @@ use crate::chiplib::ChipInfo;
 use serde::Serialize;
 use std::time::{Duration, Instant};
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NandDummyMode {
+    Append,
+    Prepend,
+}
+
+/// Multi-IO modes are stored for future HAL support. The current CH34X HAL
+/// exposes a single-line full-duplex stream only, so reads/writes always run
+/// on the single-line command path (0x03 / 0x02) regardless of these fields.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NandReadMode {
+    Single,
+    Dual,
+    Quad,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NandWriteMode {
+    Single,
+    Quad,
+}
+
+/// feature bit 0 = plane select, bit 1 = die select #1, bit 2 = die select #2
+/// (mirrors SNANDer table semantics; only plane select is implemented today).
+const NAND_FEATURE_PLANE_SELECT: u32 = 0x01;
+
 pub struct ChipParams {
     #[allow(dead_code)]
     pub protocol: String,
@@ -20,6 +46,12 @@ pub struct ChipParams {
     pub addr4bit: u8,
     #[allow(dead_code)]
     pub spare: usize,
+    pub dummy_mode: NandDummyMode,
+    #[allow(dead_code)]
+    pub read_mode: NandReadMode,
+    #[allow(dead_code)]
+    pub write_mode: NandWriteMode,
+    pub feature: u32,
 }
 
 impl ChipParams {
@@ -32,6 +64,19 @@ impl ChipParams {
                 _ => 0,
             };
         }
+        let dummy_mode = match info.attr("dummyMode") {
+            Some("prepend") | Some("PREPEND") => NandDummyMode::Prepend,
+            _ => NandDummyMode::Append,
+        };
+        let read_mode = match info.attr("readMode") {
+            Some("dual") | Some("DUAL") => NandReadMode::Dual,
+            Some("quad") | Some("QUAD") => NandReadMode::Quad,
+            _ => NandReadMode::Single,
+        };
+        let write_mode = match info.attr("writeMode") {
+            Some("quad") | Some("QUAD") => NandWriteMode::Quad,
+            _ => NandWriteMode::Single,
+        };
         ChipParams {
             protocol: info.protocol.clone(),
             page: info.page.max(1) as usize,
@@ -40,6 +85,10 @@ impl ChipParams {
             algorithm: info.attr_u32("algorithm").unwrap_or(0) as u8,
             addr4bit,
             spare: info.attr_u64("spare").unwrap_or(0) as usize,
+            dummy_mode,
+            read_mode,
+            write_mode,
+            feature: info.attr_u32("feature").unwrap_or(0),
         }
     }
 
@@ -52,6 +101,10 @@ impl ChipParams {
     #[allow(dead_code)]
     pub fn addr4b_alg(&self) -> u8 {
         (self.addr4bit >> 4) & 0x0F
+    }
+
+    fn plane_select(&self, page_no: u32) -> bool {
+        (self.feature & NAND_FEATURE_PLANE_SELECT) != 0 && ((page_no >> 6) & 0x01) != 0
     }
 }
 
@@ -403,7 +456,22 @@ fn nand_write_enable(dev: &Ch34xDevice) -> Result<(), String> {
     cs_cmd(dev, &[0x06])
 }
 
-fn nand_page_read(dev: &Ch34xDevice, page_size: usize, page_no: u32) -> Result<Vec<u8>, String> {
+/// Build the 4-byte cache-read header: 03h + (dummy) + 16-bit column
+/// (+ appended dummy). Plane-select chips use column bit 4 for the plane.
+fn nand_cache_read_header(params: &ChipParams, page_no: u32, column: usize) -> [u8; 4] {
+    let mut col_hi = ((column >> 8) & 0xFF) as u8;
+    if params.plane_select(page_no) {
+        col_hi |= 0x10;
+    }
+    let col_lo = (column & 0xFF) as u8;
+    match params.dummy_mode {
+        NandDummyMode::Append => [0x03, col_hi, col_lo, 0xFF],
+        NandDummyMode::Prepend => [0x03, 0xFF, col_hi, col_lo],
+    }
+}
+
+fn nand_page_read(dev: &Ch34xDevice, params: &ChipParams, page_no: u32) -> Result<Vec<u8>, String> {
+    let page_size = params.page;
     nand_wait_ready(dev, 200)?;
     cs_cmd(
         dev,
@@ -418,20 +486,22 @@ fn nand_page_read(dev: &Ch34xDevice, page_size: usize, page_no: u32) -> Result<V
 
     let mut buf = vec![0xFFu8; page_size];
     if 4 + page_size <= dev.spi_frame_limit() {
+        let hdr = nand_cache_read_header(params, page_no, 0);
         dev.cs_low()?;
-        dev.spi_tx(&[0x03, 0x00, 0x00, 0x00])?;
+        dev.spi_tx(&hdr)?;
         dev.spi_rx(&mut buf)?;
         dev.cs_high()?;
         return Ok(buf);
     }
 
     // DLL 后端单帧较小时，分多次 0x03 + 列地址 读取缓冲区（读操作可安全分段）
-    let chunk_limit = dev.spi_frame_limit().saturating_sub(3).max(1);
+    let chunk_limit = dev.spi_frame_limit().saturating_sub(4).max(1);
     let mut offset = 0usize;
     while offset < page_size {
         let chunk = (page_size - offset).min(chunk_limit);
+        let hdr = nand_cache_read_header(params, page_no, offset);
         dev.cs_low()?;
-        dev.spi_tx(&[0x03, ((offset >> 8) & 0xFF) as u8, (offset & 0xFF) as u8])?;
+        dev.spi_tx(&hdr)?;
         dev.spi_rx(&mut buf[offset..offset + chunk])?;
         dev.cs_high()?;
         offset += chunk;
@@ -455,16 +525,24 @@ fn nand_load_page(dev: &Ch34xDevice, page_no: u32) -> Result<(), String> {
 
 /// Read `len` bytes from the page cache at an arbitrary 16-bit column.
 /// SPI NAND exposes main area first, then the spare/OOB area, so the spare
-/// area starts at column `page_size`.
-fn nand_read_cache(dev: &Ch34xDevice, column: usize, len: usize) -> Result<Vec<u8>, String> {
+/// area starts at column `page_size`. Dummy-byte placement and plane-select
+/// column bit follow the per-chip database fields.
+fn nand_read_cache(
+    dev: &Ch34xDevice,
+    params: &ChipParams,
+    page_no: u32,
+    column: usize,
+    len: usize,
+) -> Result<Vec<u8>, String> {
     let mut out = vec![0xFFu8; len];
     let chunk_limit = dev.spi_frame_limit().saturating_sub(4).max(1);
     let mut offset = 0usize;
     while offset < len {
         let chunk = (len - offset).min(chunk_limit);
         let col = column + offset;
+        let hdr = nand_cache_read_header(params, page_no, col);
         dev.cs_low()?;
-        dev.spi_tx(&[0x03, ((col >> 8) & 0xFF) as u8, (col & 0xFF) as u8, 0x00])?;
+        dev.spi_tx(&hdr)?;
         dev.spi_rx(&mut out[offset..offset + chunk])?;
         dev.cs_high()?;
         offset += chunk;
@@ -475,12 +553,13 @@ fn nand_read_cache(dev: &Ch34xDevice, column: usize, len: usize) -> Result<Vec<u
 /// Read the spare/OOB area of one NAND page.
 pub fn nand_read_spare(
     dev: &Ch34xDevice,
+    params: &ChipParams,
     page_no: u32,
-    page_size: usize,
-    spare_size: usize,
 ) -> Result<Vec<u8>, String> {
+    let page_size = params.page;
+    let spare_size = if params.spare > 0 { params.spare } else { 64 };
     nand_load_page(dev, page_no)?;
-    nand_read_cache(dev, page_size, spare_size)
+    nand_read_cache(dev, params, page_no, page_size, spare_size)
 }
 
 /// Scan every block's first page spare area and report factory bad-block
@@ -496,14 +575,11 @@ pub fn nand_scan_bad_blocks(
     let block_size = (params.block as u64).max(page_size);
     let pages_per_block = (block_size / page_size).max(1) as u32;
     let total_blocks = size.div_ceil(block_size).min(u32::MAX as u64) as u32;
-    // IMSProg does not carry spare size for every NAND part; 64 bytes is the
-    // most common default and the bad marker is at byte 0 either way.
-    let spare_size = if params.spare > 0 { params.spare } else { 64 };
 
     let mut bad_blocks = Vec::new();
     for block_no in 0..total_blocks {
         let page_no = block_no * pages_per_block;
-        let spare = nand_read_spare(dev, page_no, page_size as usize, spare_size)?;
+        let spare = nand_read_spare(dev, params, page_no)?;
         if spare.first().copied().unwrap_or(0xFF) != 0xFF {
             bad_blocks.push(block_no);
         }
@@ -518,10 +594,11 @@ pub fn nand_scan_bad_blocks(
 /// register. Experimental, hardware validation pending.
 pub fn nand_read_otp_page(
     dev: &Ch34xDevice,
+    params: &ChipParams,
     page_no: u32,
-    page_size: usize,
-    spare_size: usize,
 ) -> Result<Vec<u8>, String> {
+    let page_size = params.page;
+    let spare_size = if params.spare > 0 { params.spare } else { 64 };
     nand_wait_ready(dev, 200)?;
     let mut cfg = [0xFFu8; 1];
     dev.cs_low()?;
@@ -538,8 +615,10 @@ pub fn nand_read_otp_page(
 
     let result = (|| {
         nand_load_page(dev, page_no)?;
-        let mut out = nand_read_cache(dev, 0, page_size)?;
-        out.extend_from_slice(&nand_read_cache(dev, page_size, spare_size)?);
+        let mut out = nand_read_cache(dev, params, page_no, 0, page_size)?;
+        out.extend_from_slice(&nand_read_cache(
+            dev, params, page_no, page_size, spare_size,
+        )?);
         Ok(out)
     })();
 
@@ -723,7 +802,21 @@ pub fn nand_set_ecc(dev: &Ch34xDevice, enable: bool) -> Result<(), String> {
     nand_wait_ready(dev, 200)
 }
 
-fn nand_page_write(dev: &Ch34xDevice, page: &[u8], page_no: u32) -> Result<(), String> {
+/// 02h program-load column address; plane-select chips use column bit 4.
+fn nand_program_load_header(params: &ChipParams, page_no: u32, column: usize) -> [u8; 3] {
+    let mut col_hi = ((column >> 8) & 0xFF) as u8;
+    if params.plane_select(page_no) {
+        col_hi |= 0x10;
+    }
+    [0x02, col_hi, (column & 0xFF) as u8]
+}
+
+fn nand_page_write(
+    dev: &Ch34xDevice,
+    params: &ChipParams,
+    page: &[u8],
+    page_no: u32,
+) -> Result<(), String> {
     if 3 + page.len() > dev.spi_frame_limit() {
         return Err(format!(
             "SPI_PAGE_TOO_LARGE: 当前 HAL 单帧上限 {} 字节，NAND 页 {} 字节放不下。\
@@ -735,8 +828,9 @@ fn nand_page_write(dev: &Ch34xDevice, page: &[u8], page_no: u32) -> Result<(), S
     }
     nand_wait_ready(dev, 1000)?;
     nand_write_enable(dev)?;
+    let hdr = nand_program_load_header(params, page_no, 0);
     dev.cs_low()?;
-    dev.spi_tx(&[0x02, 0x00, 0x00])?;
+    dev.spi_tx(&hdr)?;
     dev.spi_tx(page)?;
     dev.cs_high()?;
     nand_wait_ready(dev, 500)?;
@@ -756,14 +850,20 @@ fn nand_page_write(dev: &Ch34xDevice, page: &[u8], page_no: u32) -> Result<(), S
 
 /// 单帧放不下整页时的“强制尝试”：把 0x02 缓冲区加载拆成多个列地址段，
 /// 最后只执行一次 0x10。注意：该路径尚未经过真机验证，属于用户主动选择。
-fn nand_page_write_segmented(dev: &Ch34xDevice, page: &[u8], page_no: u32) -> Result<(), String> {
+fn nand_page_write_segmented(
+    dev: &Ch34xDevice,
+    params: &ChipParams,
+    page: &[u8],
+    page_no: u32,
+) -> Result<(), String> {
     nand_wait_ready(dev, 1000)?;
     let chunk_limit = dev.spi_frame_limit().saturating_sub(3).max(1);
     let mut offset = 0usize;
     while offset < page.len() {
         let chunk = (page.len() - offset).min(chunk_limit);
+        let hdr = nand_program_load_header(params, page_no, offset);
         dev.cs_low()?;
-        dev.spi_tx(&[0x02, ((offset >> 8) & 0xFF) as u8, (offset & 0xFF) as u8])?;
+        dev.spi_tx(&hdr)?;
         dev.spi_tx(&page[offset..offset + chunk])?;
         dev.cs_high()?;
         offset += chunk;
@@ -795,9 +895,9 @@ fn nand_unprotect(dev: &Ch34xDevice) -> Result<(), String> {
     Ok(())
 }
 
-fn nand_block_erase(dev: &Ch34xDevice, block_no: u32) -> Result<(), String> {
+fn nand_block_erase(dev: &Ch34xDevice, block_no: u32, pages_per_block: u32) -> Result<(), String> {
     nand_wait_ready(dev, 2000)?;
-    let row = block_no << 6; // IMSProg: PA[15:6], fixed 64 pages/block
+    let row = block_no.saturating_mul(pages_per_block);
     nand_write_enable(dev)?;
     nand_unprotect(dev)?;
     cs_cmd(
@@ -846,7 +946,7 @@ pub fn nand_read(
         }
         for page_in_block in 0..pages_per_block {
             let page_no = block_no as u32 * pages_per_block + page_in_block;
-            let mut page = nand_page_read(dev, params.page.max(1), page_no)?;
+            let mut page = nand_page_read(dev, params, page_no)?;
             if page.len() > size as usize - out.len() {
                 page.truncate(size as usize - out.len());
             }
@@ -900,7 +1000,7 @@ pub fn nand_write(
         page[..chunk].copy_from_slice(&data[offset..offset + chunk]);
         if 3 + page.len() > dev.spi_frame_limit() {
             if force_segmented {
-                nand_page_write_segmented(dev, &page, page_no)?;
+                nand_page_write_segmented(dev, params, &page, page_no)?;
             } else {
                 return Err(format!(
                     "SPI_PAGE_TOO_LARGE: 当前 HAL 单帧上限 {} 字节，NAND 页 {} 字节放不下。\
@@ -911,7 +1011,7 @@ pub fn nand_write(
                 ));
             }
         } else {
-            nand_page_write(dev, &page, page_no)?;
+            nand_page_write(dev, params, &page, page_no)?;
         }
         offset += chunk;
         page_no += 1;
@@ -927,13 +1027,15 @@ pub fn nand_erase(
     bad_blocks: &[u32],
 ) -> Result<(), String> {
     let block_size = params.block.max(1) as u64;
+    let page_size = params.page.max(1) as u64;
+    let pages_per_block = (block_size / page_size).max(1) as u32;
     let blocks = size.div_ceil(block_size) as u32;
     let bad_set: std::collections::HashSet<u32> = bad_blocks.iter().copied().collect();
     for block_no in 0..blocks {
         if bad_set.contains(&block_no) {
             continue;
         }
-        nand_block_erase(dev, block_no)?;
+        nand_block_erase(dev, block_no, pages_per_block)?;
     }
     Ok(())
 }
