@@ -132,6 +132,14 @@ function onVccFollowChange() {
   }
 }
 
+// Bypass / Ignore 属于实验性坏块处理方式，切换时在日志中明确提示
+function onNandBadBlockModeChange(value: string | number) {
+  const mode = String(value)
+  if (mode !== 'bypass' && mode !== 'ignore') return
+  const label = t(mode === 'bypass' ? 'nand.mode.bypass' : 'nand.mode.ignore')
+  store.addLog(t('nand.modeExpLog').replace('{0}', label), 'functionTest')
+}
+
 function closeVccModal() {
   vccModal.value = false
 }
@@ -333,7 +341,11 @@ onMounted(async () => {
 
       <div class="field">
         <label class="field-label">{{ t('nand.badBlockMode') }}</label>
-        <UiSelect v-model="store.nandBadBlockMode" :options="nandBadBlockOptions" />
+        <UiSelect
+          v-model="store.nandBadBlockMode"
+          :options="nandBadBlockOptions"
+          @change="onNandBadBlockModeChange"
+        />
       </div>
 
       <div class="field" style="margin-top: 6px">

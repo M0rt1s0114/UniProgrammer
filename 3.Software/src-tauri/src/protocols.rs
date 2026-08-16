@@ -871,10 +871,10 @@ pub fn nand_write(
     force_segmented: bool,
     progress: &mut dyn FnMut(u64, u64),
 ) -> Result<(), String> {
-    if mode == NandBadBlockMode::Bypass && !bad_blocks.is_empty() {
-        return Err(
-            "Bypass(BBM LUT) 写入将在坏块映射表功能完成后启用，请暂时使用 Skip 或 Ignore".into(),
-        );
+    if mode == NandBadBlockMode::Bypass {
+        // Bypass 模式在主流程中已先把坏块映射写入芯片内部 BBM LUT，
+        // 这里以空坏块列表写入，由硬件 LUT 完成逻辑块到备用块的重映射。
+        debug_assert!(bad_blocks.is_empty());
     }
     let page_size = params.page.max(1) as u64;
     let block_size = (params.block as u64).max(page_size);
