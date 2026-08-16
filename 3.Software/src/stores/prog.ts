@@ -2,6 +2,7 @@ import { ref, computed, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { invoke } from '@tauri-apps/api/core'
 import { t } from '@/i18n'
+import { useSettingsStore } from '@/stores/settings'
 
 export interface DetectedChipInfo {
   id: string
@@ -37,40 +38,11 @@ export function formatBytes(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
 }
 
-function loadBoolSetting(key: string, fallback: boolean): boolean {
-  try {
-    const raw = localStorage.getItem(key)
-    return raw === null ? fallback : JSON.parse(raw) === true
-  } catch {
-    return fallback
-  }
-}
-
-function loadStringSetting(key: string, fallback: string): string {
-  try {
-    const raw = localStorage.getItem(key)
-    return raw === null ? fallback : JSON.parse(raw)
-  } catch {
-    return fallback
-  }
-}
-
-function loadVccTargetMv(): number {
-  try {
-    const save = JSON.parse(localStorage.getItem('nand.saveVoltage') ?? 'false') === true
-    if (save) {
-      const mv = Number(localStorage.getItem('vcc.targetMv'))
-      if ([1200, 1800, 2500, 3300].includes(mv)) return mv
-    }
-  } catch {
-    // ignore
-  }
-  return 3300
-}
-
 let _logId = 0
 
 export const useProgStore = defineStore('prog', () => {
+  const settings = useSettingsStore()
+
   // 编程器连接
   const status = ref<OperationStatus>('idle')
   const connectedDevice = ref('')
@@ -80,7 +52,7 @@ export const useProgStore = defineStore('prog', () => {
   const spiFreq = ref(15000)
   // VCC 输出（高危功能）：默认关闭，连接编程器时重置，不持久化
   const vccOutputEnabled = ref(false)
-  const vccTargetMv = ref(loadVccTargetMv())
+  const vccTargetMv = ref(settings.vccTargetMv)
   const vccFollowChip = ref(false)
   // 芯片信息必须声明在 vccChipMv 之前，否则 computed 初始化时会触发 TDZ 错误
   const chipDetails = ref<DetectedChipInfo | null>(null)
@@ -129,50 +101,64 @@ export const useProgStore = defineStore('prog', () => {
   // 校验
   const verifyAfterWrite = ref(false)
 
-  // SPI NAND 设置（持久化）
-  const nandReadBadBlockFirst = ref(loadBoolSetting('nand.readBadBlockFirst', true))
-  const nandBadBlockMode = ref<'skip' | 'bypass' | 'ignore'>(
-    loadStringSetting('nand.badBlockMode', 'skip') as 'skip' | 'bypass' | 'ignore',
-  )
-  const nandProgramMode = ref<'main' | 'oob_auto' | 'main_oob'>(
-    loadStringSetting('nand.programMode', 'main') as 'main' | 'oob_auto' | 'main_oob',
-  )
-  const nandBatchBurn = ref(loadBoolSetting('nand.batchBurn', false))
-  const nandSaveVoltage = ref(loadBoolSetting('nand.saveVoltage', false))
-  const nandPowerAutoDetect = ref(loadBoolSetting('nand.powerAutoDetect', false))
-  const nandAutoDetectEeprom = ref(loadBoolSetting('nand.autoDetectEeprom', false))
-  const nandProgressEstimate = ref(loadBoolSetting('nand.progressEstimate', false))
-  const nandCheckSoundSwitch = ref(loadBoolSetting('nand.checkSoundSwitch', true))
+  // SPI NAND 设置（来自 Setting.set，settings store 为唯一持久化来源）
+  const nandReadBadBlockFirst = ref(settings.nandReadBadBlockFirst)
+  const nandBadBlockMode = ref<'skip' | 'bypass' | 'ignore'>(settings.nandBadBlockMode)
+  const nandProgramMode = ref<'main' | 'oob_auto' | 'main_oob'>(settings.nandProgramMode)
+  const nandBatchBurn = ref(settings.batchBurn)
+  const nandSaveVoltage = ref(settings.saveVoltage)
+  const nandPowerAutoDetect = ref(settings.powerAutoDetect)
+  const nandAutoDetectEeprom = ref(settings.autoDetectEeprom)
+  const nandProgressEstimate = ref(settings.progressEstimate)
+  const nandCheckSoundSwitch = ref(settings.checkSoundSwitch)
+
+  // 设置对话框改动后同步到 prog store，保持现有组件绑定不变
   watch(
     [
-      nandReadBadBlockFirst,
-      nandBadBlockMode,
-      nandProgramMode,
-      nandBatchBurn,
-      nandSaveVoltage,
-      nandPowerAutoDetect,
-      nandAutoDetectEeprom,
-      nandProgressEstimate,
-      nandCheckSoundSwitch,
+      () => settings.batchBurn,
+      () => settings.saveVoltage,
+      () => settings.powerAutoDetect,
+      () => settings.autoDetectEeprom,
+      () => settings.progressEstimate,
+      () => settings.checkSoundSwitch,
+      () => settings.nandReadBadBlockFirst,
+      () => settings.nandBadBlockMode,
+      () => settings.nandProgramMode,
     ],
-    () => {
-      try {
-        localStorage.setItem('nand.readBadBlockFirst', JSON.stringify(nandReadBadBlockFirst.value))
-        localStorage.setItem('nand.badBlockMode', JSON.stringify(nandBadBlockMode.value))
-        localStorage.setItem('nand.programMode', JSON.stringify(nandProgramMode.value))
-        localStorage.setItem('nand.batchBurn', JSON.stringify(nandBatchBurn.value))
-        localStorage.setItem('nand.saveVoltage', JSON.stringify(nandSaveVoltage.value))
-        localStorage.setItem('nand.powerAutoDetect', JSON.stringify(nandPowerAutoDetect.value))
-        localStorage.setItem('nand.autoDetectEeprom', JSON.stringify(nandAutoDetectEeprom.value))
-        localStorage.setItem('nand.progressEstimate', JSON.stringify(nandProgressEstimate.value))
-        localStorage.setItem('nand.checkSoundSwitch', JSON.stringify(nandCheckSoundSwitch.value))
-        if (nandSaveVoltage.value) {
-          localStorage.setItem('vcc.targetMv', JSON.stringify(vccTargetMv.value))
-        } else {
-          localStorage.removeItem('vcc.targetMv')
-        }
-      } catch {
-        // WebView 禁用存储时忽略，仅本次会话生效
+    ([
+      batchBurn,
+      saveVoltage,
+      powerAutoDetect,
+      autoDetectEeprom,
+      progressEstimate,
+      checkSoundSwitch,
+      readBadBlockFirst,
+      badBlockMode,
+      programMode,
+    ]) => {
+      nandBatchBurn.value = batchBurn
+      nandSaveVoltage.value = saveVoltage
+      nandPowerAutoDetect.value = powerAutoDetect
+      nandAutoDetectEeprom.value = autoDetectEeprom
+      nandProgressEstimate.value = progressEstimate
+      nandCheckSoundSwitch.value = checkSoundSwitch
+      nandReadBadBlockFirst.value = readBadBlockFirst
+      nandBadBlockMode.value = badBlockMode
+      nandProgramMode.value = programMode
+    },
+  )
+
+  // 电压目标值双向同步：VCC 面板继续用 prog store，Setting.set 用 settings store
+  watch(vccTargetMv, (mv) => {
+    if (settings.hydrated && mv !== settings.vccTargetMv) {
+      settings.vccTargetMv = mv
+    }
+  })
+  watch(
+    () => settings.vccTargetMv,
+    (mv) => {
+      if (mv !== vccTargetMv.value) {
+        vccTargetMv.value = mv
       }
     },
   )

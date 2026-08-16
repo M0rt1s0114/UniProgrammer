@@ -847,7 +847,7 @@ onMounted(async () => {
   height: 6px;
   border-radius: 50%;
   background: var(--color-warn);
-  box-shadow: 0 0 6px rgba(240, 165, 0, 0.7);
+  box-shadow: 0 0 6px var(--warn-border);
 }
 .adv-chevron {
   transition: transform 150ms ease;
@@ -861,9 +861,9 @@ onMounted(async () => {
   flex-direction: column;
   gap: 4px;
   padding: 4px;
-  border: 1px solid rgba(240, 165, 0, 0.2);
+  border: 1px solid var(--warn-border);
   border-radius: var(--radius-md);
-  background: rgba(240, 165, 0, 0.04);
+  background: var(--warn-soft);
 }
 .adv-btn {
   text-align: left;
@@ -888,7 +888,7 @@ onMounted(async () => {
   padding: 10px;
   background: var(--bg-elevated);
   border-radius: var(--radius-md);
-  border: 1px solid rgba(74, 158, 255, 0.2);
+  border: 1px solid var(--info-border);
 }
 
 .running-label {
@@ -898,7 +898,7 @@ onMounted(async () => {
   margin-top: 6px;
   font-family: var(--font-mono);
   font-size: 11px;
-  color: #4a9eff;
+  color: var(--color-info);
   text-transform: capitalize;
 }
 
@@ -912,8 +912,8 @@ onMounted(async () => {
   margin-top: 6px;
 }
 .vcc-box.vcc-active {
-  border-color: rgba(240, 80, 80, 0.65);
-  background: rgba(240, 80, 80, 0.08);
+  border-color: var(--danger-border);
+  background: var(--danger-soft);
 }
 
 .vcc-row {
@@ -942,16 +942,16 @@ onMounted(async () => {
   border-color: var(--border-focus);
 }
 .vcc-toggle.is-on {
-  border-color: rgba(240, 80, 80, 0.8);
-  background: rgba(240, 80, 80, 0.15);
-  color: #f05050;
+  border-color: var(--danger-border);
+  background: var(--danger-soft);
+  color: var(--color-danger);
   font-weight: 600;
 }
 
 .vcc-status {
   font-family: var(--font-mono);
   font-size: 11px;
-  color: #f05050;
+  color: var(--color-danger);
   font-weight: 600;
 }
 

@@ -117,6 +117,11 @@ const zh: MessageRecord = {
 
   // Settings / About
   'settings.moreComing': '更多设置项将在后续版本中提供',
+  'settings.language': '语言',
+  'settings.theme': '主题',
+  'settings.themeDark': '深色',
+  'settings.themeLight': '浅色',
+  'settings.themeSystem': '跟随系统',
   'about.placeholder': '关于内容待定',
   'nand.spare': 'OOB 容量',
   'nand.pagesPerBlock': '每块页数',
@@ -301,6 +306,11 @@ const en: MessageRecord = {
 
   // Settings / About
   'settings.moreComing': 'More settings are coming soon',
+  'settings.language': 'Language',
+  'settings.theme': 'Theme',
+  'settings.themeDark': 'Dark',
+  'settings.themeLight': 'Light',
+  'settings.themeSystem': 'Follow System',
   'about.placeholder': 'About content to be determined',
   'nand.spare': 'OOB Size',
   'nand.pagesPerBlock': 'Pages Per Block',

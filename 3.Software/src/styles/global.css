@@ -33,6 +33,16 @@
   --color-info: #4a9eff;
   --color-success: #00e5a0;
 
+  /* Semantic tints (used by warnings, badges, status) */
+  --warn-soft: rgba(240, 165, 0, 0.12);
+  --warn-border: rgba(240, 165, 0, 0.35);
+  --danger-soft: rgba(240, 80, 80, 0.12);
+  --danger-border: rgba(240, 80, 80, 0.45);
+  --info-soft: rgba(74, 158, 255, 0.16);
+  --info-border: rgba(74, 158, 255, 0.3);
+  --test-purple: #c792ea;
+  --test-purple-soft: rgba(199, 146, 234, 0.16);
+
   /* Text hierarchy */
   --text-primary: #e8edf5;
   --text-secondary: #8a96ab;
@@ -55,6 +65,52 @@
 
   /* Transitions */
   --transition: 150ms ease;
+
+  color-scheme: dark;
+}
+
+/* ---- Light theme: cold gray-white industrial ---- */
+html[data-theme='light'] {
+  /* Background layers */
+  --bg-base: #e9edf2;
+  --bg-surface: #f4f6f9;
+  --bg-elevated: #fbfcfe;
+  --bg-overlay: #dde4eb;
+
+  /* Brand accent — keep the circuit-board green */
+  --accent: #009f6f;
+  --accent-dim: #00855d;
+  --accent-glow: rgba(0, 159, 111, 0.14);
+  --accent-subtle: rgba(0, 159, 111, 0.08);
+
+  /* Semantic colors */
+  --color-warn: #b97800;
+  --color-danger: #d13f3f;
+  --color-info: #2b74d4;
+  --color-success: #009f6f;
+
+  /* Semantic tints */
+  --warn-soft: rgba(185, 120, 0, 0.12);
+  --warn-border: rgba(185, 120, 0, 0.4);
+  --danger-soft: rgba(209, 63, 63, 0.12);
+  --danger-border: rgba(209, 63, 63, 0.4);
+  --info-soft: rgba(43, 116, 212, 0.14);
+  --info-border: rgba(43, 116, 212, 0.3);
+  --test-purple: #8a4fb8;
+  --test-purple-soft: rgba(138, 79, 184, 0.16);
+
+  /* Text hierarchy */
+  --text-primary: #1d2633;
+  --text-secondary: #4b5868;
+  --text-muted: #8794a4;
+  --text-accent: #008a60;
+
+  /* Borders */
+  --border: rgba(29, 38, 51, 0.12);
+  --border-accent: rgba(0, 159, 111, 0.32);
+  --border-focus: rgba(0, 159, 111, 0.55);
+
+  color-scheme: light;
 }
 
 /* ---- Reset & Base ---- */
@@ -181,22 +237,22 @@ html.linux body {
 }
 
 .btn-danger {
-  background: rgba(240, 80, 80, 0.1);
+  background: var(--danger-soft);
   color: var(--color-danger);
-  border-color: rgba(240, 80, 80, 0.3);
+  border-color: var(--danger-border);
 }
 .btn-danger:hover {
-  background: rgba(240, 80, 80, 0.2);
+  background: var(--danger-soft);
   border-color: var(--color-danger);
 }
 
 .btn-warn {
-  background: rgba(240, 165, 0, 0.1);
+  background: var(--warn-soft);
   color: var(--color-warn);
-  border-color: rgba(240, 165, 0, 0.35);
+  border-color: var(--warn-border);
 }
 .btn-warn:hover {
-  background: rgba(240, 165, 0, 0.2);
+  background: var(--warn-soft);
   border-color: var(--color-warn);
 }
 
@@ -290,15 +346,15 @@ select.input {
   font-weight: 500;
 }
 .badge-success {
-  background: rgba(0, 229, 160, 0.12);
-  color: var(--accent);
+  background: var(--accent-subtle);
+  color: var(--text-accent);
 }
 .badge-warn {
-  background: rgba(240, 165, 0, 0.12);
+  background: var(--warn-soft);
   color: var(--color-warn);
 }
 .badge-danger {
-  background: rgba(240, 80, 80, 0.12);
+  background: var(--danger-soft);
   color: var(--color-danger);
 }
 .badge-idle {

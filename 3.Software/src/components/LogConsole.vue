@@ -142,7 +142,7 @@ function levelClass(level: LogEntry['level']) {
   font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 600;
-  color: #c792ea;
+  color: var(--test-purple);
 }
 
 .log-info {
@@ -163,10 +163,10 @@ function levelClass(level: LogEntry['level']) {
   border-left-color: var(--accent);
 }
 .log-function-test {
-  border-left-color: #c792ea;
+  border-left-color: var(--test-purple);
 }
 .log-function-test .log-msg {
-  color: #c792ea;
+  color: var(--test-purple);
 }
 .log-success .log-msg {
   color: var(--accent);

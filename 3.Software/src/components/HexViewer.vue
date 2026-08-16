@@ -646,7 +646,7 @@ onUnmounted(() => {
   cursor: default;
 }
 .byte-hit {
-  background: rgba(74, 158, 255, 0.25);
+  background: var(--info-soft);
 }
 .byte-editing {
   background: var(--bg-overlay);

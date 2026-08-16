@@ -5,6 +5,7 @@ mod chiplib;
 mod dialogs;
 mod protocols;
 mod serprog;
+mod settings;
 
 use ch34x::{Ch34xDevice, Ch34xSettings, ChipKind, DeviceMode};
 use serde::Serialize;
@@ -1451,6 +1452,16 @@ fn write_file(path: String, data: Vec<u8>) -> Result<(), String> {
     std::fs::write(&path, &data).map_err(|e| format!("写入文件失败 {}: {}", path, e))
 }
 
+#[tauri::command]
+fn load_settings() -> Result<String, String> {
+    settings::load()
+}
+
+#[tauri::command]
+fn save_settings(content: String) -> Result<String, String> {
+    settings::save(&content)
+}
+
 fn main() {
     tauri::Builder::default()
         .manage(Mutex::new(AppState {
@@ -1488,6 +1499,8 @@ fn main() {
             save_file_dialog,
             read_file,
             write_file,
+            load_settings,
+            save_settings,
         ])
         .run(tauri::generate_context!())
         .expect("启动失败");

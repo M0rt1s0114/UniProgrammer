@@ -7,10 +7,10 @@ const store = useProgStore()
 
 const statusColor = computed(() => {
   if (store.detectStatus === 'programmer_fail' || store.detectStatus === 'chip_rule_fail')
-    return '#f05050'
-  if (store.status === 'running') return '#4a9eff'
-  if (store.status === 'success') return '#00e5a0'
-  return '#f05050'
+    return 'var(--color-danger)'
+  if (store.status === 'running') return 'var(--color-info)'
+  if (store.status === 'success') return 'var(--accent)'
+  return 'var(--color-danger)'
 })
 
 const statusLabel = computed(() => {
@@ -120,9 +120,9 @@ const fileName = computed(() => {
   font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 600;
-  color: #f05050;
-  border: 1px solid rgba(240, 80, 80, 0.6);
-  background: rgba(240, 80, 80, 0.1);
+  color: var(--color-danger);
+  border: 1px solid var(--danger-border);
+  background: var(--danger-soft);
   border-radius: var(--radius-sm);
   padding: 1px 6px;
 }
