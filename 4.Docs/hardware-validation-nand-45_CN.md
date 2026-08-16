@@ -28,6 +28,9 @@
 | 8 | 参数页 | 点“读参数页数据” | 返回 256 字节 ONFI 参数页，签名/厂商/页大小可读 | 只读 |
 | 9 | ECC 开关 | 开启/关闭硬件 ECC | B0h bit4 翻转；开启后写读应无 ECC 错误，关闭后 OOB ECC 区为 FF | 写入寄存器 |
 | 10 | OTP 读 | 输入页号点“读 OTP 页” | 返回 OTP 页主区+OOB 数据，结束后 B0h 配置恢复 | 只读 |
+| 11 | Die select | 使用 `feature` 位已设置的多 die NAND（如 MT29F4G01、F50L2G41LB、W25M02GV），跨 die 边界读写擦 | 自动切换到第二 die，地址连续正确 | 写/擦有写入风险 |
+| 12 | P_FAIL / E_FAIL | 先正常编程/擦除（不得误报）；若芯片支持块保护，再对保护区写入/擦除 | 正常操作成功；保护操作返回明确的 NAND 编程/擦除失败错误 | 写入；使用可牺牲区域 |
+| 13 | Dummy / plane 字段 | 检测后查看芯片信息，并对 `dummyMode=prepend` 或带 plane-select 的芯片执行读写 | 显示的 dummy/read/write/feature 与库一致，回读数据正确 | 只读 |
 
 ## 45 系列 DataFlash
 

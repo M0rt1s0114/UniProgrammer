@@ -29,6 +29,9 @@ sequences come from public datasheets and standard protocol references.
 | 8 | Parameter page | Click "Read Parameter Page" | 256-byte ONFI parameter page; signature/vendor/page size readable | Read-only |
 | 9 | ECC toggle | Enable/disable on-die ECC | B0h bit 4 toggles; writes/reads report no ECC errors when enabled; OOB ECC area is FF when disabled | Register write |
 | 10 | OTP read | Enter page number, click "Read OTP Page" | Main + OOB data returned; B0h configuration restored afterwards | Read-only |
+| 11 | Die select | Use a multi-die NAND whose `feature` bits are set (e.g. MT29F4G01, F50L2G41LB, W25M02GV), then read/write/erase across the die boundary | Operations cross to the second die automatically; addresses stay continuous | Write for write/erase |
+| 12 | P_FAIL / E_FAIL | Perform normal program/erase first (must not false-trigger); then write/erase a protected area if the chip supports block protection | Normal operations succeed; protected operations return a clear NAND program/erase fail error | Write; use a sacrificial area |
+| 13 | Dummy / plane fields | Inspect Chip Information after detection and operate a chip with `dummyMode=prepend` or plane-select feature | Displayed dummy/read/write/feature values match the database; read-back data is correct | Read-only |
 
 ## 45-Series DataFlash
 

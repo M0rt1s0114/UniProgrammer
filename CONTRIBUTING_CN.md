@@ -161,6 +161,17 @@ cargo test
 | libusb | SPI NOR | | | | | |
 | Serprog | SPI NOR | | | | | |
 
+- 2026-08-16：CH341A DLL + SPI NOR 基础读/写/擦/校验已在单台测试环境通过；
+  后续按实际测试继续填写。
+
+## 芯片数据库
+
+- `chiplib.bin` 是权威数据库，磁盘上使用轻量混淆。
+- `chiplib.xml` 是同样混淆的回退文件，不是可读源文件。
+- 解码只发生在内存中；不得提交或在工作目录留下明文芯片库。
+- 批量更新优先使用 `chipdb_tool merge <bin> <chips.tsv>`，单颗芯片使用
+  `chipdb_tool add ...`，避免覆盖已有补全字段。
+
 ## 版本管理
 
 - 语义化版本 2.0.0

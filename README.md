@@ -7,11 +7,14 @@
 
 [中文文档](README_CN.md)
 
-> **⚠️ 项目未经实机验证，请谨慎使用 / This project has NOT been validated on
-> real hardware; use with caution.**
+> **⚠️ 项目尚未完成实机验证，请谨慎使用 / Most features have NOT been
+> validated on real hardware; use with caution.**
+>
+> 2026-08-16: basic CH341A + SPI NOR operations have passed on one test setup;
+> other programmer/chip combinations still require the validation checklist.
 
-> **Alpha software warning** — this project has not been validated on real
-> hardware yet. Do not use it on chips whose contents you cannot afford to lose.
+> **Alpha software warning** — do not use this project on chips whose contents
+> you cannot afford to lose.
 
 ## Table of Contents
 
@@ -44,7 +47,15 @@ between chip commands and the USB/serial transport underneath.
   SPI EEPROM, DataFlash AT45
 - Read / write / erase / verify with live progress
 - Chip database with JEDEC auto-detection and manual selection
-- Dark cross-platform UI (English / Chinese switch)
+  (lightly obfuscated on disk, see [Chip Database](#chip-database))
+- Dark / light / follow-system themes
+- Settings dialog persisted to `Setting.set` (INI) with migration from
+  browser storage
+- Voltage regulation panel with guarded power-on flow
+- About dialog with dynamic version and chip database statistics
+- SPI NAND bad-block modes (Skip / Bypass / Ignore), BBM LUT read/write,
+  on-die ECC control, OTP and parameter-page read, per-chip dummy/plane/die
+  configuration
 - Hex editor: edit, undo, search, goto, fill, checksum
 - Native file dialogs on Windows; Linux support in progress
 
@@ -100,10 +111,22 @@ Backend selection is a compile-time Cargo feature. See
 
 ## Chip Database
 
-`chiplib.bin` is the authoritative database; `chiplib.xml` is the readable
-source and fallback. The database is enriched from `IMSProg.Dat` fields:
+`chiplib.bin` is the authoritative database and is lightly obfuscated on disk
+(FFW-style per-byte mask + rotate). `chiplib.xml` is an obfuscated fallback,
+not a readable source file; both are decoded in memory only and no plaintext
+database file is shipped or left in the working directory.
+
+Maintenance tools (also see `cargo run --example chipdb_tool -- help`):
 
 ```bash
+# Merge a TSV chip table (insert missing, enrich existing attributes)
+cargo run --example chipdb_tool -- merge src-tauri/chiplib.bin chips.tsv
+
+# Add or replace one chip by JEDEC ID
+cargo run --example chipdb_tool -- add src-tauri/chiplib.bin 5E3213 \
+  Zbit ZB25D40B SPI_NOR page=256 size=524288 sector=4096 block=65536
+
+# Enrich from IMSProg.Dat fields (fills missing values only)
 cargo run --example chipdb_tool -- \
   src-tauri/chiplib.bin IMSProg.Dat --backup
 ```

@@ -7,10 +7,13 @@
 
 [English](README.md)
 
-> **⚠️ 项目未经实机验证，请谨慎使用 / This project has NOT been validated on
-> real hardware; use with caution.**
+> **⚠️ 项目尚未完成实机验证，请谨慎使用 / Most features have NOT been
+> validated on real hardware; use with caution.**
+>
+> 2026-08-16：CH341A + SPI NOR 基础操作已在单台测试环境通过；
+> 其他编程器/芯片组合仍需按验证清单逐项测试。
 
-> **Alpha 版本警告** — 本项目尚未经过真实硬件验证。不要用于内容无法承受丢失的芯片。
+> **Alpha 版本警告** — 不要用于内容无法承受丢失的芯片。
 
 ## 目录
 
@@ -43,7 +46,13 @@ USB/串口传输之间保持清晰分离。
   SPI EEPROM、DataFlash AT45
 - 读 / 写 / 擦除 / 校验，实时进度显示
 - 芯片数据库支持 JEDEC 自动识别与手动选型
-- 深色跨平台界面（中英文切换）
+  （磁盘上为轻量混淆，见[芯片数据库](#芯片数据库)）
+- 深色 / 浅色 / 跟随系统主题
+- 设置对话框，配置持久化到 `Setting.set`（INI），自动迁移旧浏览器存储
+- 电压调节面板与接通电源高危确认流程
+- 关于对话框：动态版本号、芯片库分类统计
+- SPI NAND 坏块模式（Skip / Bypass / Ignore）、BBM LUT 读写、
+  片上 ECC 控制、OTP / 参数页读取，以及按芯片配置的 dummy/plane/die 支持
 - Hex 编辑器：编辑、撤销、搜索、跳转、填充、校验和
 - Windows 原生文件对话框；Linux 支持开发中
 
@@ -96,10 +105,21 @@ cd 3.Software
 
 ## 芯片数据库
 
-`chiplib.bin` 是权威数据库；`chiplib.xml` 是可读源与回退方案。
-数据库可从 `IMSProg.Dat` 补齐字段：
+`chiplib.bin` 是权威数据库，磁盘上使用轻量混淆（FFW 式逐字节掩码+循环移位）。
+`chiplib.xml` 是同样混淆的回退文件，不是可读源码；两者都只在内存中解码，
+分发包和工作目录中不会留下明文芯片库。
+
+维护工具（也可执行 `cargo run --example chipdb_tool -- help`）：
 
 ```bash
+# 批量合并 TSV 芯片表（缺失插入，已有条目只补缺失字段）
+cargo run --example chipdb_tool -- merge src-tauri/chiplib.bin chips.tsv
+
+# 按 JEDEC ID 新增/替换单颗芯片
+cargo run --example chipdb_tool -- add src-tauri/chiplib.bin 5E3213 \
+  Zbit ZB25D40B SPI_NOR page=256 size=524288 sector=4096 block=65536
+
+# 从 IMSProg.Dat 补全字段（只填空缺值）
 cargo run --example chipdb_tool -- \
   src-tauri/chiplib.bin IMSProg.Dat --backup
 ```

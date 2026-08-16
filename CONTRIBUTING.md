@@ -162,6 +162,19 @@ Hardware changes require manual validation. Use the table below as a checklist:
 | libusb | SPI NOR | | | | | |
 | Serprog | SPI NOR | | | | | |
 
+- 2026-08-16: CH341A DLL + SPI NOR basic read/write/erase/verify passed on
+  one test setup. Keep filling the other cells as hardware testing progresses.
+
+## Chip database
+
+- `chiplib.bin` is the authoritative database and is lightly obfuscated on disk.
+- `chiplib.xml` is an obfuscated fallback, not a readable source file.
+- Decoding happens in memory only; never commit or leave a plaintext database
+  file in the working directory.
+- Prefer `chipdb_tool merge <bin> <chips.tsv>` for batch updates and
+  `chipdb_tool add ...` for single chips so existing enriched attributes are
+  not overwritten.
+
 ## Versioning
 
 - Semantic Versioning 2.0.0
