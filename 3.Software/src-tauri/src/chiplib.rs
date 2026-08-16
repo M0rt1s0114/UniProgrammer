@@ -643,9 +643,6 @@ impl Chiplib {
             return Err(format!("无效 ID: {}", id));
         }
 
-        let mut id_bytes = [0u8; MAX_ID_LEN];
-        id_bytes[..id.len()].copy_from_slice(id.as_bytes());
-
         let mut attrs: Vec<(String, String)> = vec![
             ("vendor".into(), vendor.to_string()),
             ("model".into(), model.to_string()),
@@ -659,7 +656,64 @@ impl Chiplib {
         if !attrs.iter().any(|(k, _)| k == "id") {
             attrs.push(("id".into(), id.to_string()));
         }
+        let blob = Self::build_blob(&attrs)?;
 
+        let mut id_bytes = [0u8; MAX_ID_LEN];
+        id_bytes[..id.len()].copy_from_slice(id.as_bytes());
+        let entry = IndexEntry {
+            id: id_bytes,
+            data_offset: self.data.len() as u32,
+            data_len: blob.len() as u16,
+            protocol: proto_id,
+        };
+        match self.entries.binary_search_by(|e| e.id.cmp(&id_bytes)) {
+            Ok(idx) => self.entries[idx] = entry,
+            Err(idx) => self.entries.insert(idx, entry),
+        }
+        self.data.extend_from_slice(&blob);
+        Ok(())
+    }
+
+    /// Merge mode used by the SNANDer table importer: missing chips are
+    /// inserted; existing chips only get the keys they don't already have,
+    /// so enriched fields (sector/block/vcc/timing, ...) are never lost.
+    #[allow(dead_code)] // used by the chipdb_tool example
+    pub fn upsert_chip_merge(
+        &mut self,
+        id: &str,
+        vendor: &str,
+        model: &str,
+        protocol: &str,
+        extra_attrs: &[(&str, &str)],
+    ) -> Result<(), String> {
+        let mut id_bytes = [0u8; MAX_ID_LEN];
+        id_bytes[..id.len()].copy_from_slice(id.as_bytes());
+
+        let result = if let Ok(idx) = self.entries.binary_search_by(|e| e.id.cmp(&id_bytes)) {
+            let entry = &self.entries[idx];
+            let mut attrs = Self::parse_data_attrs(
+                &self.data[entry.data_offset as usize..][..entry.data_len as usize],
+            );
+            if attrs.get("vendor").filter(|v| !v.is_empty()).is_none() && !vendor.is_empty() {
+                attrs.insert("vendor".into(), vendor.to_string());
+            }
+            if attrs.get("model").filter(|v| !v.is_empty()).is_none() && !model.is_empty() {
+                attrs.insert("model".into(), model.to_string());
+            }
+            for (key, value) in extra_attrs {
+                if !attrs.contains_key(*key) && !value.is_empty() {
+                    attrs.insert(key.to_string(), value.to_string());
+                }
+            }
+            self.replace_entry_blob(idx, attrs)
+        } else {
+            self.upsert_chip(id, vendor, model, protocol, extra_attrs)
+        };
+        self.version = 20260816;
+        result
+    }
+
+    fn build_blob(attrs: &[(String, String)]) -> Result<Vec<u8>, String> {
         // Canonical serialization: vendor/model/protocol first, remaining
         // keys sorted, trailing NUL (matches import_imsprog_dat).
         let mut parts: Vec<String> = Vec::with_capacity(attrs.len());
@@ -681,17 +735,25 @@ impl Chiplib {
         if blob.len() > u16::MAX as usize {
             return Err("芯片属性块超过 64KB 上限".into());
         }
+        Ok(blob)
+    }
 
-        let entry = IndexEntry {
-            id: id_bytes,
+    fn replace_entry_blob(
+        &mut self,
+        idx: usize,
+        attrs: HashMap<String, String>,
+    ) -> Result<(), String> {
+        let entry = &self.entries[idx];
+        let all: Vec<(String, String)> =
+            attrs.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+        let blob = Self::build_blob(&all)?;
+        let new_entry = IndexEntry {
+            id: entry.id,
             data_offset: self.data.len() as u32,
             data_len: blob.len() as u16,
-            protocol: proto_id,
+            protocol: entry.protocol,
         };
-        match self.entries.binary_search_by(|e| e.id.cmp(&id_bytes)) {
-            Ok(idx) => self.entries[idx] = entry,
-            Err(idx) => self.entries.insert(idx, entry),
-        }
+        self.entries[idx] = new_entry;
         self.data.extend_from_slice(&blob);
         Ok(())
     }
@@ -801,7 +863,7 @@ mod tests {
     #[test]
     fn xml_fallback_contains_new_chip() {
         let lib = Chiplib::load_xml("../chiplib.xml").expect("load chiplib.xml");
-        assert_eq!(lib.entry_count(), 960);
+        assert_eq!(lib.entry_count(), 1072);
         let d40 = lib.find_by_id("5E3213").expect("ZB25D40B in XML fallback");
         assert_eq!(d40.vendor, "Zbit");
         assert_eq!(d40.model, "ZB25D40B");
@@ -818,12 +880,20 @@ mod tests {
         assert_eq!(merged.vendor, "XTX");
         assert_eq!(merged.protocol, "SPI_NOR");
         assert_eq!(merged.size, 16 * 1024 * 1024);
+
+        let prepend = lib
+            .find_by_id("C8B1")
+            .expect("GD5F1GQ4UC imported with dummy mode");
+        assert_eq!(prepend.protocol, "SPI_NAND");
+        assert_eq!(prepend.attr("dummyMode"), Some("prepend"));
+        assert_eq!(prepend.attr("readMode"), Some("dual"));
+        assert_eq!(prepend.attr_u32("feature"), Some(0));
     }
 
     #[test]
     fn load_enriched_bin() {
         let lib = Chiplib::load_bin("chiplib.bin").expect("load chiplib.bin");
-        assert_eq!(lib.entries.len(), 960);
+        assert_eq!(lib.entries.len(), 1072);
 
         let nor = lib.find_by_id("EF4018").expect("W25Q128 JEDEC");
         assert_eq!(nor.protocol, "SPI_NOR");
@@ -874,5 +944,12 @@ mod tests {
             .expect("24C02");
         assert_eq!(i2c.size, 256);
         assert!(i2c.attr("addrtype").is_some());
+
+        let prepend = lib
+            .find_by_id("C8B1")
+            .expect("GD5F1GQ4UC imported with dummy mode");
+        assert_eq!(prepend.protocol, "SPI_NAND");
+        assert_eq!(prepend.attr("dummyMode"), Some("prepend"));
+        assert_eq!(prepend.attr("readMode"), Some("dual"));
     }
 }
