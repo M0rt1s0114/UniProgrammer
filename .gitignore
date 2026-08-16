@@ -36,6 +36,9 @@ Thumbs.db
 # 参考项目（仅本地查阅，不进仓库）
 example/
 
+# 本地讨论/规划笔记（仅本地查阅，不进仓库）
+feature/
+
 # 安装包产物（正式发布走 GitHub Actions）
 *.msi
 *.dmg
