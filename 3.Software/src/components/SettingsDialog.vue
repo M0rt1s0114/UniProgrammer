@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { useSettingsStore } from '@/stores/settings'
+import { reactive, ref, watch } from 'vue'
+import { useSettingsStore, type ThemeMode } from '@/stores/settings'
 import { useProgStore } from '@/stores/prog'
+import type { Locale } from '@/i18n'
 import { t } from '@/i18n'
 
 const settings = useSettingsStore()
@@ -10,7 +11,59 @@ const open = defineModel<boolean>('open', { default: false })
 
 const showVccConfirm = ref(false)
 
-function close() {
+// 对话框内先编辑草稿，点击“确定”后才写入 settings store；
+// 点取消 / 点击遮罩关闭则丢弃本次修改。
+const draft = reactive({
+  language: 'zh' as Locale,
+  theme: 'dark' as ThemeMode,
+  batchBurn: false,
+  saveVoltage: false,
+  powerAutoDetect: false,
+  autoDetectEeprom: false,
+  progressEstimate: false,
+  checkSoundSwitch: true,
+  vccControlEnabled: false,
+})
+
+function loadDraft() {
+  draft.language = settings.language
+  draft.theme = settings.theme
+  draft.batchBurn = settings.batchBurn
+  draft.saveVoltage = settings.saveVoltage
+  draft.powerAutoDetect = settings.powerAutoDetect
+  draft.autoDetectEeprom = settings.autoDetectEeprom
+  draft.progressEstimate = settings.progressEstimate
+  draft.checkSoundSwitch = settings.checkSoundSwitch
+  draft.vccControlEnabled = settings.vccControlEnabled
+  showVccConfirm.value = false
+}
+
+watch(
+  () => open.value,
+  (isOpen) => {
+    if (isOpen) loadDraft()
+  },
+)
+
+function applyDraft() {
+  settings.language = draft.language
+  settings.theme = draft.theme
+  settings.batchBurn = draft.batchBurn
+  settings.saveVoltage = draft.saveVoltage
+  settings.powerAutoDetect = draft.powerAutoDetect
+  settings.autoDetectEeprom = draft.autoDetectEeprom
+  settings.progressEstimate = draft.progressEstimate
+  settings.checkSoundSwitch = draft.checkSoundSwitch
+  settings.vccControlEnabled = draft.vccControlEnabled
+}
+
+function confirm() {
+  applyDraft()
+  open.value = false
+}
+
+function cancel() {
+  showVccConfirm.value = false
   open.value = false
 }
 
@@ -18,7 +71,7 @@ function close() {
 function onVccControlChange(event: Event) {
   const target = (event.target as HTMLInputElement).checked
   if (!target) {
-    settings.vccControlEnabled = false
+    draft.vccControlEnabled = false
     return
   }
   showVccConfirm.value = true
@@ -26,7 +79,7 @@ function onVccControlChange(event: Event) {
 
 function confirmVccControl() {
   showVccConfirm.value = false
-  settings.vccControlEnabled = true
+  draft.vccControlEnabled = true
 }
 
 function cancelVccControl() {
@@ -36,7 +89,7 @@ function cancelVccControl() {
 
 <template>
   <Transition name="fade">
-    <div v-if="open" class="modal-backdrop" @click.self="close">
+    <div v-if="open" class="modal-backdrop" @click.self="cancel">
       <div class="modal settings-modal">
         <h3 class="modal-title">{{ t('app.settings') }}</h3>
 
@@ -45,27 +98,27 @@ function cancelVccControl() {
             <div class="settings-label">{{ t('settings.autoTitle') }}</div>
             <div class="settings-grid">
               <label class="toggle-row">
-                <input v-model="settings.batchBurn" type="checkbox" class="toggle-check" />
+                <input v-model="draft.batchBurn" type="checkbox" class="toggle-check" />
                 <span class="toggle-text">{{ t('settings.batchBurn') }}</span>
               </label>
               <label class="toggle-row">
-                <input v-model="settings.saveVoltage" type="checkbox" class="toggle-check" />
+                <input v-model="draft.saveVoltage" type="checkbox" class="toggle-check" />
                 <span class="toggle-text">{{ t('settings.saveVoltage') }}</span>
               </label>
               <label class="toggle-row">
-                <input v-model="settings.powerAutoDetect" type="checkbox" class="toggle-check" />
+                <input v-model="draft.powerAutoDetect" type="checkbox" class="toggle-check" />
                 <span class="toggle-text">{{ t('settings.powerAutoDetect') }}</span>
               </label>
               <label class="toggle-row">
-                <input v-model="settings.autoDetectEeprom" type="checkbox" class="toggle-check" />
+                <input v-model="draft.autoDetectEeprom" type="checkbox" class="toggle-check" />
                 <span class="toggle-text">{{ t('settings.autoDetectEeprom') }}</span>
               </label>
               <label class="toggle-row">
-                <input v-model="settings.progressEstimate" type="checkbox" class="toggle-check" />
+                <input v-model="draft.progressEstimate" type="checkbox" class="toggle-check" />
                 <span class="toggle-text">{{ t('settings.progressEstimate') }}</span>
               </label>
               <label class="toggle-row">
-                <input v-model="settings.checkSoundSwitch" type="checkbox" class="toggle-check" />
+                <input v-model="draft.checkSoundSwitch" type="checkbox" class="toggle-check" />
                 <span class="toggle-text">{{ t('settings.checkSoundSwitch') }}</span>
               </label>
             </div>
@@ -76,7 +129,7 @@ function cancelVccControl() {
               <input
                 type="checkbox"
                 class="toggle-check"
-                :checked="settings.vccControlEnabled"
+                :checked="draft.vccControlEnabled"
                 :disabled="store.vccOutputEnabled"
                 @change="onVccControlChange"
               />
@@ -91,11 +144,11 @@ function cancelVccControl() {
             <div class="settings-label">{{ t('settings.language') }}</div>
             <div class="settings-radio-row">
               <label class="toggle-row">
-                <input v-model="settings.language" type="radio" value="zh" class="toggle-check" />
+                <input v-model="draft.language" type="radio" value="zh" class="toggle-check" />
                 <span class="toggle-text">中文</span>
               </label>
               <label class="toggle-row">
-                <input v-model="settings.language" type="radio" value="en" class="toggle-check" />
+                <input v-model="draft.language" type="radio" value="en" class="toggle-check" />
                 <span class="toggle-text">English</span>
               </label>
             </div>
@@ -105,15 +158,15 @@ function cancelVccControl() {
             <div class="settings-label">{{ t('settings.theme') }}</div>
             <div class="settings-radio-row">
               <label class="toggle-row">
-                <input v-model="settings.theme" type="radio" value="dark" class="toggle-check" />
+                <input v-model="draft.theme" type="radio" value="dark" class="toggle-check" />
                 <span class="toggle-text">{{ t('settings.themeDark') }}</span>
               </label>
               <label class="toggle-row">
-                <input v-model="settings.theme" type="radio" value="light" class="toggle-check" />
+                <input v-model="draft.theme" type="radio" value="light" class="toggle-check" />
                 <span class="toggle-text">{{ t('settings.themeLight') }}</span>
               </label>
               <label class="toggle-row">
-                <input v-model="settings.theme" type="radio" value="system" class="toggle-check" />
+                <input v-model="draft.theme" type="radio" value="system" class="toggle-check" />
                 <span class="toggle-text">{{ t('settings.themeSystem') }}</span>
               </label>
             </div>
@@ -121,7 +174,8 @@ function cancelVccControl() {
         </div>
 
         <div class="modal-actions">
-          <button class="btn btn-primary" @click="close">{{ t('action.confirm') }}</button>
+          <button class="btn btn-secondary" @click="cancel">{{ t('action.cancel') }}</button>
+          <button class="btn btn-primary" @click="confirm">{{ t('action.confirm') }}</button>
         </div>
       </div>
     </div>

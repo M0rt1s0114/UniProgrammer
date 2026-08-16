@@ -350,33 +350,6 @@ onMounted(async () => {
         {{ t('nand.scanBadBlocks') }}
       </button>
 
-      <div class="nand-options-grid">
-        <label class="toggle-row">
-          <input v-model="store.nandBatchBurn" type="checkbox" class="toggle-check" />
-          <span class="toggle-text">{{ t('nand.batchBurn') }}</span>
-        </label>
-        <label class="toggle-row">
-          <input v-model="store.nandSaveVoltage" type="checkbox" class="toggle-check" />
-          <span class="toggle-text">{{ t('nand.saveVoltage') }}</span>
-        </label>
-        <label class="toggle-row">
-          <input v-model="store.nandPowerAutoDetect" type="checkbox" class="toggle-check" />
-          <span class="toggle-text">{{ t('nand.powerAutoDetect') }}</span>
-        </label>
-        <label class="toggle-row">
-          <input v-model="store.nandAutoDetectEeprom" type="checkbox" class="toggle-check" />
-          <span class="toggle-text">{{ t('nand.autoDetectEeprom') }}</span>
-        </label>
-        <label class="toggle-row">
-          <input v-model="store.nandProgressEstimate" type="checkbox" class="toggle-check" />
-          <span class="toggle-text">{{ t('nand.progressEstimate') }}</span>
-        </label>
-        <label class="toggle-row">
-          <input v-model="store.nandCheckSoundSwitch" type="checkbox" class="toggle-check" />
-          <span class="toggle-text">{{ t('nand.checkSoundSwitch') }}</span>
-        </label>
-      </div>
-
       <button
         class="btn btn-ghost btn-sm w-full adv-toggle"
         :class="{ open: nandAdvancedOpen }"
@@ -763,13 +736,6 @@ onMounted(async () => {
   gap: 7px;
   cursor: pointer;
   padding: 2px 0 2px 4px;
-}
-
-.nand-options-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 2px 10px;
-  margin-top: 6px;
 }
 
 /* 45 模式按钮改为纵向全宽排列，避免中文标签超出 230px 侧栏 */

@@ -309,6 +309,30 @@ select.input {
   padding-right: 28px;
 }
 
+/* ---- Toggle / Checkbox Row ---- */
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  padding: 2px 0 2px 4px;
+}
+.toggle-check {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+  vertical-align: middle;
+}
+.toggle-text {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+}
+
 /* ---- Card ---- */
 .card {
   background: var(--bg-surface);
