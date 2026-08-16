@@ -17,6 +17,8 @@ const zh: MessageRecord = {
   'app.maximize': '最大化',
   'app.close': '关闭',
   'app.switchLocale': '切换到英文',
+  'app.settings': '设置',
+  'app.about': '关于',
   'app.dragToResize': '拖拽调整大小',
 
   // Pane titles
@@ -36,6 +38,7 @@ const zh: MessageRecord = {
   'action.verify': '校验',
   'action.cancel': '取消',
   'action.confirmErase': '确认擦除',
+  'action.confirm': '确定',
   'action.saveBin': '保存 BIN',
   'action.saveHex': '保存 HEX',
 
@@ -111,6 +114,10 @@ const zh: MessageRecord = {
   'nand.checkSoundSwitch': '校验成功提示音',
   'nand.readOtpPage': '读 OTP 页',
   'nand.otpPage': 'OTP 页号',
+
+  // Settings / About
+  'settings.moreComing': '更多设置项将在后续版本中提供',
+  'about.placeholder': '关于内容待定',
   'nand.spare': 'OOB 容量',
   'nand.pagesPerBlock': '每块页数',
   'nand.isBmm': '支持 BBM',
@@ -193,6 +200,8 @@ const en: MessageRecord = {
   'app.maximize': 'Maximize',
   'app.close': 'Close',
   'app.switchLocale': 'Switch to Chinese',
+  'app.settings': 'Settings',
+  'app.about': 'About',
   'app.dragToResize': 'Drag to resize',
 
   // Pane titles
@@ -212,6 +221,7 @@ const en: MessageRecord = {
   'action.verify': 'Verify',
   'action.cancel': 'Cancel',
   'action.confirmErase': 'Confirm Erase',
+  'action.confirm': 'OK',
   'action.saveBin': 'Save BIN',
   'action.saveHex': 'Save HEX',
 
@@ -288,6 +298,10 @@ const en: MessageRecord = {
   'nand.checkSoundSwitch': 'Verify Success Sound',
   'nand.readOtpPage': 'Read OTP Page',
   'nand.otpPage': 'OTP Page',
+
+  // Settings / About
+  'settings.moreComing': 'More settings are coming soon',
+  'about.placeholder': 'About content to be determined',
   'nand.spare': 'OOB Size',
   'nand.pagesPerBlock': 'Pages Per Block',
   'nand.isBmm': 'Supports BBM',

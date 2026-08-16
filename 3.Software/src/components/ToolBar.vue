@@ -3,6 +3,8 @@ import { ref } from 'vue'
 import { useProgStore } from '@/stores/prog'
 import { useSpiNor } from '@/services/spiNor'
 import { t } from '@/i18n'
+import SettingsDialog from '@/components/SettingsDialog.vue'
+import AboutDialog from '@/components/AboutDialog.vue'
 
 const store = useProgStore()
 const spiNor = useSpiNor()
@@ -11,6 +13,8 @@ const spiNor = useSpiNor()
 // All four operation icons are Font Awesome Free 7.3.1 (CC BY 4.0).
 
 const showEraseConfirm = ref(false)
+const showSettings = ref(false)
+const showAbout = ref(false)
 
 function requestErase() {
   showEraseConfirm.value = true
@@ -163,6 +167,54 @@ async function confirmErase() {
       </button>
     </div>
 
+    <div class="toolbar-spacer" />
+
+    <div class="tool-group tool-group-utility">
+      <button class="tool-btn" :title="t('app.settings')" @click="showSettings = true">
+        <span class="tool-icon">
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <circle cx="12" cy="12" r="3" />
+            <path
+              d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.55-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34h.08a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55h.08a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.08a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1z"
+            />
+          </svg>
+        </span>
+        <span class="tool-label">{{ t('app.settings') }}</span>
+      </button>
+
+      <button class="tool-btn" :title="t('app.about')" @click="showAbout = true">
+        <span class="tool-icon">
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="16" x2="12" y2="12" />
+            <line x1="12" y1="8" x2="12.01" y2="8" />
+          </svg>
+        </span>
+        <span class="tool-label">{{ t('app.about') }}</span>
+      </button>
+    </div>
+
+    <SettingsDialog v-model:open="showSettings" />
+    <AboutDialog v-model:open="showAbout" />
+
     <!-- 擦除确认弹窗 -->
     <Transition name="fade">
       <div v-if="showEraseConfirm" class="modal-backdrop" @click.self="showEraseConfirm = false">
@@ -219,8 +271,8 @@ async function confirmErase() {
   gap: 4px;
 }
 
-.tool-group-ops {
-  margin-left: auto;
+.toolbar-spacer {
+  flex: 1;
 }
 
 .toolbar-divider {

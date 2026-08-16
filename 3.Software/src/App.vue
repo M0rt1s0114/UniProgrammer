@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { onMounted, ref, computed, nextTick } from 'vue'
+import { onMounted, ref, nextTick } from 'vue'
 import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window'
 import { useProgStore } from '@/stores/prog'
-import { locale, setLocale, t } from '@/i18n'
+import { t } from '@/i18n'
 import OperationPanel from '@/components/OperationPanel.vue'
 import ToolBar from '@/components/ToolBar.vue'
 import HexViewer from '@/components/HexViewer.vue'
@@ -20,11 +20,6 @@ function maximizeWindow() {
 }
 function closeWindow() {
   appWindow.close()
-}
-
-const localeLabel = computed(() => (locale.value === 'zh' ? 'EN' : '中'))
-function toggleLocale() {
-  setLocale(locale.value === 'zh' ? 'en' : 'zh')
 }
 
 const logHeight = ref(180)
@@ -94,9 +89,6 @@ async function fitWindowToSidebar() {
       <span class="titlebar-title">{{ t('app.title') }}</span>
       <span class="titlebar-version text-muted">v0.1.0-alpha.2</span>
       <div class="titlebar-spacer" />
-      <button class="locale-btn" :title="t('app.switchLocale')" @click="toggleLocale">
-        {{ localeLabel }}
-      </button>
       <div class="wc-group">
         <button class="wc-btn wc-minimize" :title="t('app.minimize')" @click="minimizeWindow">
           <svg width="10" height="10" viewBox="0 0 10 10">
@@ -251,29 +243,6 @@ async function fitWindowToSidebar() {
 }
 .titlebar-spacer {
   flex: 1;
-}
-
-.locale-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 26px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text-muted);
-  font-family: var(--font-sans);
-  font-size: 11px;
-  font-weight: 500;
-  cursor: pointer;
-  transition:
-    background 120ms,
-    color 120ms;
-}
-.locale-btn:hover {
-  background: var(--bg-elevated);
-  color: var(--text-primary);
 }
 
 .wc-group {
