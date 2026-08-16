@@ -814,7 +814,7 @@ mod tests {
 
         let merged = lib
             .find_by_id("0B4018")
-            .expect("XT25F128B in XML fallback after vendor merge");
+            .expect("XT25F128B in XML fallback after library expansion");
         assert_eq!(merged.vendor, "XTX");
         assert_eq!(merged.protocol, "SPI_NOR");
         assert_eq!(merged.size, 16 * 1024 * 1024);
@@ -842,7 +842,7 @@ mod tests {
 
         let xtx = lib
             .find_by_id("0B4018")
-            .expect("XT25F128B from vendor merge");
+            .expect("XT25F128B from library expansion");
         assert_eq!(xtx.protocol, "SPI_NOR");
         assert_eq!(xtx.vendor, "XTX");
         assert_eq!(xtx.model, "XT25F128B");
@@ -850,7 +850,7 @@ mod tests {
 
         let nand = lib
             .find_by_id("EFBA22")
-            .expect("W25N02KWZEIR from vendor merge");
+            .expect("W25N02KWZEIR from library expansion");
         assert_eq!(nand.protocol, "SPI_NAND");
         assert_eq!(nand.vendor, "WINBOND");
         assert_eq!(nand.model, "W25N02KWZEIR");
@@ -862,7 +862,7 @@ mod tests {
 
         let dataflash = lib
             .find_by_id("1F2200")
-            .expect("AT45DB011D binary from vendor merge");
+            .expect("AT45DB011D binary from library expansion");
         assert_eq!(dataflash.protocol, "SPI_DATA_45");
         assert_eq!(dataflash.vendor, "ATMEL");
         assert_eq!(dataflash.model, "AT45DB011D_3V3_binary");

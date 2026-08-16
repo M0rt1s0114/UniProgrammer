@@ -129,7 +129,7 @@ export const useProgStore = defineStore('prog', () => {
   // 校验
   const verifyAfterWrite = ref(false)
 
-  // SPI NAND 设置（持久化；语义对齐 reference tool）
+  // SPI NAND 设置（持久化）
   const nandReadBadBlockFirst = ref(loadBoolSetting('nand.readBadBlockFirst', true))
   const nandBadBlockMode = ref<'skip' | 'bypass' | 'ignore'>(
     loadStringSetting('nand.badBlockMode', 'skip') as 'skip' | 'bypass' | 'ignore',

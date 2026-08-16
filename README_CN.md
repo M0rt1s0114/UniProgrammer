@@ -7,6 +7,9 @@
 
 [English](README.md)
 
+> **⚠️ 项目未经实机验证，请谨慎使用 / This project has NOT been validated on
+> real hardware; use with caution.**
+
 > **Alpha 版本警告** — 本项目尚未经过真实硬件验证。不要用于内容无法承受丢失的芯片。
 
 ## 目录
@@ -113,7 +116,9 @@ cargo run --example chipdb_tool -- \
 - 代码规范：在 `3.Software` 下运行 `.\lint.ps1`（Windows）或 `./lint.sh`
   （Linux），会依次执行 ESLint、Prettier、`cargo fmt` 与 `cargo clippy`；
   CI 会在 `main` 推送和 Pull Request 时自动执行同样检查
-- 发布稳定版前必须完成真机验证
+- 发布稳定版前必须完成真机验证；清单：
+  [中文](4.Docs/hardware-validation-nand-45_CN.md) /
+  [English](4.Docs/hardware-validation-nand-45.md)
 
 ## 维护者
 
@@ -121,7 +126,8 @@ cargo run --example chipdb_tool -- \
 
 ## 贡献
 
-见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+见 [CONTRIBUTING_CN.md](CONTRIBUTING_CN.md)（中文）/
+[CONTRIBUTING.md](CONTRIBUTING.md)（English）。
 
 ## 许可证
 

@@ -7,6 +7,9 @@
 
 [中文文档](README_CN.md)
 
+> **⚠️ 项目未经实机验证，请谨慎使用 / This project has NOT been validated on
+> real hardware; use with caution.**
+
 > **Alpha software warning** — this project has not been validated on real
 > hardware yet. Do not use it on chips whose contents you cannot afford to lose.
 
@@ -118,7 +121,9 @@ programmer over USART1.
 - Code quality: run `.\lint.ps1` (Windows) or `./lint.sh` (Linux) inside
   `3.Software` to execute ESLint, Prettier, `cargo fmt` and `cargo clippy`;
   CI enforces the same checks on `main` and pull requests
-- Hardware validation is required before declaring a release stable
+- Hardware validation is required before declaring a release stable;
+  checklist: [EN](4.Docs/hardware-validation-nand-45.md) /
+  [中文](4.Docs/hardware-validation-nand-45_CN.md)
 
 ## Maintainers
 
@@ -126,7 +131,8 @@ programmer over USART1.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md) (English) /
+[CONTRIBUTING_CN.md](CONTRIBUTING_CN.md) (中文).
 
 ## License
 
