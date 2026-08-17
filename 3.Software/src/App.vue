@@ -3,6 +3,7 @@ import { onMounted, ref, nextTick, watch } from 'vue'
 import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window'
 import { getVersion } from '@tauri-apps/api/app'
 import { invoke } from '@tauri-apps/api/core'
+import { listen } from '@tauri-apps/api/event'
 import { useProgStore } from '@/stores/prog'
 import { t } from '@/i18n'
 import OperationPanel from '@/components/OperationPanel.vue'
@@ -107,11 +108,9 @@ onMounted(() => {
   store.addLog('UniProg 已启动')
   loadVersion()
   fitWindowToSidebar()
-  void appWindow.onCloseRequested((event) => {
-    if (store.isRunning) {
-      event.preventDefault()
-      showCloseConfirm.value = true
-    }
+  // Rust 侧检测到“运行中关闭请求”后通知前端弹确认框。
+  void listen('close_requested_while_busy', () => {
+    showCloseConfirm.value = true
   })
 })
 

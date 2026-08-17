@@ -3,7 +3,8 @@
    Theme: Industrial Dark / Instrument
    =================================== */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/jetbrains-mono';
 
 /* 本地打包 Maple Mono CN：中文统一使用 Maple Mono，英文保持现有字体 */
 @font-face {
@@ -46,7 +47,7 @@
   /* Text hierarchy */
   --text-primary: #e8edf5;
   --text-secondary: #8a96ab;
-  --text-muted: #4a5568;
+  --text-muted: #5d6a7c;
   --text-accent: #00e5a0;
 
   /* Borders */
@@ -55,8 +56,12 @@
   --border-focus: rgba(0, 229, 160, 0.6);
 
   /* Typography */
-  --font-sans: 'Inter', 'Maple Mono CN', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', 'Maple Mono CN', 'Fira Code', 'Consolas', monospace;
+  --font-sans:
+    'Inter Variable', 'Inter', 'Noto Sans SC', 'Microsoft YaHei UI', 'PingFang SC',
+    system-ui, sans-serif;
+  --font-mono:
+    'JetBrains Mono Variable', 'JetBrains Mono', 'Maple Mono CN', 'Fira Code', 'Consolas',
+    monospace;
 
   /* Spacing */
   --radius-sm: 4px;
@@ -72,10 +77,10 @@
 /* ---- Light theme: cold gray-white industrial ---- */
 html[data-theme='light'] {
   /* Background layers */
-  --bg-base: #e9edf2;
+  --bg-base: #e7ebf0;
   --bg-surface: #f4f6f9;
   --bg-elevated: #fbfcfe;
-  --bg-overlay: #dde4eb;
+  --bg-overlay: #d7dfe7;
 
   /* Brand accent — keep the circuit-board green */
   --accent: #009f6f;
@@ -84,29 +89,29 @@ html[data-theme='light'] {
   --accent-subtle: rgba(0, 159, 111, 0.08);
 
   /* Semantic colors */
-  --color-warn: #b97800;
-  --color-danger: #d13f3f;
-  --color-info: #2b74d4;
+  --color-warn: #9a6200;
+  --color-danger: #c12e2e;
+  --color-info: #1e5fb8;
   --color-success: #009f6f;
 
   /* Semantic tints */
-  --warn-soft: rgba(185, 120, 0, 0.12);
-  --warn-border: rgba(185, 120, 0, 0.4);
-  --danger-soft: rgba(209, 63, 63, 0.12);
-  --danger-border: rgba(209, 63, 63, 0.4);
-  --info-soft: rgba(43, 116, 212, 0.14);
-  --info-border: rgba(43, 116, 212, 0.3);
-  --test-purple: #8a4fb8;
-  --test-purple-soft: rgba(138, 79, 184, 0.16);
+  --warn-soft: rgba(154, 98, 0, 0.12);
+  --warn-border: rgba(154, 98, 0, 0.4);
+  --danger-soft: rgba(193, 46, 46, 0.12);
+  --danger-border: rgba(193, 46, 46, 0.4);
+  --info-soft: rgba(30, 95, 184, 0.14);
+  --info-border: rgba(30, 95, 184, 0.3);
+  --test-purple: #7c45a6;
+  --test-purple-soft: rgba(124, 69, 166, 0.16);
 
   /* Text hierarchy */
   --text-primary: #1d2633;
-  --text-secondary: #4b5868;
-  --text-muted: #8794a4;
-  --text-accent: #008a60;
+  --text-secondary: #3f4b59;
+  --text-muted: #5d6b7a;
+  --text-accent: #007a53;
 
   /* Borders */
-  --border: rgba(29, 38, 51, 0.12);
+  --border: rgba(29, 38, 51, 0.14);
   --border-accent: rgba(0, 159, 111, 0.32);
   --border-focus: rgba(0, 159, 111, 0.55);
 
@@ -142,7 +147,7 @@ body {
   color: var(--text-primary);
   font-family: var(--font-sans);
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 400;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   user-select: none;

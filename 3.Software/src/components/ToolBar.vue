@@ -621,7 +621,7 @@ async function confirmErase() {
 }
 
 .tool-label {
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1;
   white-space: nowrap;
 }

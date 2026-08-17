@@ -143,7 +143,7 @@ onUnmounted(() => {
 
 .ui-select-item {
   padding: 6px 8px;
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: 12px;
   color: var(--text-secondary);
   border-radius: var(--radius-sm);

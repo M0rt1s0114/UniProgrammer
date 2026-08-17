@@ -182,7 +182,7 @@ function onChipAutoDetectToggle() {
 }
 
 async function startScan() {
-  await store.scanProgrammers(true)
+  await store.scanProgrammers(true, false)
 }
 
 function setProgrammerMode(mode: 'auto' | 'manual') {
@@ -202,6 +202,21 @@ watch(
       store.startProgrammerPolling(true)
     } else {
       store.stopProgrammerPolling()
+    }
+  },
+)
+
+// 编程器连接成功后触发芯片自动检测：无论连接来自手动、自动识别单设备
+// 还是多设备选单，都统一走这条 watcher，避免遗漏。
+watch(
+  () => store.status,
+  (status, previous) => {
+    if (status !== 'success' || previous === 'success') return
+    if (settings.chipAutoDetectEnabled) {
+      void spiNor.autoDetectChip()
+    } else if (store.nandPowerAutoDetect) {
+      store.addLog('上电自动检测已开启，正在自动检测芯片...')
+      void spiNor.detectChip()
     }
   },
 )
@@ -233,12 +248,6 @@ async function connect() {
       return
     }
     await store.connectSerprog(port)
-  }
-  if (store.status === 'success' && settings.chipAutoDetectEnabled) {
-    void spiNor.autoDetectChip()
-  } else if (store.status === 'success' && store.nandPowerAutoDetect) {
-    store.addLog('上电自动检测已开启，正在自动检测芯片...')
-    await spiNor.detectChip()
   }
 }
 
@@ -881,12 +890,12 @@ onMounted(async () => {
   gap: 4px;
 }
 .field-label {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-secondary);
   font-family: var(--font-sans);
 }
 .field-hint {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-muted);
   font-family: var(--font-sans);
   line-height: 1.4;

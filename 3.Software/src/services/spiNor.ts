@@ -70,6 +70,7 @@ export function useSpiNor() {
 
   // ── 检测芯片 ────────────────────────────────────────────────────────────────
   async function detectChip() {
+    store.isRunning = true
     store.detectStatus = 'detecting'
     store.currentOp = '检测芯片'
     store.addLog('正在检测 SPI Flash...')
@@ -110,6 +111,8 @@ export function useSpiNor() {
         store.status = 'error'
         store.connectedDevice = ''
       }
+    } finally {
+      store.isRunning = false
     }
   }
 

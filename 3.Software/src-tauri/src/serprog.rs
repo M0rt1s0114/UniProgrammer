@@ -128,9 +128,12 @@ impl Serprog {
     /// send NOP + Q_IFACE, and return the interface version string when the
     /// device answers like a serprog programmer. No DTR pulse is issued here
     /// so unrelated serial devices are disturbed as little as possible.
-    pub fn probe(path: &str) -> Option<String> {
+    ///
+    /// `quick` is used by the hotplug poll: shorter timeout, fewer retries,
+    /// no NOP prefix. Manual rescans use the full probe.
+    pub fn probe(path: &str, quick: bool) -> Option<String> {
         let port = serialport::new(path, 115_200)
-            .timeout(Duration::from_millis(250))
+            .timeout(Duration::from_millis(if quick { 150 } else { 250 }))
             .data_bits(serialport::DataBits::Eight)
             .parity(serialport::Parity::None)
             .stop_bits(serialport::StopBits::One)
@@ -146,14 +149,17 @@ impl Serprog {
             max_read_len: 4096,
         };
         dev.port.clear(serialport::ClearBuffer::All).ok();
-        let _ = dev.nop();
-        for _ in 0..3 {
+        if !quick {
+            let _ = dev.nop();
+        }
+        let attempts = if quick { 2 } else { 3 };
+        for _ in 0..attempts {
             if let Ok(ver) = dev.command(S_CMD_Q_IFACE, &[], 2) {
                 if ver.len() == 2 {
                     return Some(format!("v{}.{}", ver[0], ver[1]));
                 }
             }
-            std::thread::sleep(Duration::from_millis(50));
+            std::thread::sleep(Duration::from_millis(if quick { 30 } else { 50 }));
         }
         None
     }

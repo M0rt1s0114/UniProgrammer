@@ -77,7 +77,7 @@ function levelClass(level: LogEntry['level']) {
 }
 
 .log-count {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-muted);
   margin-right: auto;
 }
@@ -128,7 +128,7 @@ function levelClass(level: LogEntry['level']) {
 .log-time {
   color: var(--text-muted);
   flex-shrink: 0;
-  font-size: 10px;
+  font-size: 11px;
   min-width: 52px;
   white-space: nowrap;
   padding-top: 1px;
@@ -143,7 +143,7 @@ function levelClass(level: LogEntry['level']) {
 .log-level-test {
   flex-shrink: 0;
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   color: var(--test-purple);
   white-space: nowrap;

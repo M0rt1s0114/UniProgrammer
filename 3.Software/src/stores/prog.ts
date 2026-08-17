@@ -1,6 +1,7 @@
 import { ref, computed, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { invoke } from '@tauri-apps/api/core'
+import { listen } from '@tauri-apps/api/event'
 import { t } from '@/i18n'
 import { useSettingsStore } from '@/stores/settings'
 
@@ -113,6 +114,11 @@ export const useProgStore = defineStore('prog', () => {
   const progressMessage = ref('')
   const progressIndeterminate = ref(false)
   const progressElapsedMs = ref(0)
+
+  // 把“操作中”状态同步给 Rust，任务栏关闭/Alt+F4 由 Rust 侧拦截。
+  watch(isRunning, (running) => {
+    void invoke('set_operation_running', { running }).catch(() => undefined)
+  })
 
   // Hex 查看器数据
   const hexData = ref<Uint8Array | null>(null)
@@ -443,57 +449,89 @@ export const useProgStore = defineStore('prog', () => {
   let lastAutoConnectId = ''
   let lastAutoConnectAt = 0
   const AUTO_CONNECT_RETRY_MS = 30_000
+  let serprogListenerPromise: Promise<void> | null = null
 
-  async function scanProgrammers(forceSerprog = false) {
+  function ensureSerprogListener() {
+    if (!serprogListenerPromise) {
+      serprogListenerPromise = listen<ProgrammerCandidate[]>('serprog_scan_result', ({ payload }) => {
+        applyScanResult(payload, true)
+      }).then(() => undefined)
+    }
+    return serprogListenerPromise
+  }
+
+  function applyScanResult(incoming: ProgrammerCandidate[], mergeSerprogOnly: boolean) {
+    const merged = new Map(programmerCandidates.value.map((candidate) => [candidate.id, candidate]))
+    if (mergeSerprogOnly) {
+      for (const candidate of incoming) {
+        merged.set(candidate.id, candidate)
+      }
+    } else {
+      const incomingIds = new Set(incoming.map((candidate) => candidate.id))
+      for (const candidate of incoming) {
+        merged.set(candidate.id, candidate)
+      }
+      for (const id of [...merged.keys()]) {
+        if (!incomingIds.has(id)) merged.delete(id)
+      }
+    }
+    const list = [...merged.values()]
+    programmerCandidates.value = list
+    lastScanError = ''
+
+    // 扫到任何编程器后立刻停止轮询，把设备让给用户使用。
+    if (list.length > 0) {
+      stopProgrammerPolling()
+    }
+
+    // 已连接设备被拔出：候选里没有它了
+    if (
+      status.value === 'success' &&
+      programmerConnectedId.value &&
+      !list.some((candidate) => candidate.id === programmerConnectedId.value)
+    ) {
+      status.value = 'error'
+      connectedDevice.value = ''
+      programmerConnectedId.value = ''
+      chipDetected.value = false
+      detectedChipSize.value = 0
+      chipDetails.value = null
+      addLog('编程器已断开', 'warn')
+    }
+
+    // 自动连接策略：优先上次记住的设备；只有一个候选时自动连接。
+    // 失败后 30 秒内不重复尝试，避免每隔 2 秒刷一次错误日志。
+    if (
+      settings.programmerAutoConnect &&
+      status.value !== 'success' &&
+      status.value !== 'running'
+    ) {
+      const preferred =
+        list.find((candidate) => candidate.id === settings.programmerLastId) ??
+        (list.length === 1 ? list[0] : undefined)
+      const now = Date.now()
+      if (
+        preferred &&
+        (preferred.id !== lastAutoConnectId || now - lastAutoConnectAt > AUTO_CONNECT_RETRY_MS)
+      ) {
+        lastAutoConnectId = preferred.id
+        lastAutoConnectAt = now
+        void connectCandidate(preferred, true)
+      }
+    }
+  }
+
+  async function scanProgrammers(forceSerprog = false, quickSerprog = true) {
     if (programmerScanning.value || isRunning.value || status.value === 'running') return
     programmerScanning.value = true
     try {
+      await ensureSerprogListener()
+      // USB 结果立即返回；串口在 Rust 后台探测并通过事件补充。
       const list = await invoke<ProgrammerCandidate[]>('scan_programmers', {
         includeSerprog: forceSerprog,
+        quickSerprog,
       })
-      programmerCandidates.value = list
-      lastScanError = ''
-
-      // 扫到任何编程器后立刻停止轮询，把设备让给用户使用。
-      if (list.length > 0) {
-        stopProgrammerPolling()
-      }
-
-      // 已连接设备被拔出：候选里没有它了
-      if (
-        status.value === 'success' &&
-        programmerConnectedId.value &&
-        !list.some((candidate) => candidate.id === programmerConnectedId.value)
-      ) {
-        status.value = 'error'
-        connectedDevice.value = ''
-        programmerConnectedId.value = ''
-        chipDetected.value = false
-        detectedChipSize.value = 0
-        chipDetails.value = null
-        addLog('编程器已断开', 'warn')
-      }
-
-      // 自动连接策略：优先上次记住的设备；只有一个候选时自动连接。
-      // 失败后 30 秒内不重复尝试，避免每隔 2 秒刷一次错误日志。
-      if (
-        settings.programmerAutoConnect &&
-        status.value !== 'success' &&
-        status.value !== 'running'
-      ) {
-        const preferred =
-          list.find((candidate) => candidate.id === settings.programmerLastId) ??
-          (list.length === 1 ? list[0] : undefined)
-        const now = Date.now()
-        if (
-          preferred &&
-          (preferred.id !== lastAutoConnectId || now - lastAutoConnectAt > AUTO_CONNECT_RETRY_MS)
-        ) {
-          lastAutoConnectId = preferred.id
-          lastAutoConnectAt = now
-          await connectCandidate(preferred, true)
-        }
-      }
+      applyScanResult(list, false)
     } catch (e: unknown) {
       const message = String(e)
       if (message !== lastScanError) {
@@ -533,10 +571,10 @@ export const useProgStore = defineStore('prog', () => {
   function startProgrammerPolling(immediate = false) {
     if (programmerPollTimer) return
     if (immediate) {
-      void scanProgrammers(true)
+      void scanProgrammers(true, true)
     }
     programmerPollTimer = setInterval(() => {
-      void scanProgrammers(false)
+      void scanProgrammers(false, true)
     }, 2000)
   }
 

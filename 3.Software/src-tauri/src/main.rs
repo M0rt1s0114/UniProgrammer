@@ -14,7 +14,7 @@ use serde::Serialize;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
-use tauri::{Emitter, Manager, State};
+use tauri::{Emitter, Manager, State, WindowEvent};
 
 #[derive(Serialize)]
 struct ChipDetectResult {
@@ -146,6 +146,11 @@ struct AppState {
     /// Last serial-port snapshot. Serial probing only runs again when this
     /// list changes, so the hotplug poll never chats with every COM port.
     last_serial_ports: Vec<String>,
+    /// Last serprog probe result, reused while the port list is unchanged.
+    cached_serprog: Vec<autodetect::ProgrammerCandidate>,
+    /// Mirrored from the frontend: true while read/write/erase/verify/auto
+    /// flow is executing. Used by the Rust close-requested handler.
+    operation_running: bool,
 }
 
 fn exe_dir() -> PathBuf {
@@ -574,12 +579,11 @@ async fn initialize(
         ChipKind::Ch347F => "CH347F Programmer",
     };
     let name = base_name.to_string();
-    let io_level_v = io_level_mv as f64 / 1000.0;
     s.connected_device = Some(name.clone());
-    Ok(format!(
-        "已连接: {}（目标 VCC/IO 电平 {:.1}V）",
-        name, io_level_v
-    ))
+    // TODO: VCC/IO 电平切换尚未与硬件绑定，先不输出目标电压日志；
+    // 后续实现电压控制后再恢复为：
+    // Ok(format!("已连接: {}（目标 VCC/IO 电平 {:.1}V）", name, io_level_v))
+    Ok(format!("已连接: {}", name))
 }
 
 #[tauri::command]
@@ -600,24 +604,45 @@ async fn connect_serprog(
 
 /// Scan for supported programmers.
 ///
-/// `include_serprog` forces a serial handshake probe. When false, ports are
-/// only probed if the port list changed since the last scan, so the 2-second
-/// hotplug poll stays quiet around unrelated COM devices.
+/// USB results come back immediately; serprog probing runs in the background
+/// and is delivered through the `serprog_scan_result` event. Port probing is
+/// cached and only re-runs when the serial port list changes or the caller
+/// forces it (`include_serprog`).
 #[tauri::command]
 async fn scan_programmers(
     state: State<'_, Mutex<AppState>>,
+    app: tauri::AppHandle,
     include_serprog: bool,
+    quick_serprog: bool,
 ) -> Result<Vec<autodetect::ProgrammerCandidate>, String> {
-    let mut s = state.lock().map_err(|e| e.to_string())?;
-    let mut candidates = autodetect::scan_ch34x();
+    let (candidates, probe_ports) = {
+        let mut s = state.lock().map_err(|e| e.to_string())?;
+        let mut candidates = autodetect::scan_ch34x();
+        let ports: Vec<String> = serialport::available_ports()
+            .map(|list| list.into_iter().map(|p| p.port_name).collect())
+            .unwrap_or_default();
+        let ports_changed = include_serprog || ports != s.last_serial_ports;
+        if ports_changed {
+            s.last_serial_ports = ports.clone();
+            // 保留上一轮结果，避免串口探测完成前列表闪烁。
+            candidates.extend(s.cached_serprog.clone());
+            (candidates, Some(ports))
+        } else {
+            candidates.extend(s.cached_serprog.clone());
+            (candidates, None)
+        }
+    };
 
-    let ports: Vec<String> = serialport::available_ports()
-        .map(|list| list.into_iter().map(|p| p.port_name).collect())
-        .unwrap_or_default();
-    let ports_changed = include_serprog || ports != s.last_serial_ports;
-    if ports_changed {
-        candidates.extend(autodetect::scan_serprog(&ports));
-        s.last_serial_ports = ports.clone();
+    if let Some(ports) = probe_ports {
+        let probe_app = app.clone();
+        std::thread::spawn(move || {
+            let found = autodetect::scan_serprog(&ports, quick_serprog);
+            let state = probe_app.state::<Mutex<AppState>>();
+            if let Ok(mut s) = state.lock() {
+                s.cached_serprog = found.clone();
+            }
+            probe_app.emit("serprog_scan_result", found).ok();
+        });
     }
 
     Ok(candidates)
@@ -2084,6 +2109,13 @@ async fn load_firmware_file(path: String) -> Result<FirmwareLoadResult, String> 
 }
 
 #[tauri::command]
+fn set_operation_running(state: State<'_, Mutex<AppState>>, running: bool) -> Result<(), String> {
+    let mut s = state.lock().map_err(|e| e.to_string())?;
+    s.operation_running = running;
+    Ok(())
+}
+
+#[tauri::command]
 async fn force_close_window(app: tauri::AppHandle) -> Result<(), String> {
     let window = app.get_webview_window("main").ok_or("找不到主窗口")?;
     window.destroy().map_err(|e| e.to_string())
@@ -2113,7 +2145,23 @@ fn main() {
             connected_device: None,
             detected: None,
             last_serial_ports: Vec::new(),
+            cached_serprog: Vec::new(),
+            operation_running: false,
         }))
+        .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                let busy = window
+                    .state::<Mutex<AppState>>()
+                    .lock()
+                    .map(|s| s.operation_running)
+                    .unwrap_or(false);
+                if busy {
+                    // Rust 侧同步拦截，保证任务栏右键“关闭窗口”也走确认流程。
+                    api.prevent_close();
+                    let _ = window.emit("close_requested_while_busy", ());
+                }
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             load_chip_lib,
             initialize,
@@ -2148,6 +2196,7 @@ fn main() {
             load_firmware_file,
             write_file,
             force_close_window,
+            set_operation_running,
             load_settings,
             save_settings,
         ])

@@ -86,10 +86,10 @@ pub fn scan_ch34x() -> Vec<ProgrammerCandidate> {
 
 /// Probe serial ports with the serprog handshake. Non-serprog ports are left
 /// alone; `serprog::probe` uses a short timeout and no DTR reset.
-pub fn scan_serprog(ports: &[String]) -> Vec<ProgrammerCandidate> {
+pub fn scan_serprog(ports: &[String], quick: bool) -> Vec<ProgrammerCandidate> {
     let mut out = Vec::new();
     for port in ports {
-        if let Some(version) = crate::serprog::Serprog::probe(port) {
+        if let Some(version) = crate::serprog::Serprog::probe(port, quick) {
             out.push(ProgrammerCandidate {
                 id: format!("serprog:{port}"),
                 kind: "serprog".to_string(),
