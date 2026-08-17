@@ -530,6 +530,7 @@ impl Chiplib {
             ("Microwire", 9),
             ("AVR", 10),
             ("MCU", 11),
+            ("PARALLEL_NAND", 12),
         ]
         .iter()
         .cloned()
@@ -903,6 +904,7 @@ fn protocol_id_to_name(id: u16) -> String {
         9 => "Microwire".to_string(),
         10 => "AVR".to_string(),
         11 => "MCU".to_string(),
+        12 => "PARALLEL_NAND".to_string(),
         _ => "Unknown".to_string(),
     }
 }
@@ -921,6 +923,7 @@ fn protocol_name_to_id(name: &str) -> u16 {
         "Microwire" => 9,
         "AVR" => 10,
         "MCU" => 11,
+        "PARALLEL_NAND" => 12,
         _ => 0xFF,
     }
 }
@@ -941,7 +944,7 @@ mod tests {
     #[test]
     fn xml_fallback_contains_new_chip() {
         let lib = Chiplib::load_xml("../chiplib.xml").expect("load chiplib.xml");
-        assert_eq!(lib.entry_count(), 1072);
+        assert_eq!(lib.entry_count(), 1173);
         let d40 = lib.find_by_id("5E3213").expect("ZB25D40B in XML fallback");
         assert_eq!(d40.vendor, "Zbit");
         assert_eq!(d40.model, "ZB25D40B");
@@ -971,7 +974,7 @@ mod tests {
     #[test]
     fn load_enriched_bin() {
         let lib = Chiplib::load_bin("chiplib.bin").expect("load chiplib.bin");
-        assert_eq!(lib.entries.len(), 1072);
+        assert_eq!(lib.entries.len(), 1173);
 
         let nor = lib.find_by_id("EF4018").expect("W25Q128 JEDEC");
         assert_eq!(nor.protocol, "SPI_NOR");
