@@ -1311,7 +1311,7 @@ async fn read_chip(
     size: u64,
     start_addr: u64,
     bad_block_mode: Option<String>,
-) -> Result<Vec<u8>, String> {
+) -> Result<tauri::ipc::Response, String> {
     let mut s = state.lock().map_err(|e| e.to_string())?;
 
     if s.serprog.is_some() && s.ch34x.is_none() {
@@ -1359,7 +1359,7 @@ async fn read_chip(
             )
             .ok();
         }
-        return Ok(out);
+        return Ok(tauri::ipc::Response::new(out));
     }
 
     // Non-NOR protocols dispatch to the ported IMSProg command sequences.
@@ -1379,7 +1379,8 @@ async fn read_chip(
                         app.emit("read_progress", ReadProgressEvent { done, total })
                             .ok();
                     },
-                );
+                )
+                .map(tauri::ipc::Response::new);
             }
             "SPI_DATA_45" => {
                 let dev = open_ch34x_mode(&s, bus)?;
@@ -1393,7 +1394,8 @@ async fn read_chip(
                         app.emit("read_progress", ReadProgressEvent { done, total })
                             .ok();
                     },
-                );
+                )
+                .map(tauri::ipc::Response::new);
             }
             "SPI_NAND" => {
                 let dev = open_ch34x_mode(&s, bus)?;
@@ -1409,7 +1411,8 @@ async fn read_chip(
                 return protocols::nand_read(&dev, &params, size, &op_bad, &mut |done, total| {
                     app.emit("read_progress", ReadProgressEvent { done, total })
                         .ok();
-                });
+                })
+                .map(tauri::ipc::Response::new);
             }
             "I2C" | "I2C_F-RAM" | "I2C_SPD" => {
                 let dev = open_ch34x_mode(&s, bus)?;
@@ -1423,7 +1426,8 @@ async fn read_chip(
                         app.emit("read_progress", ReadProgressEvent { done, total })
                             .ok();
                     },
-                );
+                )
+                .map(tauri::ipc::Response::new);
             }
             "Microwire" => {
                 let dev = open_ch34x_mode(&s, bus)?;
@@ -1437,7 +1441,8 @@ async fn read_chip(
                         app.emit("read_progress", ReadProgressEvent { done, total })
                             .ok();
                     },
-                );
+                )
+                .map(tauri::ipc::Response::new);
             }
             other => return Err(format!("协议 {} 暂未实现", other)),
         }
@@ -1503,18 +1508,43 @@ async fn read_chip(
         spi_4byte_mode(&dev, params.alg, false)?;
     }
 
-    Ok(out)
+    Ok(tauri::ipc::Response::new(out))
+}
+
+/// Extract the raw bytes payload sent with `invoke('write_chip', uint8Array, ...)`.
+/// Tauri delivers a top-level `Uint8Array`/`ArrayBuffer` body as `InvokeBody::Raw`,
+/// which keeps multi-megabyte NAND images from being JSON-serialized as number arrays.
+fn raw_request_bytes<'a>(request: &'a tauri::ipc::Request<'_>) -> Result<&'a [u8], String> {
+    match request.body() {
+        tauri::ipc::InvokeBody::Raw(bytes) => Ok(bytes.as_slice()),
+        tauri::ipc::InvokeBody::Json(_) => {
+            Err("写入/校验数据必须以原始字节（Uint8Array/ArrayBuffer）发送".into())
+        }
+    }
+}
+
+/// Read a parameter that the frontend passed as an invoke option header.
+fn request_header(request: &tauri::ipc::Request<'_>, name: &str) -> Option<String> {
+    request
+        .headers()
+        .get(name)
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_owned)
 }
 
 #[tauri::command]
 async fn write_chip(
     state: State<'_, Mutex<AppState>>,
     app: tauri::AppHandle,
-    data: Vec<u8>,
-    start_addr: u64,
-    force_segmented: Option<bool>,
-    bad_block_mode: Option<String>,
+    request: tauri::ipc::Request<'_>,
 ) -> Result<String, String> {
+    let data = raw_request_bytes(&request)?;
+    let start_addr: u64 = request_header(&request, "x-start-addr")
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(0);
+    let force_segmented: Option<bool> =
+        request_header(&request, "x-force-segmented").and_then(|value| value.parse().ok());
+    let bad_block_mode: Option<String> = request_header(&request, "x-bad-block-mode");
     let mut s = state.lock().map_err(|e| e.to_string())?;
     let total = data.len();
 
@@ -1568,7 +1598,7 @@ async fn write_chip(
                 return protocols::s95_write(
                     &dev,
                     &params,
-                    &data,
+                    data,
                     start_addr,
                     &mut |done, total| {
                         app.emit("write_progress", WriteProgressEvent { done, total })
@@ -1583,7 +1613,7 @@ async fn write_chip(
                 return protocols::at45_write(
                     &dev,
                     &params,
-                    &data,
+                    data,
                     start_addr,
                     &mut |done, total| {
                         app.emit("write_progress", WriteProgressEvent { done, total })
@@ -1597,6 +1627,7 @@ async fn write_chip(
                 let params = protocols::ChipParams::from_info(info);
                 let mode = parse_nand_bad_block_mode(bad_block_mode.as_deref());
                 let bad_blocks = scan_nand_bad_blocks_for_mode(&dev, info, &app, mode)?;
+                let bad_count = bad_blocks.len();
                 let links = prepare_bypass_if_needed(&dev, info, mode, &bad_blocks)?;
                 let op_bad = if mode == protocols::NandBadBlockMode::Bypass {
                     Vec::new()
@@ -1606,7 +1637,7 @@ async fn write_chip(
                 protocols::nand_write(
                     &dev,
                     &params,
-                    &data,
+                    data,
                     info.size,
                     &op_bad,
                     mode,
@@ -1616,14 +1647,20 @@ async fn write_chip(
                             .ok();
                     },
                 )?;
-                if links.is_empty() {
-                    return Ok(format!("写入完成，共 {} 字节", total));
+                if !links.is_empty() {
+                    return Ok(format!(
+                        "写入完成，共 {} 字节（已写入 {} 条 BBM 坏块映射）",
+                        total,
+                        links.len()
+                    ));
                 }
-                return Ok(format!(
-                    "写入完成，共 {} 字节（已写入 {} 条 BBM 坏块映射）",
-                    total,
-                    links.len()
-                ));
+                if bad_count > 0 {
+                    return Ok(format!(
+                        "写入完成，共 {} 字节（发现 {} 个坏块，已跳过）",
+                        total, bad_count
+                    ));
+                }
+                return Ok(format!("写入完成，共 {} 字节", total));
             }
             "I2C" | "I2C_F-RAM" | "I2C_SPD" => {
                 let dev = open_ch34x_mode(&s, bus)?;
@@ -1631,7 +1668,7 @@ async fn write_chip(
                 return protocols::i2c_write(
                     &dev,
                     &params,
-                    &data,
+                    data,
                     start_addr,
                     &mut |done, total| {
                         app.emit("write_progress", WriteProgressEvent { done, total })
@@ -1643,16 +1680,10 @@ async fn write_chip(
             "Microwire" => {
                 let dev = open_ch34x_mode(&s, bus)?;
                 let params = protocols::ChipParams::from_info(info);
-                return protocols::mw_write(
-                    &dev,
-                    &params,
-                    &data,
-                    start_addr,
-                    &mut |done, total| {
-                        app.emit("write_progress", WriteProgressEvent { done, total })
-                            .ok();
-                    },
-                )
+                return protocols::mw_write(&dev, &params, data, start_addr, &mut |done, total| {
+                    app.emit("write_progress", WriteProgressEvent { done, total })
+                        .ok();
+                })
                 .map(|_| format!("写入完成，共 {} 字节", total));
             }
             other => return Err(format!("协议 {} 暂未实现", other)),
@@ -1723,10 +1754,13 @@ async fn write_chip(
 async fn verify_chip(
     state: State<'_, Mutex<AppState>>,
     app: tauri::AppHandle,
-    data: Vec<u8>,
-    start_addr: u64,
-    bad_block_mode: Option<String>,
+    request: tauri::ipc::Request<'_>,
 ) -> Result<String, String> {
+    let data = raw_request_bytes(&request)?;
+    let start_addr: u64 = request_header(&request, "x-start-addr")
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(0);
+    let bad_block_mode: Option<String> = request_header(&request, "x-bad-block-mode");
     let mut s = state.lock().map_err(|e| e.to_string())?;
     let total = data.len() as u64;
 
@@ -2116,7 +2150,7 @@ fn set_operation_running(state: State<'_, Mutex<AppState>>, running: bool) -> Re
 }
 
 #[tauri::command]
-async fn force_close_window(app: tauri::AppHandle) -> Result<(), String> {
+fn force_close_window(app: tauri::AppHandle) -> Result<(), String> {
     let window = app.get_webview_window("main").ok_or("找不到主窗口")?;
     window.destroy().map_err(|e| e.to_string())
 }

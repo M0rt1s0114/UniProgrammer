@@ -169,7 +169,7 @@ const gotoText = ref('')
 const fillText = ref('FF')
 
 function scrollToRow(row: number) {
-  const target = Math.max(0, Math.min(row, totalRows.value - 1)) * ROW_HEIGHT
+  const target = scrollTargetForRow(row)
   scrollTop.value = target
   nextTick(() => {
     if (containerRef.value) containerRef.value.scrollTop = target
@@ -248,12 +248,33 @@ const containerHeight = ref(0)
 const totalRows = computed(() => (props.data ? Math.ceil(props.data.length / BYTES_PER_ROW) : 0))
 const totalHeight = computed(() => totalRows.value * ROW_HEIGHT)
 
+// 浏览器会钳制超高的滚动容器（Chromium 上限约 3350 万 px）。
+// 128MB 镜像有 800 多万行、真实高度 1.6 亿 px，会被截断到无法滚到末尾，
+// 因此大缓冲区使用等比缩放的虚拟高度。
+const MAX_VIRTUAL_HEIGHT = 30_000_000
+const usesScaledScroll = computed(() => totalHeight.value > MAX_VIRTUAL_HEIGHT)
+const viewportHeight = computed(() => Math.min(totalHeight.value, MAX_VIRTUAL_HEIGHT))
+
+function scrollTargetForRow(row: number): number {
+  const lastRow = Math.max(0, totalRows.value - 1)
+  const clamped = Math.max(0, Math.min(row, lastRow))
+  if (!usesScaledScroll.value || lastRow === 0) return clamped * ROW_HEIGHT
+  return Math.floor((clamped / lastRow) * MAX_VIRTUAL_HEIGHT)
+}
+
+function rowForScroll(scroll: number): number {
+  if (!usesScaledScroll.value) return Math.floor(scroll / ROW_HEIGHT)
+  if (totalRows.value <= 1) return 0
+  const ratio = Math.max(0, Math.min(1, scroll / MAX_VIRTUAL_HEIGHT))
+  return Math.floor(ratio * (totalRows.value - 1))
+}
+
 const visibleRowCount = computed(() => {
   if (containerHeight.value <= 0) return 22
   return Math.ceil(containerHeight.value / ROW_HEIGHT) + 8
 })
 
-const startRow = computed(() => Math.max(0, Math.floor(scrollTop.value / ROW_HEIGHT) - 4))
+const startRow = computed(() => Math.max(0, rowForScroll(scrollTop.value) - 4))
 const endRow = computed(() => Math.min(totalRows.value, startRow.value + visibleRowCount.value))
 
 interface HexRow {
@@ -292,7 +313,9 @@ const visibleRows = computed<HexRow[]>(() => {
   return rows
 })
 
-const paddingTop = computed(() => startRow.value * ROW_HEIGHT)
+const paddingTop = computed(() =>
+  usesScaledScroll.value ? scrollTargetForRow(startRow.value) : startRow.value * ROW_HEIGHT,
+)
 
 function onScroll(e: Event) {
   scrollTop.value = (e.target as HTMLElement).scrollTop
@@ -419,7 +442,7 @@ onUnmounted(() => {
         <span>{{ t('hex.noData') }}</span>
       </div>
 
-      <div v-else :style="{ height: totalHeight + 'px', position: 'relative' }">
+      <div v-else :style="{ height: viewportHeight + 'px', position: 'relative' }">
         <div :style="{ paddingTop: paddingTop + 'px' }">
           <div
             v-for="row in visibleRows"

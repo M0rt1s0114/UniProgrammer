@@ -1048,6 +1048,23 @@ pub fn nand_write(
     let total = data.len() as u64;
     let total_pages = size.div_ceil(page_size);
 
+    // Skip 模式会为每个坏块跳过整个物理块。写满整片镜像时提前算出可用容量，
+    // 避免先写十几分钟、到片尾才发现放不下，报错也更直观。
+    if mode == NandBadBlockMode::Skip && !bad_set.is_empty() {
+        let bad_pages = bad_set.len() as u64 * pages_per_block as u64;
+        let usable_pages = total_pages.saturating_sub(bad_pages);
+        let usable_bytes = usable_pages.saturating_mul(page_size);
+        if total > usable_bytes {
+            return Err(format!(
+                "数据 {} 字节超过 NAND 可用容量 {} 字节（Skip 模式需跳过 {} 个坏块，每个坏块占用 {} 字节）",
+                total,
+                usable_bytes,
+                bad_set.len(),
+                block_size
+            ));
+        }
+    }
+
     let mut offset = 0usize;
     let mut page_no = 0u32;
     while offset < data.len() {

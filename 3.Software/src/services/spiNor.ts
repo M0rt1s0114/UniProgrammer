@@ -525,15 +525,18 @@ export function useSpiNor() {
           total,
         )
       })
-      const raw = await invoke<number[]>('read_chip', {
+      // 后端用 tauri::ipc::Response 返回原始字节（ArrayBuffer），
+      // 大容量 NAND（如 128MB）不再经过 JSON number[] 序列化，避免前端卡死。
+      const raw = await invoke<ArrayBuffer>('read_chip', {
         size: store.detectedChipSize,
         startAddr: 0,
         badBlockMode: store.nandBadBlockMode,
       })
-      store.hexData = new Uint8Array(raw)
+      const bytes = new Uint8Array(raw)
+      store.hexData = bytes
       store.progress = 100
       store.progressMessage = '读取完成'
-      store.addLog(`读取完成，共 ${raw.length} 字节`, 'success')
+      store.addLog(`读取完成，共 ${bytes.length} 字节`, 'success')
     } catch (e: unknown) {
       autoStepFailed = true
       store.addLog(`读取失败: ${String(e)}`, 'error')
@@ -556,18 +559,22 @@ export function useSpiNor() {
     }
     if (!forceSegmented && store.selectedType === 'SPI_NAND' && store.nandReadBadBlockFirst) {
       try {
-        await scanBadBlocks()
+        const scan = await scanBadBlocks()
+        if (scan.badCount > 0) {
+          store.addLog('坏块扫描属于提示信息：写入会按所选坏块模式继续执行', 'info')
+        }
       } catch {
         autoStepFailed = true
         return
       }
     }
+    const payload = store.hexData
     store.isRunning = true
     store.currentOp = '写入芯片'
     store.progress = 0
     store.progressMessage = '准备写入...'
     const opStart = Date.now()
-    store.addLog(`开始写入，${store.hexData.length} 字节...`)
+    store.addLog(`开始写入，${payload.length} 字节...`)
 
     let unlisten: UnlistenFn | null = null
     try {
@@ -581,13 +588,14 @@ export function useSpiNor() {
           total,
         )
       })
-      // Tauri 传 Vec<u8> 需要 Array<number>，从 Uint8Array 转一下
-      const msg = await invoke<string>('write_chip', {
-        data: Array.from(store.hexData),
-        startAddr: 0,
-        forceSegmented,
-        badBlockMode: store.nandBadBlockMode,
-      })
+      // 顶层 Uint8Array 会作为原始字节体（application/octet-stream）交给
+      // tauri::ipc::Request，不再走 JSON number[]，128MB 镜像也能保持流畅。
+      const headers: Record<string, string> = {
+        'x-start-addr': '0',
+        'x-force-segmented': String(forceSegmented),
+        'x-bad-block-mode': store.nandBadBlockMode,
+      }
+      const msg = await invoke<string>('write_chip', payload, { headers })
       store.progress = 100
       store.progressMessage = '写入完成'
       store.addLog(msg, 'success')
@@ -624,12 +632,13 @@ export function useSpiNor() {
       store.addLog('HexViewer 中没有数据，无法校验', 'warn')
       return
     }
+    const payload = store.hexData
     store.isRunning = true
     store.currentOp = '校验芯片'
     store.progress = 0
     store.progressMessage = '准备校验...'
     const opStart = Date.now()
-    store.addLog(`开始校验，${store.hexData.length} 字节...`)
+    store.addLog(`开始校验，${payload.length} 字节...`)
 
     let unlisten: UnlistenFn | null = null
     try {
@@ -643,11 +652,12 @@ export function useSpiNor() {
           total,
         )
       })
-      const msg = await invoke<string>('verify_chip', {
-        data: Array.from(store.hexData),
-        startAddr: 0,
-        badBlockMode: store.nandBadBlockMode,
-      })
+      // 与写入一致：顶层 Uint8Array 走原始字节通道，避免大镜像 JSON 卡顿。
+      const headers: Record<string, string> = {
+        'x-start-addr': '0',
+        'x-bad-block-mode': store.nandBadBlockMode,
+      }
+      const msg = await invoke<string>('verify_chip', payload, { headers })
       store.progress = 100
       store.progressMessage = '校验完成'
       store.addLog(msg, 'success')

@@ -1,4 +1,4 @@
-import { ref, computed, watch } from 'vue'
+import { ref, shallowRef, computed, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
@@ -120,8 +120,10 @@ export const useProgStore = defineStore('prog', () => {
     void invoke('set_operation_running', { running }).catch(() => undefined)
   })
 
-  // Hex 查看器数据
-  const hexData = ref<Uint8Array | null>(null)
+  // Hex 查看器数据。
+  // 用 shallowRef 存大块二进制：128MB 镜像不应被 Vue 深度代理，
+  // 否则每个字节访问都走 Proxy，读/写/导出都会明显变卡。
+  const hexData = shallowRef<Uint8Array | null>(null)
 
   // 文件信息
   const filePath = ref('')
