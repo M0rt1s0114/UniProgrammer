@@ -1,6 +1,6 @@
 # Contributing to UniProgrammer
 
-[中文](CONTRIBUTING_CN.md)
+[涓枃](CONTRIBUTING_CN.md)
 
 Thank you for your interest in contributing! UniProgrammer is a cross-platform
 SPI flash programmer with a pluggable hardware abstraction layer (HAL). This
@@ -79,7 +79,7 @@ Examples:
 feat(hal): add Windows DLL backend
 fix(serprog): correct S_BUSTYPE and O_SPIOP opcodes
 refactor(chiplib): replace XML fallback with typed loader
-chore(release): 0.2.1-alpha.5
+chore(release): 0.3.0-alpha.1
 ```
 
 Breaking changes use `!` or a `BREAKING CHANGE:` footer:
@@ -178,7 +178,7 @@ Hardware changes require manual validation. Use the table below as a checklist:
 ## Versioning
 
 - Semantic Versioning 2.0.0
-- Git tags use a `v` prefix: `v0.2.1-alpha.5`
+- Git tags use a `v` prefix: `v0.3.0-alpha.1`
 - Pre-releases: `-alpha.N`, `-beta.N`, `-rc.N`
 - Pushing a `v*` tag triggers the release workflow
 

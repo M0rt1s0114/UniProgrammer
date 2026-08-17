@@ -1,23 +1,181 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useProgStore } from '@/stores/prog'
+import { useSettingsStore } from '@/stores/settings'
 import { useSpiNor } from '@/services/spiNor'
 import { t } from '@/i18n'
 import SettingsDialog from '@/components/SettingsDialog.vue'
 import AboutDialog from '@/components/AboutDialog.vue'
 
 const store = useProgStore()
+const settings = useSettingsStore()
 const spiNor = useSpiNor()
 
 // Toolbar icons supplied by the project owner.
 // All four operation icons are Font Awesome Free 7.3.1 (CC BY 4.0).
 
 const showEraseConfirm = ref(false)
+const showAutoConfirm = ref(false)
+const showAutoConfig = ref(false)
 const showSettings = ref(false)
 const showAbout = ref(false)
 
+const AUTO_STEP_KEYS = ['read', 'erase', 'blankCheck', 'write', 'verify'] as const
+type AutoStepKey = (typeof AUTO_STEP_KEYS)[number]
+const autoStepLabels: Record<AutoStepKey, string> = {
+  read: t('auto.stepRead'),
+  erase: t('auto.stepErase'),
+  blankCheck: t('auto.stepBlankCheck'),
+  write: t('auto.stepWrite'),
+  verify: t('auto.stepVerify'),
+}
+
+function parseAutoOrder(value: string): AutoStepKey[] {
+  const valid = new Set<string>(AUTO_STEP_KEYS)
+  return value
+    .split(',')
+    .map((step) => step.trim())
+    .filter((step): step is AutoStepKey => valid.has(step))
+}
+
+interface AutoEntry {
+  uid: number
+  step: AutoStepKey
+}
+
+let autoEntryUid = 0
+function entriesFromOrder(value: string): AutoEntry[] {
+  return parseAutoOrder(value).map((step) => ({ uid: ++autoEntryUid, step }))
+}
+
+// 设置弹窗内部使用草稿；点“保存”才写回 settings，“关闭”直接丢弃。
+const draftAutoEntries = ref<AutoEntry[]>([])
+const draftAutoSteps = computed<AutoStepKey[]>(() => draftAutoEntries.value.map((entry) => entry.step))
+const savedAutoSteps = computed<AutoStepKey[]>(() => parseAutoOrder(settings.autoOrder))
+const availableAutoSteps = computed<AutoStepKey[]>(() => [...AUTO_STEP_KEYS])
+const allAutoStepsUsed = computed(
+  () => new Set(draftAutoSteps.value).size === AUTO_STEP_KEYS.length,
+)
+const draftAutoStepSummary = computed(() =>
+  draftAutoSteps.value.map((step) => autoStepLabels[step]).join(' → '),
+)
+const savedAutoStepSummary = computed(() =>
+  savedAutoSteps.value.map((step) => autoStepLabels[step]).join(' → '),
+)
+
+watch(
+  () => showAutoConfig.value,
+  (open) => {
+    stopAutoDrag()
+    if (open) {
+      draftAutoEntries.value = entriesFromOrder(settings.autoOrder)
+    }
+  },
+)
+
+function addAutoStep(step: AutoStepKey) {
+  draftAutoEntries.value = [...draftAutoEntries.value, { uid: ++autoEntryUid, step }]
+}
+
+function removeAutoStep(index: number) {
+  const entries = [...draftAutoEntries.value]
+  entries.splice(index, 1)
+  draftAutoEntries.value = entries
+}
+
+function moveAutoStep(index: number, delta: -1 | 1) {
+  const target = index + delta
+  if (target < 0 || target >= draftAutoEntries.value.length) return
+  reorderAutoStep(index, target)
+}
+
+function reorderAutoStep(from: number, target: number) {
+  if (from === target) return
+  const entries = [...draftAutoEntries.value]
+  const [entry] = entries.splice(from, 1)
+  entries.splice(target, 0, entry)
+  draftAutoEntries.value = entries
+}
+
+function saveAutoConfig() {
+  settings.autoOrder = draftAutoSteps.value.join(',')
+  showAutoConfig.value = false
+}
+
+function closeAutoConfig() {
+  showAutoConfig.value = false
+}
+
+const draggedAutoIndex = ref<number | null>(null)
+const dropTargetIndex = ref<number | null>(null)
+let autoDragCleanup: (() => void) | null = null
+
+function stopAutoDrag() {
+  autoDragCleanup?.()
+  autoDragCleanup = null
+  draggedAutoIndex.value = null
+  dropTargetIndex.value = null
+  document.body.style.userSelect = ''
+}
+
+function startAutoDrag(index: number, event: PointerEvent) {
+  if (autoDragCleanup) return
+  event.preventDefault()
+  draggedAutoIndex.value = index
+  dropTargetIndex.value = null
+  document.body.style.userSelect = 'none'
+
+  const onMove = (moveEvent: PointerEvent) => {
+    const items = Array.from(document.querySelectorAll<HTMLElement>('.auto-order-item'))
+    if (items.length < 2) return
+    let best = -1
+    let bestDistance = Number.POSITIVE_INFINITY
+    items.forEach((item, itemIndex) => {
+      const rect = item.getBoundingClientRect()
+      const centerY = rect.top + rect.height / 2
+      const distance = Math.abs(moveEvent.clientY - centerY)
+      if (distance < bestDistance) {
+        bestDistance = distance
+        best = itemIndex
+      }
+    })
+    dropTargetIndex.value = best === draggedAutoIndex.value ? null : best
+  }
+  const onStop = () => {
+    const from = draggedAutoIndex.value
+    const target = dropTargetIndex.value
+    stopAutoDrag()
+    if (from !== null && target !== null) {
+      reorderAutoStep(from, target)
+    }
+  }
+
+  window.addEventListener('pointermove', onMove)
+  window.addEventListener('pointerup', onStop, { once: true })
+  window.addEventListener('pointercancel', onStop, { once: true })
+  autoDragCleanup = () => {
+    window.removeEventListener('pointermove', onMove)
+    window.removeEventListener('pointerup', onStop)
+    window.removeEventListener('pointercancel', onStop)
+  }
+}
+
 function requestErase() {
   showEraseConfirm.value = true
+}
+
+function requestAuto() {
+  if (savedAutoSteps.value.includes('erase') || savedAutoSteps.value.includes('write')) {
+    showAutoConfirm.value = true
+    return
+  }
+  // 空流程不弹设置框，只由 runAuto 输出“未设置自动化流程”
+  void spiNor.runAuto()
+}
+
+function confirmAuto() {
+  showAutoConfirm.value = false
+  void spiNor.runAuto()
 }
 
 async function confirmErase() {
@@ -165,6 +323,64 @@ async function confirmErase() {
         </span>
         <span class="tool-label">{{ t('action.verify') }}</span>
       </button>
+
+      <button
+        class="tool-btn blank-check-icon"
+        :title="t('action.blankCheck')"
+        :disabled="!store.canOperate || store.isRunning"
+        @click="spiNor.blankCheckChip()"
+      >
+        <span class="tool-icon">
+          <svg width="18" height="18" viewBox="0 0 640 640" fill="currentColor">
+            <path
+              d="M480 96C515.3 96 544 124.7 544 160L544 480C544 515.3 515.3 544 480 544L160 544C124.7 544 96 515.3 96 480L96 160C96 124.7 124.7 96 160 96L480 96zM438 209.7C427.3 201.9 412.3 204.3 404.5 215L285.1 379.2L233 327.1C223.6 317.7 208.4 317.7 199.1 327.1C189.8 336.5 189.7 351.7 199.1 361L271.1 433C276.1 438 283 440.5 289.9 440C296.8 439.5 303.3 435.9 307.4 430.2L443.3 243.2C451.1 232.5 448.7 217.5 438 209.7z"
+            />
+          </svg>
+        </span>
+        <span class="tool-label">{{ t('action.blankCheck') }}</span>
+      </button>
+
+      <button
+        class="tool-btn auto-icon"
+        :title="t('action.auto')"
+        :disabled="!store.canOperate || store.isRunning"
+        @click="requestAuto"
+      >
+        <span class="tool-icon">
+          <svg width="18" height="18" viewBox="0 0 640 640" fill="currentColor">
+            <path
+              d="M64 320C64 178.6 178.6 64 320 64C461.4 64 576 178.6 576 320C576 461.4 461.4 576 320 576C178.6 576 64 461.4 64 320zM252.3 211.1C244.7 215.3 240 223.4 240 232L240 408C240 416.7 244.7 424.7 252.3 428.9C259.9 433.1 269.1 433 276.6 428.4L420.6 340.4C427.7 336 432.1 328.3 432.1 319.9C432.1 311.5 427.7 303.8 420.6 299.4L276.6 211.4C269.2 206.9 259.9 206.7 252.3 210.9z"
+            />
+          </svg>
+        </span>
+        <span class="tool-label">{{ t('action.auto') }}</span>
+      </button>
+
+      <button
+        class="tool-btn auto-gear"
+        :title="t('auto.settings')"
+        :disabled="store.isRunning"
+        @click="showAutoConfig = true"
+      >
+        <span class="tool-icon">
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <circle cx="12" cy="12" r="3" />
+            <path
+              d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.55-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34h.08a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55h.08a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.08a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1z"
+            />
+          </svg>
+        </span>
+        <span class="tool-label">{{ t('auto.settings') }}</span>
+      </button>
     </div>
 
     <div class="toolbar-spacer" />
@@ -245,6 +461,86 @@ async function confirmErase() {
             </button>
             <button class="btn btn-danger" @click="confirmErase">
               {{ t('action.confirmErase') }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- 自动流程配置弹窗 -->
+    <Transition name="fade">
+      <div v-if="showAutoConfig" class="modal-backdrop" @click.self="closeAutoConfig">
+        <div class="modal">
+          <h3 class="modal-title">{{ t('auto.settings') }}</h3>
+          <TransitionGroup tag="div" name="auto-order" class="auto-step-list">
+            <div v-if="draftAutoSteps.length === 0" key="auto-order-empty" class="auto-order-empty">
+              {{ t('auto.emptyHint') }}
+            </div>
+            <div
+              v-for="(entry, index) in draftAutoEntries"
+              :key="entry.uid"
+              class="auto-order-item"
+              :class="{
+                'is-dragging': draggedAutoIndex === index,
+                'is-drop-target': dropTargetIndex === index,
+              }"
+            >
+              <span
+                class="auto-order-handle"
+                :title="t('auto.dragHint')"
+                @pointerdown.prevent="startAutoDrag(index, $event)"
+              >
+                ⠿
+              </span>
+              <span class="auto-order-index">{{ index + 1 }}</span>
+              <span class="auto-order-name">{{ autoStepLabels[entry.step] }}</span>
+              <button class="auto-order-btn" @click="moveAutoStep(index, -1)">↑</button>
+              <button class="auto-order-btn" @click="moveAutoStep(index, 1)">↓</button>
+              <button class="auto-order-btn auto-order-remove" @click="removeAutoStep(index)">✕</button>
+            </div>
+          </TransitionGroup>
+
+          <div class="auto-step-pool">
+            <button
+              v-for="step in availableAutoSteps"
+              :key="step"
+              class="btn btn-ghost btn-sm"
+              @click="addAutoStep(step)"
+            >
+              + {{ autoStepLabels[step] }}
+            </button>
+            <span v-if="allAutoStepsUsed" class="field-hint">
+              {{ t('auto.allStepsUsed') }}
+            </span>
+          </div>
+          <p class="auto-step-summary">
+            {{ draftAutoStepSummary || t('auto.emptyHint') }}
+          </p>
+          <div class="modal-actions">
+            <button class="btn btn-secondary" @click="closeAutoConfig">
+              {{ t('auto.close') }}
+            </button>
+            <button class="btn btn-primary" @click="saveAutoConfig">
+              {{ t('auto.save') }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- 自动流程确认弹窗（含擦除/写入时） -->
+    <Transition name="fade">
+      <div v-if="showAutoConfirm" class="modal-backdrop" @click.self="showAutoConfirm = false">
+        <div class="modal modal-danger">
+          <h3 class="modal-title">{{ t('auto.confirmTitle') }}</h3>
+          <p class="modal-body">{{ t('auto.confirmBody') }}</p>
+          <p class="auto-step-summary">{{ savedAutoStepSummary }}</p>
+          <div class="modal-actions">
+            <button class="btn btn-secondary" @click="showAutoConfirm = false">
+              {{ t('action.cancel') }}
+            </button>
+            <button class="btn btn-danger" @click="confirmAuto">
+              {{ t('auto.run') }}
             </button>
           </div>
         </div>
@@ -344,5 +640,129 @@ async function confirmErase() {
 
 .verify-icon:hover:not(:disabled) {
   color: var(--color-warn);
+}
+
+.blank-check-icon:hover:not(:disabled) {
+  color: var(--color-info);
+}
+
+.auto-icon:hover:not(:disabled) {
+  color: var(--accent);
+}
+
+.auto-gear {
+  min-width: 42px;
+}
+
+.auto-step-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 10px 0 6px;
+}
+
+.auto-order-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 6px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.auto-order-item.is-dragging {
+  opacity: 0.45;
+}
+.auto-order-item.is-drop-target {
+  border-top-color: var(--accent);
+  box-shadow: 0 -2px 0 0 var(--accent);
+}
+.auto-order-move {
+  transition: transform 180ms ease;
+}
+.auto-order-enter-active,
+.auto-order-leave-active {
+  transition:
+    opacity 150ms ease,
+    transform 150ms ease;
+}
+.auto-order-enter-from,
+.auto-order-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+.auto-order-handle {
+  color: var(--text-muted);
+  cursor: grab;
+  user-select: none;
+  padding: 0 2px;
+}
+.auto-order-handle:active {
+  cursor: grabbing;
+}
+.auto-order-index {
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--accent-subtle);
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  flex-shrink: 0;
+}
+.auto-order-name {
+  flex: 1;
+  font-size: 12px;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+}
+.auto-order-btn {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 11px;
+}
+.auto-order-btn:hover {
+  background: var(--bg-overlay);
+  color: var(--text-primary);
+}
+.auto-order-remove:hover {
+  color: var(--color-danger);
+}
+.auto-order-empty {
+  padding: 10px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+}
+.auto-step-pool {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 4px;
+}
+
+.auto-step-summary {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: var(--bg-surface);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  margin: 4px 0 10px;
+  word-break: break-all;
 }
 </style>

@@ -1,6 +1,6 @@
 [package]
 name = "chip-validator"
-version = "0.2.1-alpha.5"
+version = "0.3.0-alpha.1"
 edition = "2021"
 license = "GPL-3.0-or-later"
 
@@ -17,14 +17,12 @@ serialport = "4.2"
 open = "5"
 
 [target.'cfg(windows)'.dependencies]
-windows = { version = "0.58", features = ["Win32_Foundation", "Win32_System_Com", "Win32_System_LibraryLoader", "Win32_UI_Shell"] }
+windows = { version = "0.58", features = ["Win32_Foundation", "Win32_System_Com", "Win32_System_LibraryLoader", "Win32_UI_Shell", "Win32_UI_Shell_Common"] }
 
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
-# 硬件抽象层后端：
-#  - 都不启用：按平台自动选择（Windows -> DLL，其他 -> libusb）
-#  - hal-dll     ：强制 CH34X.DLL（仅 Windows 有意义）
-#  - hal-libusb ：强制 libusb/rusb（Windows 调试或 Linux 正常路径）
-hal-dll = []
+# 纭欢鎶借薄灞傚悗绔細
+#  - 閮戒笉鍚敤锛氭寜骞冲彴鑷姩閫夋嫨锛圵indows -> DLL锛屽叾浠?-> libusb锛?#  - hal-dll     锛氬己鍒?CH34X.DLL锛堜粎 Windows 鏈夋剰涔夛級
+#  - hal-libusb 锛氬己鍒?libusb/rusb锛圵indows 璋冭瘯鎴?Linux 姝ｅ父璺緞锛?hal-dll = []
 hal-libusb = []

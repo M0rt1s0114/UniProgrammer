@@ -1,8 +1,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod autodetect;
 mod ch34x;
 mod chiplib;
 mod dialogs;
+mod firmware;
 mod protocols;
 mod serprog;
 mod settings;
@@ -12,7 +14,7 @@ use serde::Serialize;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
-use tauri::{Emitter, State};
+use tauri::{Emitter, Manager, State};
 
 #[derive(Serialize)]
 struct ChipDetectResult {
@@ -71,6 +73,20 @@ struct BadBlockProgressEvent {
 }
 
 #[derive(Clone, Serialize)]
+struct BlankCheckProgressEvent {
+    done: u64,
+    total: u64,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BlankCheckResult {
+    blank: bool,
+    checked: u64,
+    first_non_blank: Option<u64>,
+}
+
+#[derive(Clone, Serialize)]
 struct EraseProgressEvent {
     done: u64,
     total: u64,
@@ -92,6 +108,13 @@ struct RawBytesResult {
     length: usize,
     hex: String,
     bytes: Vec<u8>,
+}
+
+#[derive(Serialize)]
+struct FirmwareLoadResult {
+    length: usize,
+    bytes: Vec<u8>,
+    format: String,
 }
 
 #[derive(Serialize)]
@@ -120,6 +143,9 @@ struct AppState {
     lib: Option<chiplib::Chiplib>,
     connected_device: Option<String>,
     detected: Option<chiplib::ChipInfo>,
+    /// Last serial-port snapshot. Serial probing only runs again when this
+    /// list changes, so the hotplug poll never chats with every COM port.
+    last_serial_ports: Vec<String>,
 }
 
 fn exe_dir() -> PathBuf {
@@ -493,12 +519,15 @@ fn load_chip_lib(state: State<'_, Mutex<AppState>>) -> Result<String, String> {
 }
 
 #[tauri::command]
-fn initialize(
+async fn initialize(
     state: State<'_, Mutex<AppState>>,
     kind: String,
     io_level_mv: u32,
     spi_mode: u8,
     freq_khz: u32,
+    device_index: Option<u32>,
+    usb_bus: Option<u8>,
+    usb_address: Option<u8>,
 ) -> Result<String, String> {
     let mut s = state.lock().map_err(|e| e.to_string())?;
 
@@ -524,6 +553,9 @@ fn initialize(
         freq_khz,
         // VCC 供电与 SPI/IO 信号电平绑定到同一目标轨
         io_level_mv,
+        device_index: device_index.unwrap_or(0),
+        usb_bus,
+        usb_address,
     };
 
     // Per-operation lifecycle: verify that the device opens now, then close.
@@ -550,7 +582,7 @@ fn initialize(
 }
 
 #[tauri::command]
-fn connect_serprog(state: State<'_, Mutex<AppState>>, port: String) -> Result<String, String> {
+async fn connect_serprog(state: State<'_, Mutex<AppState>>, port: String) -> Result<String, String> {
     let mut s = state.lock().map_err(|e| e.to_string())?;
     let dev = serprog::Serprog::open(&port)?;
     let info = format!("serprog ({})", port);
@@ -562,8 +594,33 @@ fn connect_serprog(state: State<'_, Mutex<AppState>>, port: String) -> Result<St
     Ok(format!("已连接: {}", info))
 }
 
+/// Scan for supported programmers.
+///
+/// `include_serprog` forces a serial handshake probe. When false, ports are
+/// only probed if the port list changed since the last scan, so the 2-second
+/// hotplug poll stays quiet around unrelated COM devices.
 #[tauri::command]
-fn detect_chip(state: State<'_, Mutex<AppState>>) -> Result<ChipDetectResult, String> {
+async fn scan_programmers(
+    state: State<'_, Mutex<AppState>>,
+    include_serprog: bool,
+) -> Result<Vec<autodetect::ProgrammerCandidate>, String> {
+    let mut s = state.lock().map_err(|e| e.to_string())?;
+    let mut candidates = autodetect::scan_ch34x();
+
+    let ports: Vec<String> = serialport::available_ports()
+        .map(|list| list.into_iter().map(|p| p.port_name).collect())
+        .unwrap_or_default();
+    let ports_changed = include_serprog || ports != s.last_serial_ports;
+    if ports_changed {
+        candidates.extend(autodetect::scan_serprog(&ports));
+        s.last_serial_ports = ports.clone();
+    }
+
+    Ok(candidates)
+}
+
+#[tauri::command]
+async fn detect_chip(state: State<'_, Mutex<AppState>>) -> Result<ChipDetectResult, String> {
     let mut s = state.lock().map_err(|e| e.to_string())?;
     let mut probes: Vec<[u8; 5]> = Vec::new();
 
@@ -646,7 +703,7 @@ fn detect_chip(state: State<'_, Mutex<AppState>>) -> Result<ChipDetectResult, St
 }
 
 #[tauri::command]
-fn scan_bad_blocks(
+async fn scan_bad_blocks(
     state: State<'_, Mutex<AppState>>,
     app: tauri::AppHandle,
 ) -> Result<BadBlockScanResult, String> {
@@ -939,10 +996,270 @@ async fn chip_erase(
     Ok("全片擦除完成".to_string())
 }
 
+/// Return the absolute address of the first byte that is not 0xFF.
+fn first_non_blank_byte(data: &[u8], base: u64) -> Option<u64> {
+    data.iter()
+        .position(|&b| b != 0xFF)
+        .map(|index| base + index as u64)
+}
+
+/// Stream a blank check: read the requested range in chunks and stop at the
+/// first non-0xFF byte. Never materialises the whole chip in memory.
+#[tauri::command]
+async fn blank_check(
+    state: State<'_, Mutex<AppState>>,
+    app: tauri::AppHandle,
+    size: u64,
+    start_addr: u64,
+    bad_block_mode: Option<String>,
+) -> Result<BlankCheckResult, String> {
+    let mut s = state.lock().map_err(|e| e.to_string())?;
+    let total = size.saturating_sub(start_addr);
+    if total == 0 {
+        return Ok(BlankCheckResult {
+            blank: true,
+            checked: 0,
+            first_non_blank: None,
+        });
+    }
+
+    // serprog path: stream reads through O_SPIOP.
+    if s.serprog.is_some() && s.ch34x.is_none() {
+        let ser = s.serprog.as_mut().unwrap();
+        let use_4b = size > 0x0100_0000;
+        let cmd_read: u8 = if use_4b { 0x13 } else { 0x03 };
+        let make_header = |addr: u64| -> Vec<u8> {
+            let mut h = vec![cmd_read];
+            if use_4b {
+                h.push(((addr >> 24) & 0xFF) as u8);
+            }
+            h.push(((addr >> 16) & 0xFF) as u8);
+            h.push(((addr >> 8) & 0xFF) as u8);
+            h.push((addr & 0xFF) as u8);
+            h
+        };
+        let chunk_max = ser.max_read_len().min(4096);
+        let mut offset: u64 = 0;
+        while offset < total {
+            let addr = start_addr + offset;
+            let chunk = (total - offset).min(chunk_max as u64) as usize;
+            let data = ser
+                .spi_command(&make_header(addr), chunk)
+                .map_err(|e| format!("查空读取失败 @ 0x{:08X}: {}", addr, e))?;
+            if data.len() != chunk {
+                return Err(format!(
+                    "查空读取长度不符 @ 0x{:08X}: 预期 {} 实际 {}",
+                    addr,
+                    chunk,
+                    data.len()
+                ));
+            }
+            if let Some(pos) = first_non_blank_byte(&data, addr) {
+                return Ok(BlankCheckResult {
+                    blank: false,
+                    checked: offset + pos as u64 - addr,
+                    first_non_blank: Some(pos),
+                });
+            }
+            offset += chunk as u64;
+            app.emit(
+                "blank_check_progress",
+                BlankCheckProgressEvent {
+                    done: offset,
+                    total,
+                },
+            )
+            .ok();
+        }
+        return Ok(BlankCheckResult {
+            blank: true,
+            checked: total,
+            first_non_blank: None,
+        });
+    }
+
+    // Small / non-streaming protocols reuse the existing read paths and scan
+    // the returned buffer. Capped so a pathological request cannot OOM.
+    if let Some(info) = s.detected.as_ref() {
+        let bus = protocols::bus_mode_for_protocol(&info.protocol);
+        match info.protocol.as_str() {
+            "SPI_NOR" => {}
+            other => {
+                if size > 256 * 1024 * 1024 {
+                    return Err(format!("{} 协议查空暂不支持超过 256 MiB", other));
+                }
+                let dev = open_ch34x_mode(&s, bus)?;
+                let params = protocols::ChipParams::from_info(info);
+                let data = match other {
+                    "SPI_EEPROM" => protocols::s95_read(
+                        &dev,
+                        &params,
+                        start_addr,
+                        size as usize,
+                        &mut |done, total| {
+                            app.emit(
+                                "blank_check_progress",
+                                BlankCheckProgressEvent { done, total },
+                            )
+                            .ok();
+                        },
+                    )?,
+                    "SPI_DATA_45" => protocols::at45_read(
+                        &dev,
+                        &params,
+                        start_addr,
+                        size as usize,
+                        &mut |done, total| {
+                            app.emit(
+                                "blank_check_progress",
+                                BlankCheckProgressEvent { done, total },
+                            )
+                            .ok();
+                        },
+                    )?,
+                    "SPI_NAND" => {
+                        let mode = parse_nand_bad_block_mode(bad_block_mode.as_deref());
+                        let bad_blocks =
+                            scan_nand_bad_blocks_for_mode(&dev, info, &app, mode)?;
+                        let links = prepare_bypass_if_needed(&dev, info, mode, &bad_blocks)?;
+                        let op_bad = if mode == protocols::NandBadBlockMode::Bypass {
+                            Vec::new()
+                        } else {
+                            bad_blocks
+                        };
+                        let data = protocols::nand_read(
+                            &dev,
+                            &params,
+                            size,
+                            &op_bad,
+                            &mut |done, total| {
+                                app.emit(
+                                    "blank_check_progress",
+                                    BlankCheckProgressEvent { done, total },
+                                )
+                                .ok();
+                            },
+                        )?;
+                        let _ = links;
+                        data
+                    }
+                    "I2C" | "I2C_F-RAM" | "I2C_SPD" => protocols::i2c_read(
+                        &dev,
+                        &params,
+                        start_addr,
+                        size as usize,
+                        &mut |done, total| {
+                            app.emit(
+                                "blank_check_progress",
+                                BlankCheckProgressEvent { done, total },
+                            )
+                            .ok();
+                        },
+                    )?,
+                    "Microwire" => protocols::mw_read(
+                        &dev,
+                        &params,
+                        start_addr,
+                        size as usize,
+                        &mut |done, total| {
+                            app.emit(
+                                "blank_check_progress",
+                                BlankCheckProgressEvent { done, total },
+                            )
+                            .ok();
+                        },
+                    )?,
+                    other => return Err(format!("协议 {} 暂未实现查空", other)),
+                };
+                if let Some(pos) = first_non_blank_byte(&data, start_addr) {
+                    return Ok(BlankCheckResult {
+                        blank: false,
+                        checked: pos - start_addr,
+                        first_non_blank: Some(pos),
+                    });
+                }
+                return Ok(BlankCheckResult {
+                    blank: true,
+                    checked: data.len() as u64,
+                    first_non_blank: None,
+                });
+            }
+        }
+    }
+
+    // CH34X SPI NOR: manual CS read, chunked, no whole-image buffer.
+    let params = match s.detected.as_ref() {
+        Some(info) if info.protocol == "SPI_NOR" => nor_params(info),
+        _ => NorParams {
+            page: 256,
+            _sector: 4096,
+            _block: 64 * 1024,
+            addr4b: size > 0x0100_0000,
+            alg: 0,
+        },
+    };
+    let dev = open_ch34x(&s)?;
+    spi_wait_ready(&dev, 1000)?;
+    if params.addr4b {
+        spi_4byte_mode(&dev, params.alg, true)?;
+    }
+
+    let chunk_limit = dev.spi_frame_limit();
+    let mut offset: u64 = 0;
+    while offset < total {
+        let addr = start_addr + offset;
+        let hdr_len = if params.addr4b { 5 } else { 4 };
+        let chunk = (total - offset).min((chunk_limit.saturating_sub(hdr_len)) as u64) as usize;
+        dev.cs_low()?;
+        let mut hdr = vec![0x03u8];
+        if params.addr4b {
+            hdr.push(((addr >> 24) & 0xFF) as u8);
+        }
+        hdr.push(((addr >> 16) & 0xFF) as u8);
+        hdr.push(((addr >> 8) & 0xFF) as u8);
+        hdr.push((addr & 0xFF) as u8);
+        dev.spi_tx(&hdr)
+            .map_err(|e| format!("查空读取失败 @ 0x{:08X}: {}", addr, e))?;
+        let mut buf = vec![0xFFu8; chunk];
+        dev.spi_rx(&mut buf)
+            .map_err(|e| format!("查空读取失败 @ 0x{:08X}: {}", addr, e))?;
+        dev.cs_high()?;
+
+        if let Some(pos) = first_non_blank_byte(&buf, addr) {
+            if params.addr4b {
+                spi_4byte_mode(&dev, params.alg, false)?;
+            }
+            return Ok(BlankCheckResult {
+                blank: false,
+                checked: offset + (pos - addr),
+                first_non_blank: Some(pos),
+            });
+        }
+        offset += chunk as u64;
+        app.emit(
+            "blank_check_progress",
+            BlankCheckProgressEvent {
+                done: offset,
+                total,
+            },
+        )
+        .ok();
+    }
+
+    if params.addr4b {
+        spi_4byte_mode(&dev, params.alg, false)?;
+    }
+    Ok(BlankCheckResult {
+        blank: true,
+        checked: total,
+        first_non_blank: None,
+    })
+}
+
 /// NOR read, IMSProg style: manual CS, 0x03 read, optional 4-byte address mode
 /// (B7/E9 or Spansion BRWR), progress events.
 #[tauri::command]
-fn read_chip(
+async fn read_chip(
     state: State<'_, Mutex<AppState>>,
     app: tauri::AppHandle,
     size: u64,
@@ -1144,7 +1461,7 @@ fn read_chip(
 }
 
 #[tauri::command]
-fn write_chip(
+async fn write_chip(
     state: State<'_, Mutex<AppState>>,
     app: tauri::AppHandle,
     data: Vec<u8>,
@@ -1357,7 +1674,7 @@ fn write_chip(
 }
 
 #[tauri::command]
-fn verify_chip(
+async fn verify_chip(
     state: State<'_, Mutex<AppState>>,
     app: tauri::AppHandle,
     data: Vec<u8>,
@@ -1610,7 +1927,12 @@ fn get_chip_info(
 fn get_chip_types(state: State<'_, Mutex<AppState>>) -> Result<Vec<String>, String> {
     let s = state.lock().map_err(|e| e.to_string())?;
     let lib = get_lib(&s)?;
-    Ok(lib.list_protocols())
+    // 并行 NAND 已入库，但当前所有编程器后端都尚未实现，UI 暂不显示。
+    Ok(lib
+        .list_protocols()
+        .into_iter()
+        .filter(|p| p != "PARALLEL_NAND")
+        .collect())
 }
 
 #[tauri::command]
@@ -1724,8 +2046,26 @@ fn save_file_dialog(default_name: String, default_ext: String) -> Result<Option<
 }
 
 #[tauri::command]
-fn read_file(path: String) -> Result<Vec<u8>, String> {
+async fn read_file(path: String) -> Result<Vec<u8>, String> {
     std::fs::read(&path).map_err(|e| format!("读取文件失败 {}: {}", path, e))
+}
+
+/// Load a firmware image, decoding Intel HEX / S-record / UF2 containers
+/// into plain bytes when needed. Raw images pass through unchanged.
+#[tauri::command]
+async fn load_firmware_file(path: String) -> Result<FirmwareLoadResult, String> {
+    let (bytes, format) = firmware::load_firmware_file(&path)?;
+    Ok(FirmwareLoadResult {
+        length: bytes.len(),
+        bytes,
+        format: format.to_string(),
+    })
+}
+
+#[tauri::command]
+async fn force_close_window(app: tauri::AppHandle) -> Result<(), String> {
+    let window = app.get_webview_window("main").ok_or("找不到主窗口")?;
+    window.destroy().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -1751,11 +2091,13 @@ fn main() {
             lib: None,
             connected_device: None,
             detected: None,
+            last_serial_ports: Vec::new(),
         }))
         .invoke_handler(tauri::generate_handler![
             load_chip_lib,
             initialize,
             connect_serprog,
+            scan_programmers,
             detect_chip,
             scan_bad_blocks,
             read_nand_uid,
@@ -1767,6 +2109,7 @@ fn main() {
             read_at45_page_mode,
             set_at45_page_mode,
             chip_erase,
+            blank_check,
             read_chip,
             write_chip,
             verify_chip,
@@ -1781,7 +2124,9 @@ fn main() {
             open_file_dialog,
             save_file_dialog,
             read_file,
+            load_firmware_file,
             write_file,
+            force_close_window,
             load_settings,
             save_settings,
         ])

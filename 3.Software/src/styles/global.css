@@ -470,6 +470,15 @@ select.input {
   color: var(--color-warn);
 }
 
+.modal-danger {
+  border-color: var(--danger-border);
+}
+
+.modal-danger .modal-icon,
+.modal-danger .modal-title {
+  color: var(--color-danger);
+}
+
 .modal-title {
   font-size: 16px;
   font-weight: 600;

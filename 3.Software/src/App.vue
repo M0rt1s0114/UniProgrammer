@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { onMounted, ref, nextTick } from 'vue'
+import { onMounted, ref, nextTick, watch } from 'vue'
 import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window'
 import { getVersion } from '@tauri-apps/api/app'
+import { invoke } from '@tauri-apps/api/core'
 import { useProgStore } from '@/stores/prog'
 import { t } from '@/i18n'
 import OperationPanel from '@/components/OperationPanel.vue'
@@ -13,6 +14,17 @@ import StatusBar from '@/components/StatusBar.vue'
 const store = useProgStore()
 const appWindow = getCurrentWindow()
 const appVersion = ref('')
+
+const showCloseConfirm = ref(false)
+
+watch(
+  () => store.isRunning,
+  (running) => {
+    if (!running && showCloseConfirm.value) {
+      showCloseConfirm.value = false
+    }
+  },
+)
 
 async function loadVersion() {
   try {
@@ -30,6 +42,32 @@ function maximizeWindow() {
 }
 function closeWindow() {
   appWindow.close()
+}
+
+async function confirmClose() {
+  showCloseConfirm.value = false
+  // 优先走 Rust 后端销毁窗口，绕开 WebView2 的 close-requested 拦截问题。
+  try {
+    await invoke('force_close_window')
+    return
+  } catch (backendError) {
+    console.warn('force_close_window failed:', backendError)
+  }
+  try {
+    await appWindow.destroy()
+    return
+  } catch (destroyError) {
+    console.warn('window.destroy failed:', destroyError)
+  }
+  try {
+    await appWindow.close()
+  } catch (closeError) {
+    console.warn('window.close failed:', closeError)
+  }
+}
+
+function cancelClose() {
+  showCloseConfirm.value = false
 }
 
 const logHeight = ref(180)
@@ -53,9 +91,15 @@ function onDividerMouseDown(e: MouseEvent) {
 }
 
 onMounted(() => {
-  store.addLog('UnProg 已启动')
+  store.addLog('UniProg 已启动')
   loadVersion()
   fitWindowToSidebar()
+  void appWindow.onCloseRequested((event) => {
+    if (store.isRunning) {
+      event.preventDefault()
+      showCloseConfirm.value = true
+    }
+  })
 })
 
 // 启动时按左侧栏实际内容高度调整窗口，保证“文件/芯片/电压”等信息
@@ -199,6 +243,42 @@ async function fitWindowToSidebar() {
     </div>
 
     <StatusBar />
+
+    <!-- 运行中关闭确认（红色，无需输入） -->
+    <Transition name="fade">
+      <div v-if="showCloseConfirm" class="modal-backdrop">
+        <div class="modal modal-danger">
+          <div class="modal-icon">
+            <svg
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path
+                d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"
+              />
+              <line x1="12" y1="9" x2="12" y2="13" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+          </div>
+          <h3 class="modal-title">{{ t('app.closeDuringRunTitle') }}</h3>
+          <p class="modal-body">{{ t('app.closeDuringRunBody') }}</p>
+          <div class="modal-actions">
+            <button class="btn btn-danger" @click="confirmClose">
+              {{ t('app.confirmClose') }}
+            </button>
+            <button class="btn btn-secondary" @click="cancelClose">
+              {{ t('action.cancel') }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
 

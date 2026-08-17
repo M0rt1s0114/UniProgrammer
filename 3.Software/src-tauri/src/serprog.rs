@@ -124,6 +124,40 @@ impl Serprog {
         Ok(dev)
     }
 
+    /// Non-intrusive autodetect probe: open the port with a short timeout,
+    /// send NOP + Q_IFACE, and return the interface version string when the
+    /// device answers like a serprog programmer. No DTR pulse is issued here
+    /// so unrelated serial devices are disturbed as little as possible.
+    pub fn probe(path: &str) -> Option<String> {
+        let port = serialport::new(path, 115_200)
+            .timeout(Duration::from_millis(250))
+            .data_bits(serialport::DataBits::Eight)
+            .parity(serialport::Parity::None)
+            .stop_bits(serialport::StopBits::One)
+            .flow_control(serialport::FlowControl::None)
+            .open()
+            .ok()?;
+        let mut dev = Serprog {
+            port,
+            interface_version: 0,
+            bustypes: 0,
+            serbuf: 16,
+            opbuf: 300,
+            max_read_len: 4096,
+        };
+        dev.port.clear(serialport::ClearBuffer::All).ok();
+        let _ = dev.nop();
+        for _ in 0..3 {
+            if let Ok(ver) = dev.command(S_CMD_Q_IFACE, &[], 2) {
+                if ver.len() == 2 {
+                    return Some(format!("v{}.{}", ver[0], ver[1]));
+                }
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        None
+    }
+
     /// 单次 SPI 操作可写出的最大字节数（命令+地址，不含读长度）。
     pub fn max_write_len(&self) -> usize {
         // O_SPIOP 请求 = 1 opcode + 6 长度字节 + slen 数据

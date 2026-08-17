@@ -20,7 +20,7 @@
 //! `cs_low -> spi_tx(opcode/addr) -> spi_rx(data) -> cs_high`.
 
 #[cfg(hal_backend_libusb)]
-use rusb::{DeviceHandle, GlobalContext};
+use rusb::{Device, DeviceHandle, GlobalContext};
 use std::time::Duration;
 
 #[cfg_attr(not(hal_backend_libusb), allow(dead_code))]
@@ -119,6 +119,16 @@ pub struct Ch34xSettings {
     /// 当前硬件 HAL 尚未切换电平，先保留参数供后续驱动使用。
     #[allow(dead_code)]
     pub io_level_mv: u32,
+    /// CH34X.DLL device index (0 = first device). Auto-detection fills the
+    /// index of the specific device the user selected.
+    #[allow(dead_code)] // only read by the DLL HAL build
+    pub device_index: u32,
+    /// libusb backend: select a specific device by bus/address when several
+    /// identical CH34X devices are connected. None = first matching device.
+    #[allow(dead_code)] // only read by the libusb HAL build
+    pub usb_bus: Option<u8>,
+    #[allow(dead_code)] // only read by the libusb HAL build
+    pub usb_address: Option<u8>,
 }
 
 impl Default for Ch34xSettings {
@@ -128,6 +138,9 @@ impl Default for Ch34xSettings {
             spi_mode: 3,
             freq_khz: 15_000,
             io_level_mv: 3300,
+            device_index: 0,
+            usb_bus: None,
+            usb_address: None,
         }
     }
 }
@@ -203,15 +216,77 @@ fn ch341_extract_read(write_len: usize, read: &mut [u8], response: &[u8]) {
 // ═══════════════════════════════════════ CH341 ═══════════════════════════════
 
 #[cfg(hal_backend_libusb)]
+fn open_device_matching(
+    vid: u16,
+    pid: u16,
+    bus: Option<u8>,
+    address: Option<u8>,
+) -> Option<Device<GlobalContext>> {
+    let devices = rusb::devices().ok()?;
+    for device in devices.iter() {
+        let Ok(desc) = device.device_descriptor() else {
+            continue;
+        };
+        if desc.vendor_id() != vid || desc.product_id() != pid {
+            continue;
+        }
+        if let Some(want) = bus {
+            if device.bus_number() != want {
+                continue;
+            }
+        }
+        if let Some(want) = address {
+            if device.address() != want {
+                continue;
+            }
+        }
+        return Some(device);
+    }
+    None
+}
+
+#[cfg(hal_backend_libusb)]
+pub(crate) fn enumerate_libusb_devices() -> Vec<(ChipKind, u8, u8)> {
+    let mut found = Vec::new();
+    let Ok(devices) = rusb::devices() else {
+        return found;
+    };
+    for device in devices.iter() {
+        let Ok(desc) = device.device_descriptor() else {
+            continue;
+        };
+        if desc.vendor_id() != CH347_VID && desc.vendor_id() != CH341_VID {
+            continue;
+        }
+        let kind = match desc.product_id() {
+            CH341_PID => ChipKind::Ch341A,
+            CH347_PID => ChipKind::Ch347T,
+            // CH347F has no libusb transport in this project yet.
+            _ => continue,
+        };
+        found.push((kind, device.bus_number(), device.address()));
+    }
+    found
+}
+
+#[cfg(hal_backend_libusb)]
 pub(crate) struct Ch341 {
     handle: DeviceHandle<GlobalContext>,
 }
 
 #[cfg(hal_backend_libusb)]
 impl Ch341 {
-    fn open(mode: DeviceMode) -> Result<Self, String> {
-        let handle = rusb::open_device_with_vid_pid(CH341_VID, CH341_PID)
-            .ok_or_else(|| "未找到 CH341A 设备 (1A86:5512)".to_string())?;
+    fn open(settings: &Ch34xSettings, mode: DeviceMode) -> Result<Self, String> {
+        let device = open_device_matching(
+            CH341_VID,
+            CH341_PID,
+            settings.usb_bus,
+            settings.usb_address,
+        )
+        .ok_or_else(|| "未找到 CH341A 设备 (1A86:5512)".to_string())?;
+        let handle = device
+            .open()
+            .map_err(|e| format!("打开 CH341A 设备失败: {e}"))?;
         handle
             .set_auto_detach_kernel_driver(true)
             .map_err(|e| format!("设置内核驱动自动分离失败: {e}"))?;
@@ -431,8 +506,16 @@ pub(crate) struct Ch347 {
 #[cfg(hal_backend_libusb)]
 impl Ch347 {
     fn open(settings: &Ch34xSettings, mode: DeviceMode) -> Result<Self, String> {
-        let handle = rusb::open_device_with_vid_pid(CH347_VID, CH347_PID)
-            .ok_or_else(|| "未找到 CH347T 设备 (1A86:55DB)".to_string())?;
+        let device = open_device_matching(
+            CH347_VID,
+            CH347_PID,
+            settings.usb_bus,
+            settings.usb_address,
+        )
+        .ok_or_else(|| "未找到 CH347T 设备 (1A86:55DB)".to_string())?;
+        let handle = device
+            .open()
+            .map_err(|e| format!("打开 CH347T 设备失败: {e}"))?;
         handle
             .set_auto_detach_kernel_driver(true)
             .map_err(|e| format!("设置内核驱动自动分离失败: {e}"))?;
@@ -887,12 +970,15 @@ mod dll_hal {
                 }
             };
 
-            let handle = unsafe { open(0) };
+            let handle = unsafe { open(settings.device_index) };
             if handle.is_null() || handle == INVALID_HANDLE_VALUE {
-                return Err(format!("打开 {:?} 失败：请检查设备与驱动", settings.kind));
+                return Err(format!(
+                    "打开 {:?} 设备 {} 失败：请检查设备与驱动",
+                    settings.kind, settings.device_index
+                ));
             }
 
-            let chip_type = unsafe { get_type(0) };
+            let chip_type = unsafe { get_type(settings.device_index) };
             let expected = match settings.kind {
                 ChipKind::Ch341A => CHIP_TYPE_CH341,
                 ChipKind::Ch347T => CHIP_TYPE_CH347T,
@@ -914,7 +1000,7 @@ mod dll_hal {
                             unsafe { GetProcAddress(lib, PCSTR(set_name.as_ptr() as *const u8)) };
                         if let Some(ptr) = set_ptr {
                             let set_stream: FnSetStream = unsafe { std::mem::transmute(ptr) };
-                            if unsafe { set_stream(0, 0x80) } == 0 {
+                            if unsafe { set_stream(settings.device_index, 0x80) } == 0 {
                                 return Err("CH341 SetStream(SPI) 失败".into());
                             }
                         }
@@ -922,7 +1008,10 @@ mod dll_hal {
                     if mode == DeviceMode::Microwire {
                         let buf = [0xABu8, 0x40 | 0x3F, 0x20];
                         let mut len = buf.len() as u32;
-                        if unsafe { write_data(0, buf.as_ptr() as *mut _, &mut len) } == 0 {
+                        if unsafe {
+                            write_data(settings.device_index, buf.as_ptr() as *mut _, &mut len)
+                        } == 0
+                        {
                             return Err("CH341 GPIO 方向设置失败".into());
                         }
                     }
@@ -950,7 +1039,7 @@ mod dll_hal {
                         i_delay_deactive: 0,
                     };
                     let cfg_copy = cfg;
-                    if unsafe { init(0, &cfg_copy as *const SpiCfg) } == 0 {
+                    if unsafe { init(settings.device_index, &cfg_copy as *const SpiCfg) } == 0 {
                         return Err(format!("{:?} SPI 初始化失败", settings.kind));
                     }
                     // 官方 API：CH347F 需要显式设置 8bit 数据位宽，避免
@@ -958,7 +1047,7 @@ mod dll_hal {
                     if settings.kind == ChipKind::Ch347F {
                         let set_bits = set_data_bits
                             .ok_or("CH34X.DLL 缺少导出函数 CH347SPI_SetDataBits（CH347F 必需）")?;
-                        if unsafe { set_bits(0, 0) } == 0 {
+                        if unsafe { set_bits(settings.device_index, 0) } == 0 {
                             return Err("CH347F SPI 数据位宽设置失败".into());
                         }
                     }
@@ -973,7 +1062,7 @@ mod dll_hal {
             Ok(DllHal {
                 lib,
                 handle,
-                idx: 0,
+                idx: settings.device_index,
                 kind: settings.kind,
                 close,
                 stream,
@@ -982,6 +1071,74 @@ mod dll_hal {
                 pending: RefCell::new(Vec::new()),
                 frame_limit,
             })
+        }
+
+        /// Enumerate CH34X devices through the official DLL without
+        /// initialising SPI. Returns `(device_index, chip_kind)` pairs.
+        pub fn enumerate() -> Result<Vec<(u32, ChipKind)>, String> {
+            let path = Self::find_dll("CH34X.DLL")?;
+            let wide: Vec<u16> = path
+                .as_os_str()
+                .encode_wide()
+                .chain(std::iter::once(0))
+                .collect();
+            let lib = unsafe { LoadLibraryW(PCWSTR(wide.as_ptr())) }
+                .map_err(|e| format!("加载 CH34X.DLL 失败: {e}"))?;
+
+            let mut found: Vec<(u32, ChipKind)> = Vec::new();
+            for prefix in ["CH341", "CH347"] {
+                let open_name = CString::new(format!("{}OpenDevice", prefix)).unwrap();
+                let close_name = CString::new(format!("{}CloseDevice", prefix)).unwrap();
+                let type_name = CString::new(format!("{}GetChipType", prefix)).unwrap();
+
+                let Some(open_ptr) =
+                    (unsafe { GetProcAddress(lib, PCSTR(open_name.as_ptr() as *const u8)) })
+                else {
+                    continue;
+                };
+                let Some(close_ptr) =
+                    (unsafe { GetProcAddress(lib, PCSTR(close_name.as_ptr() as *const u8)) })
+                else {
+                    continue;
+                };
+                let open: FnOpen = unsafe { std::mem::transmute::<FnGetProc, FnOpen>(open_ptr) };
+                let close: FnClose =
+                    unsafe { std::mem::transmute::<FnGetProc, FnClose>(close_ptr) };
+                let get_type: Option<FnGetChipType> =
+                    unsafe { GetProcAddress(lib, PCSTR(type_name.as_ptr() as *const u8)) }
+                        .map(|ptr| unsafe {
+                            std::mem::transmute::<FnGetProc, FnGetChipType>(ptr)
+                        });
+
+                for index in 0..8u32 {
+                    let handle = unsafe { open(index) };
+                    if handle.is_null() || handle == INVALID_HANDLE_VALUE {
+                        continue;
+                    }
+                    let chip_type = match get_type {
+                        Some(get) => unsafe { get(index) },
+                        None if prefix == "CH341" => CHIP_TYPE_CH341,
+                        None => CHIP_TYPE_CH347T,
+                    };
+                    unsafe {
+                        close(index);
+                    }
+                    let kind = match chip_type {
+                        CHIP_TYPE_CH341 => ChipKind::Ch341A,
+                        CHIP_TYPE_CH347T => ChipKind::Ch347T,
+                        CHIP_TYPE_CH347F => ChipKind::Ch347F,
+                        _ => continue, // CH339W and unknown WCH chips are not programmers
+                    };
+                    found.push((index, kind));
+                }
+            }
+
+            unsafe {
+                let _ = FreeLibrary(lib);
+            }
+            found.sort_by_key(|(idx, _)| *idx);
+            found.dedup_by_key(|(idx, kind)| (*idx, *kind));
+            Ok(found)
         }
 
         /// StreamSPI4 每次调用都会自己完成片选，因此把
@@ -1099,6 +1256,12 @@ mod dll_hal {
 
 // ═════════════════════════════════ Public device wrapper ═════════════════════
 
+/// Enumerate CH34X devices through the official DLL (Windows default HAL).
+#[cfg(hal_backend_dll)]
+pub fn enumerate_dll_devices() -> Result<Vec<(u32, ChipKind)>, String> {
+    dll_hal::DllHal::enumerate()
+}
+
 /// HAL 门面：`Box<dyn ProgrammerHal>`，上层只面对这个类型。
 pub struct Ch34xDevice(Box<dyn ProgrammerHal>);
 
@@ -1128,7 +1291,7 @@ impl Ch34xDevice {
         #[cfg(hal_backend_libusb)]
         {
             let device: Box<dyn ProgrammerHal> = match settings.kind {
-                ChipKind::Ch341A => Box::new(Ch341::open(mode)?),
+                ChipKind::Ch341A => Box::new(Ch341::open(settings, mode)?),
                 ChipKind::Ch347T => Box::new(Ch347::open(settings, mode)?),
                 ChipKind::Ch347F => {
                     return Err("CH347F 没有 libusb 实现，请使用 Windows DLL 后端".into())

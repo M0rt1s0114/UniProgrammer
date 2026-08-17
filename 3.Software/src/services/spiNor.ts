@@ -1,9 +1,12 @@
 import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { useProgStore, type DetectedChipInfo, formatBytes } from '@/stores/prog'
+import { useSettingsStore } from '@/stores/settings'
 
 export function useSpiNor() {
   const store = useProgStore()
+  const settings = useSettingsStore()
+  let autoStepFailed = false
 
   // 预填充上限：NAND 等大容量芯片不预分配 FF，避免 WebView 内存爆炸
   const MAX_PREFILL = 8 * 1024 * 1024
@@ -107,6 +110,39 @@ export function useSpiNor() {
         store.status = 'error'
         store.connectedDevice = ''
       }
+    }
+  }
+
+  // ── 自动检测芯片（n 次，间隔可设，检测到立即停止）────────────────────────
+  let chipAutoDetectRunId = 0
+
+  function cancelChipAutoDetect() {
+    chipAutoDetectRunId += 1
+  }
+
+  async function autoDetectChip() {
+    if (store.status !== 'success') {
+      store.addLog('请先连接编程器', 'warn')
+      return
+    }
+    const runId = ++chipAutoDetectRunId
+    const total = Math.max(1, Math.round(settings.chipAutoDetectCount))
+    const intervalMs = Math.max(500, Math.round(settings.chipAutoDetectIntervalSec * 1000))
+    for (let attempt = 1; attempt <= total; attempt += 1) {
+      if (runId !== chipAutoDetectRunId || !settings.chipAutoDetectEnabled) return
+      store.addLog(`自动检测芯片 (${attempt}/${total})`)
+      await detectChip()
+      if (runId !== chipAutoDetectRunId || !settings.chipAutoDetectEnabled) return
+      if (store.chipDetected) {
+        store.addLog('自动检测到芯片，停止检测', 'success')
+        return
+      }
+      if (attempt < total) {
+        await new Promise((resolve) => setTimeout(resolve, intervalMs))
+      }
+    }
+    if (runId === chipAutoDetectRunId) {
+      store.addLog('自动检测结束，未找到芯片', 'warn')
     }
   }
 
@@ -385,7 +421,11 @@ export function useSpiNor() {
       if (store.detectedChipSize > 0) {
         fillHexWithFF(store.detectedChipSize)
       }
+      if (settings.blankCheckAfterErase) {
+        await blankCheckChip()
+      }
     } catch (e: unknown) {
+      autoStepFailed = true
       store.progressIndeterminate = false
       store.progressElapsedMs = 0
       store.progress = 0
@@ -394,6 +434,56 @@ export function useSpiNor() {
     } finally {
       unlistenErase?.()
       unlistenBadBlock?.()
+      store.isRunning = false
+      store.currentOp = ''
+    }
+  }
+
+  // ── 查空 ────────────────────────────────────────────────────────────────
+  async function blankCheckChip() {
+    if (!store.chipDetected || store.detectedChipSize === 0) {
+      store.addLog('请先检测芯片', 'warn')
+      return
+    }
+    store.isRunning = true
+    store.currentOp = '查空'
+    store.progress = 0
+    store.progressIndeterminate = false
+    store.progressElapsedMs = 0
+    store.progressMessage = '正在查空...'
+    store.addLog('开始查空...')
+
+    let unlisten: UnlistenFn | null = null
+    try {
+      unlisten = await listenProgress('blank_check_progress', (done, total) => {
+        const pct = Math.floor((done / total) * 100)
+        store.progress = pct
+        store.progressMessage = `已检查 ${done} / ${total} 字节 (${pct}%)`
+      })
+      const result = (await invoke('blank_check', {
+        size: store.detectedChipSize,
+        startAddr: 0,
+        badBlockMode: store.nandBadBlockMode,
+      })) as { blank: boolean; checked: number; firstNonBlank: number | null }
+      store.progress = 100
+      if (result.blank) {
+        store.progressMessage = '查空完成：芯片为空 (全 FF)'
+        store.addLog(`查空完成：全部 ${result.checked} 字节均为 0xFF`, 'success')
+      } else {
+        store.progressMessage = '查空完成：芯片非空'
+        store.addLog(
+          `查空完成：首个非空地址 0x${(result.firstNonBlank ?? 0)
+            .toString(16)
+            .padStart(8, '0')
+            .toUpperCase()}（已检查 ${result.checked} 字节）`,
+          'warn',
+        )
+      }
+    } catch (e: unknown) {
+      autoStepFailed = true
+      store.addLog(`查空失败: ${String(e)}`, 'error')
+    } finally {
+      unlisten?.()
       store.isRunning = false
       store.currentOp = ''
     }
@@ -409,6 +499,7 @@ export function useSpiNor() {
       try {
         await scanBadBlocks()
       } catch {
+        autoStepFailed = true
         return
       }
     }
@@ -441,6 +532,7 @@ export function useSpiNor() {
       store.progressMessage = '读取完成'
       store.addLog(`读取完成，共 ${raw.length} 字节`, 'success')
     } catch (e: unknown) {
+      autoStepFailed = true
       store.addLog(`读取失败: ${String(e)}`, 'error')
       store.progress = 0
       store.progressMessage = ''
@@ -463,6 +555,7 @@ export function useSpiNor() {
       try {
         await scanBadBlocks()
       } catch {
+        autoStepFailed = true
         return
       }
     }
@@ -496,6 +589,7 @@ export function useSpiNor() {
       store.progressMessage = '写入完成'
       store.addLog(msg, 'success')
     } catch (e: unknown) {
+      autoStepFailed = true
       const message = String(e)
       if (!forceSegmented && message.includes('SPI_PAGE_TOO_LARGE')) {
         // CH341 DLL 单帧放不下大页 NAND：先给用户清晰警告
@@ -558,6 +652,7 @@ export function useSpiNor() {
         playVerifySound()
       }
     } catch (e: unknown) {
+      autoStepFailed = true
       // 后端把首个不一致地址和字节值放在错误信息里，直接显示即可
       store.addLog(`校验失败: ${String(e)}`, 'error')
       store.progress = 0
@@ -657,8 +752,87 @@ export function useSpiNor() {
     store.addLog(`已保存: ${filename}`, 'success')
   }
 
+  // ── 自动操作 ────────────────────────────────────────────────────────────────
+  type AutoStepKey = 'read' | 'erase' | 'blankCheck' | 'write' | 'verify'
+
+  function selectedAutoSteps(): AutoStepKey[] {
+    const valid = new Set<AutoStepKey>(['read', 'erase', 'blankCheck', 'write', 'verify'])
+    return settings.autoOrder
+      .split(',')
+      .map((step) => step.trim())
+      .filter((step): step is AutoStepKey => valid.has(step as AutoStepKey))
+  }
+
+  async function runAuto(): Promise<boolean> {
+    const steps = selectedAutoSteps()
+    if (steps.length === 0) {
+      store.addLog('未设置自动化流程', 'error')
+      return false
+    }
+    const needsData = steps.includes('write') || steps.includes('verify')
+    if (needsData && (!store.hexData || store.hexData.length === 0)) {
+      store.addLog('自动流程包含写入/校验，但缓冲区没有数据；请先读取芯片或加载文件', 'warn')
+      return false
+    }
+
+    const labels: Record<AutoStepKey, string> = {
+      read: '读取',
+      erase: '擦除',
+      blankCheck: '查空',
+      write: '写入',
+      verify: '校验',
+    }
+    store.isRunning = true
+    try {
+      for (let i = 0; i < steps.length; i += 1) {
+        const step = steps[i]
+        store.currentOp = `自动操作 ${i + 1}/${steps.length}`
+        store.progress = 0
+        store.progressMessage = `${labels[step]}...`
+        store.addLog(`自动步骤 ${i + 1}/${steps.length}: ${labels[step]}`)
+
+        autoStepFailed = false
+        switch (step) {
+          case 'read':
+            await readChip()
+            break
+          case 'erase':
+            await eraseChip()
+            break
+          case 'blankCheck':
+            await blankCheckChip()
+            break
+          case 'write':
+            await writeChip()
+            break
+          case 'verify':
+            await verifyChip()
+            break
+        }
+        store.isRunning = true
+        if (autoStepFailed) {
+          store.addLog(`自动流程在第 ${i + 1} 步（${labels[step]}）失败，已停止`, 'error')
+          break
+        }
+      }
+      if (!autoStepFailed) {
+        store.progress = 100
+        store.progressMessage = '自动操作完成'
+        store.addLog('自动操作完成', 'success')
+      }
+      return !autoStepFailed
+    } finally {
+      autoStepFailed = false
+      store.isRunning = false
+      store.currentOp = ''
+      store.progressIndeterminate = false
+    }
+  }
+
   return {
     detectChip,
+    autoDetectChip,
+    cancelChipAutoDetect,
     scanBadBlocks,
     readNandUid,
     readNandParamPage,
@@ -668,9 +842,12 @@ export function useSpiNor() {
     readAt45PageMode,
     setAt45PageMode,
     eraseChip,
+    blankCheckChip,
     readChip,
     writeChip,
     verifyChip,
+    runAuto,
+    selectedAutoSteps,
     saveFile,
     saveFileNative,
   }

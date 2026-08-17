@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue'
+import { computed, ref, onMounted, watch } from 'vue'
 import { useProgStore, formatBytes } from '@/stores/prog'
 import { useSettingsStore } from '@/stores/settings'
 import { useSpiNor } from '@/services/spiNor'
@@ -10,8 +10,19 @@ const store = useProgStore()
 const settings = useSettingsStore()
 const spiNor = useSpiNor()
 
-const programmerType = ref<'ch341' | 'ch347' | 'ch347f' | 'serprog' | 'hidprog'>('ch341')
-const serialPort = ref('')
+const programmerType = computed<'ch341' | 'ch347' | 'ch347f' | 'serprog' | 'hidprog'>({
+  get: () => settings.programmerManualKind as 'ch341' | 'ch347' | 'ch347f' | 'serprog' | 'hidprog',
+  set: (value) => {
+    settings.programmerManualKind = value
+  },
+})
+const serialPort = computed({
+  get: () => settings.programmerSerialPort,
+  set: (value: string) => {
+    settings.programmerSerialPort = value
+  },
+})
+const selectedCandidateId = ref('')
 
 type ExperimentalRequest = {
   title: string
@@ -42,6 +53,24 @@ const programmerOptions: UiOption[] = [
   { value: 'serprog', label: t('option.serprog') },
   { value: 'hidprog', label: t('option.hidprog') },
 ]
+
+const candidateOptions = computed<UiOption[]>(() =>
+  store.programmerCandidates.map((candidate) => ({
+    value: candidate.id,
+    label: `${candidate.name} · ${candidate.detail}`,
+  })),
+)
+const hasCandidates = computed(() => candidateOptions.value.length > 0)
+
+watch(
+  () => store.programmerCandidates,
+  (list) => {
+    if (list.some((candidate) => candidate.id === selectedCandidateId.value)) return
+    const preferred = list.find((candidate) => candidate.id === settings.programmerLastId)
+    selectedCandidateId.value = preferred?.id ?? list[0]?.id ?? ''
+  },
+  { immediate: true },
+)
 
 const spiModeOptions: UiOption[] = [
   { value: 0, label: 'Mode 0 (CPOL=0, CPHA=0)' },
@@ -144,8 +173,50 @@ function closeVccModal() {
   vccModal.value = false
 }
 
+function onChipAutoDetectToggle() {
+  if (settings.chipAutoDetectEnabled) {
+    void spiNor.autoDetectChip()
+  } else {
+    spiNor.cancelChipAutoDetect()
+  }
+}
+
+async function startScan() {
+  await store.scanProgrammers(true)
+}
+
+function setProgrammerMode(mode: 'auto' | 'manual') {
+  settings.programmerMode = mode
+  if (mode === 'manual') {
+    store.stopProgrammerPolling()
+  } else if (settings.programmerAutoPoll) {
+    store.startProgrammerPolling(true)
+  }
+}
+
+watch(
+  () => settings.programmerAutoPoll,
+  (enabled) => {
+    if (settings.programmerMode !== 'auto') return
+    if (enabled) {
+      store.startProgrammerPolling(true)
+    } else {
+      store.stopProgrammerPolling()
+    }
+  },
+)
+
 async function connect() {
-  if (
+  if (settings.programmerMode === 'auto' && hasCandidates.value) {
+    const candidate = store.programmerCandidates.find(
+      (item) => item.id === selectedCandidateId.value,
+    )
+    if (!candidate) {
+      store.addLog(t('placeholder.noProgrammer'), 'warn')
+      return
+    }
+    await store.connectCandidate(candidate)
+  } else if (
     programmerType.value === 'ch341' ||
     programmerType.value === 'ch347' ||
     programmerType.value === 'ch347f'
@@ -163,7 +234,9 @@ async function connect() {
     }
     await store.connectSerprog(port)
   }
-  if (store.status === 'success' && store.nandPowerAutoDetect) {
+  if (store.status === 'success' && settings.chipAutoDetectEnabled) {
+    void spiNor.autoDetectChip()
+  } else if (store.status === 'success' && store.nandPowerAutoDetect) {
     store.addLog('上电自动检测已开启，正在自动检测芯片...')
     await spiNor.detectChip()
   }
@@ -183,6 +256,7 @@ async function onModelChange() {
 
 onMounted(async () => {
   await store.loadLibAndTypes()
+  store.setupProgrammerDetection()
 })
 </script>
 
@@ -205,42 +279,98 @@ onMounted(async () => {
         {{ t('section.programmer') }}
       </div>
 
-      <div class="field">
-        <label class="field-label">{{ t('label.type') }}</label>
-        <UiSelect
-          v-model="programmerType"
-          :options="programmerOptions"
+      <div class="mode-switch">
+        <div class="mode-switch-thumb" :class="{ 'is-manual': settings.programmerMode === 'manual' }" />
+        <button
+          type="button"
+          class="mode-switch-item"
+          :class="{ 'is-active': settings.programmerMode === 'auto' }"
           :disabled="store.status === 'running'"
-        />
+          @click="setProgrammerMode('auto')"
+        >
+          {{ t('programmer.autoMode') }}
+        </button>
+        <button
+          type="button"
+          class="mode-switch-item"
+          :class="{ 'is-active': settings.programmerMode === 'manual' }"
+          :disabled="store.status === 'running'"
+          @click="setProgrammerMode('manual')"
+        >
+          {{ t('programmer.manualMode') }}
+        </button>
       </div>
 
-      <div
-        v-if="programmerType === 'ch347' || programmerType === 'ch347f'"
-        class="field"
-        style="margin-top: 6px"
-      >
-        <label class="field-label">{{ t('label.spiMode') }}</label>
-        <UiSelect v-model="store.spiMode" :options="spiModeOptions" />
-      </div>
+      <template v-if="settings.programmerMode === 'auto'">
+        <div class="detect-actions">
+          <button
+            class="btn btn-secondary"
+            :disabled="store.status === 'running' || store.programmerScanning"
+            @click="startScan"
+          >
+            {{ store.programmerScanning ? t('programmer.scanning') : t('programmer.startDetect') }}
+          </button>
+          <label class="auto-poll-toggle">
+            <input v-model="settings.programmerAutoPoll" type="checkbox" class="toggle-check" />
+            <span class="toggle-text">{{ t('programmer.autoPoll') }}</span>
+          </label>
+        </div>
 
-      <div
-        v-if="programmerType === 'ch347' || programmerType === 'ch347f'"
-        class="field"
-        style="margin-top: 6px"
-      >
-        <label class="field-label">{{ t('label.spiClock') }}</label>
-        <UiSelect v-model="store.spiFreq" :options="spiFreqOptions" />
-      </div>
+        <div v-if="hasCandidates" class="field" style="margin-top: 6px">
+          <label class="field-label">{{ t('label.detectedProgrammer') }}</label>
+          <UiSelect
+            v-model="selectedCandidateId"
+            :options="candidateOptions"
+            :disabled="store.status === 'running'"
+          />
+        </div>
 
-      <div v-if="programmerType === 'serprog'" class="field" style="margin-top: 6px">
-        <label class="field-label">{{ t('label.serialPort') }}</label>
-        <input v-model="serialPort" class="input" :placeholder="t('placeholder.serialPort')" />
-      </div>
+        <div v-if="store.programmerScanning" class="field-hint" style="margin-top: 6px">
+          {{ t('status.scanningProgrammers') }}
+        </div>
+        <div v-else-if="!hasCandidates" class="field-hint" style="margin-top: 6px">
+          {{ t('programmer.autoPollHint') }}
+        </div>
+      </template>
+
+      <template v-else>
+        <div class="field">
+          <label class="field-label">{{ t('label.type') }}</label>
+          <UiSelect
+            v-model="programmerType"
+            :options="programmerOptions"
+            :disabled="store.status === 'running'"
+          />
+        </div>
+
+        <div
+          v-if="programmerType === 'ch347' || programmerType === 'ch347f'"
+          class="field"
+          style="margin-top: 6px"
+        >
+          <label class="field-label">{{ t('label.spiMode') }}</label>
+          <UiSelect v-model="store.spiMode" :options="spiModeOptions" />
+        </div>
+
+        <div
+          v-if="programmerType === 'ch347' || programmerType === 'ch347f'"
+          class="field"
+          style="margin-top: 6px"
+        >
+          <label class="field-label">{{ t('label.spiClock') }}</label>
+          <UiSelect v-model="store.spiFreq" :options="spiFreqOptions" />
+        </div>
+
+        <div v-if="programmerType === 'serprog'" class="field" style="margin-top: 6px">
+          <label class="field-label">{{ t('label.serialPort') }}</label>
+          <input v-model="serialPort" class="input" :placeholder="t('placeholder.serialPort')" />
+        </div>
+      </template>
 
       <button
         class="btn btn-primary w-full"
         style="margin-top: 8px"
-        :disabled="store.status === 'running'"
+        :disabled="store.status === 'running' || store.programmerScanning"
         @click="connect"
       >
         {{ store.status === 'success' ? t('action.reconnect') : t('action.connect') }}
@@ -325,6 +455,41 @@ onMounted(async () => {
         >
           {{ t('action.search') }}
         </button>
+      </div>
+
+      <div class="field" style="margin-top: 8px">
+        <label class="toggle-row">
+          <input
+            v-model="settings.chipAutoDetectEnabled"
+            type="checkbox"
+            class="toggle-check"
+            @change="onChipAutoDetectToggle"
+          />
+          <span class="toggle-text">{{ t('chip.autoDetect') }}</span>
+        </label>
+        <div v-if="settings.chipAutoDetectEnabled" class="auto-detect-options">
+          <div class="field">
+            <label class="field-label">{{ t('chip.autoDetectCount') }}</label>
+            <input
+              v-model.number="settings.chipAutoDetectCount"
+              type="number"
+              min="1"
+              max="100"
+              class="input"
+            />
+          </div>
+          <div class="field">
+            <label class="field-label">{{ t('chip.autoDetectInterval') }}</label>
+            <input
+              v-model.number="settings.chipAutoDetectIntervalSec"
+              type="number"
+              min="0.5"
+              max="3600"
+              step="0.5"
+              class="input"
+            />
+          </div>
+        </div>
       </div>
     </section>
 
@@ -719,6 +884,75 @@ onMounted(async () => {
   font-size: 11px;
   color: var(--text-secondary);
   font-family: var(--font-sans);
+}
+.field-hint {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  line-height: 1.4;
+}
+.auto-detect-options {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+.auto-detect-options .field {
+  flex: 1;
+}
+.mode-switch {
+  position: relative;
+  display: flex;
+  padding: 2px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  margin-bottom: 8px;
+}
+.mode-switch-thumb {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 2px;
+  width: calc(50% - 2px);
+  background: var(--accent-subtle);
+  border: 1px solid var(--border-accent);
+  border-radius: calc(var(--radius-md) - 2px);
+  transition: transform 150ms ease;
+}
+.mode-switch-thumb.is-manual {
+  transform: translateX(100%);
+}
+.mode-switch-item {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  line-height: 24px;
+  cursor: pointer;
+  transition: color 150ms ease;
+}
+.mode-switch-item.is-active {
+  color: var(--accent);
+  font-weight: 600;
+}
+.mode-switch-item:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.detect-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.auto-poll-toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
 }
 
 .chip-info {

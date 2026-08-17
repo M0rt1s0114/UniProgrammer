@@ -7,15 +7,16 @@
 #[cfg(target_os = "windows")]
 mod imp {
     use std::ptr::null_mut;
-    use windows::core::{IUnknown, HSTRING};
+    use windows::core::{IUnknown, HSTRING, PCWSTR};
     use windows::Win32::Foundation::HWND;
     use windows::Win32::System::Com::{
         CoCreateInstance, CoInitializeEx, CoTaskMemFree, CoUninitialize, CLSCTX_INPROC_SERVER,
         COINIT_APARTMENTTHREADED,
     };
     use windows::Win32::UI::Shell::{
-        FileOpenDialog, FileSaveDialog, IFileDialog, FOS_FORCEFILESYSTEM, FOS_NOCHANGEDIR,
-        FOS_OVERWRITEPROMPT, FOS_PATHMUSTEXIST, SIGDN_FILESYSPATH,
+        Common::COMDLG_FILTERSPEC, FileOpenDialog, FileSaveDialog, IFileDialog,
+        FOS_FORCEFILESYSTEM, FOS_NOCHANGEDIR, FOS_OVERWRITEPROMPT, FOS_PATHMUSTEXIST,
+        SIGDN_FILESYSPATH,
     };
 
     /// Ensures CoUninitialize is called exactly once for a successful init.
@@ -64,6 +65,27 @@ mod imp {
 
         unsafe { dialog.SetOptions(FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST | FOS_NOCHANGEDIR) }
             .map_err(|e| format!("配置打开对话框失败: {e}"))?;
+
+        let firmware_name = HSTRING::from(
+            "固件/Flash 镜像 (*.bin;*.rom;*.img;*.fw;*.dump;*.eep;*.eeprom;*.nand;*.spi;*.flash;*.hex;*.ihex;*.mcs;*.srec;*.s19;*.s28;*.s37;*.mot;*.uf2)",
+        );
+        let firmware_spec = HSTRING::from(
+            "*.bin;*.rom;*.img;*.fw;*.dump;*.eep;*.eeprom;*.nand;*.spi;*.flash;*.hex;*.ihex;*.mcs;*.srec;*.s19;*.s28;*.s37;*.mot;*.uf2",
+        );
+        let all_name = HSTRING::from("所有文件 (*.*)");
+        let all_spec = HSTRING::from("*.*");
+        let filters = [
+            COMDLG_FILTERSPEC {
+                pszName: PCWSTR(firmware_name.as_ptr()),
+                pszSpec: PCWSTR(firmware_spec.as_ptr()),
+            },
+            COMDLG_FILTERSPEC {
+                pszName: PCWSTR(all_name.as_ptr()),
+                pszSpec: PCWSTR(all_spec.as_ptr()),
+            },
+        ];
+        unsafe { dialog.SetFileTypes(&filters) }
+            .map_err(|e| format!("配置打开文件类型失败: {e}"))?;
 
         match unsafe { dialog.Show(HWND(null_mut())) } {
             Ok(()) => item_path(&dialog).map(Some),

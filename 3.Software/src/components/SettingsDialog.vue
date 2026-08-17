@@ -22,6 +22,7 @@ const draft = reactive({
   autoDetectEeprom: false,
   progressEstimate: false,
   checkSoundSwitch: true,
+  blankCheckAfterErase: false,
   vccControlEnabled: false,
 })
 
@@ -34,6 +35,7 @@ function loadDraft() {
   draft.autoDetectEeprom = settings.autoDetectEeprom
   draft.progressEstimate = settings.progressEstimate
   draft.checkSoundSwitch = settings.checkSoundSwitch
+  draft.blankCheckAfterErase = settings.blankCheckAfterErase
   draft.vccControlEnabled = settings.vccControlEnabled
   showVccConfirm.value = false
 }
@@ -54,6 +56,7 @@ function applyDraft() {
   settings.autoDetectEeprom = draft.autoDetectEeprom
   settings.progressEstimate = draft.progressEstimate
   settings.checkSoundSwitch = draft.checkSoundSwitch
+  settings.blankCheckAfterErase = draft.blankCheckAfterErase
   settings.vccControlEnabled = draft.vccControlEnabled
 }
 
@@ -120,6 +123,10 @@ function cancelVccControl() {
               <label class="toggle-row">
                 <input v-model="draft.checkSoundSwitch" type="checkbox" class="toggle-check" />
                 <span class="toggle-text">{{ t('settings.checkSoundSwitch') }}</span>
+              </label>
+              <label class="toggle-row">
+                <input v-model="draft.blankCheckAfterErase" type="checkbox" class="toggle-check" />
+                <span class="toggle-text">{{ t('settings.blankCheckAfterErase') }}</span>
               </label>
             </div>
           </div>

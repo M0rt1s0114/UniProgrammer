@@ -12,13 +12,16 @@ type MessageRecord = Record<string, string>
 
 const zh: MessageRecord = {
   // App / titlebar
-  'app.title': 'UnProg',
+  'app.title': 'UniProg',
   'app.minimize': '最小化',
   'app.maximize': '最大化',
   'app.close': '关闭',
   'app.settings': '设置',
   'app.about': '关于',
   'app.dragToResize': '拖拽调整大小',
+  'app.closeDuringRunTitle': '正在执行操作',
+  'app.closeDuringRunBody': '正在执行操作，关闭可能会带来不可预知的后果，是否确认关闭？',
+  'app.confirmClose': '确认',
 
   // Pane titles
   'pane.hexView': 'Hex View',
@@ -28,6 +31,7 @@ const zh: MessageRecord = {
   'action.clearLog': '清空日志',
   'action.connect': '连接',
   'action.reconnect': '重新连接',
+  'action.rescan': '重新扫描',
   'action.openFile': '打开文件...',
   'action.detect': '检测',
   'action.search': '查找',
@@ -35,6 +39,8 @@ const zh: MessageRecord = {
   'action.write': '写入',
   'action.erase': '擦除',
   'action.verify': '校验',
+  'action.blankCheck': '查空',
+  'action.auto': '自动',
   'action.cancel': '取消',
   'action.confirmErase': '确认擦除',
   'action.confirm': '确定',
@@ -50,6 +56,7 @@ const zh: MessageRecord = {
 
   // Field labels
   'label.type': '类型',
+  'label.detectedProgrammer': '已检测到',
   'label.serialPort': '串口号',
   'label.spiMode': 'SPI 模式',
   'label.spiClock': 'SPI 时钟',
@@ -61,10 +68,35 @@ const zh: MessageRecord = {
   'placeholder.selectType': '-- 选择类型 --',
   'placeholder.selectVendor': '-- 选择厂商 --',
   'placeholder.selectModel': '-- 选择型号 --',
+  'placeholder.noProgrammer': '未检测到编程器，可手动选择连接',
 
   // Options
   'option.serprog': 'Serprog (串口)',
   'option.hidprog': 'HIDProg (预留)',
+
+  // Programmer auto detection
+  'programmer.autoMode': '自动识别',
+  'programmer.manualMode': '手动选择',
+  'programmer.startDetect': '开始识别',
+  'programmer.scanning': '识别中...',
+  'programmer.autoPoll': '连接后自动识别',
+  'programmer.autoPollHint': '点击“开始识别”检测设备；勾选“连接后自动识别”后持续轮询，找到设备即停止',
+
+  // Auto operation
+  'auto.settings': '自动流程设置',
+  'auto.stepRead': '读取',
+  'auto.stepErase': '擦除',
+  'auto.stepBlankCheck': '查空',
+  'auto.stepWrite': '写入',
+  'auto.stepVerify': '校验',
+  'auto.emptyHint': '尚未选择任何步骤',
+  'auto.allStepsUsed': '五个步骤都已加入，可继续添加重复步骤（用“+”重新选择）',
+  'auto.dragHint': '按住此把手拖拽排序',
+  'auto.run': '开始执行',
+  'auto.close': '关闭',
+  'auto.save': '保存',
+  'auto.confirmTitle': '确认执行自动流程',
+  'auto.confirmBody': '该流程包含擦除/写入操作，将不可逆地修改芯片内容。请确认已备份重要数据。',
 
   // Chip info labels
   'chipInfo.jedec': 'JEDEC:',
@@ -79,10 +111,14 @@ const zh: MessageRecord = {
   'chipInfo.feature': '特性位:',
   'chipInfo.addr4': '4B 地址:',
   'chipInfo.none': '尚未选择或检测到芯片',
+  'chip.autoDetect': '自动检测芯片',
+  'chip.autoDetectCount': '检测次数',
+  'chip.autoDetectInterval': '间隔(秒)',
 
   // Common
   'common.yes': '是',
   'common.no': '否',
+  'status.scanningProgrammers': '正在扫描编程器...',
 
   // Experimental warning
   'experimental.title': '实验性功能',
@@ -127,6 +163,7 @@ const zh: MessageRecord = {
   'settings.autoDetectEeprom': '自动识别 EEPROM',
   'settings.progressEstimate': '进度条估算(速度快)',
   'settings.checkSoundSwitch': '校验成功提示音',
+  'settings.blankCheckAfterErase': '擦除后自动查空',
   'settings.vccControl': '开启电压控制（需编程器支持）',
   'settings.vccBusyHint': '正在输出电压，请先断开电源再关闭电压控制',
   'settings.expEnabledLog': '{0}：实验性功能，已保存设置（后端暂未完全实现）',
@@ -234,13 +271,17 @@ const zh: MessageRecord = {
 
 const en: MessageRecord = {
   // App / titlebar
-  'app.title': 'UnProg',
+  'app.title': 'UniProg',
   'app.minimize': 'Minimize',
   'app.maximize': 'Maximize',
   'app.close': 'Close',
   'app.settings': 'Settings',
   'app.about': 'About',
   'app.dragToResize': 'Drag to resize',
+  'app.closeDuringRunTitle': 'Operation In Progress',
+  'app.closeDuringRunBody':
+    'An operation is in progress. Closing now may cause unpredictable results. Close anyway?',
+  'app.confirmClose': 'Confirm',
 
   // Pane titles
   'pane.hexView': 'Hex View',
@@ -250,6 +291,7 @@ const en: MessageRecord = {
   'action.clearLog': 'Clear log',
   'action.connect': 'Connect',
   'action.reconnect': 'Reconnect',
+  'action.rescan': 'Rescan',
   'action.openFile': 'Open File...',
   'action.detect': 'Detect',
   'action.search': 'Search',
@@ -257,6 +299,8 @@ const en: MessageRecord = {
   'action.write': 'Write',
   'action.erase': 'Erase',
   'action.verify': 'Verify',
+  'action.blankCheck': 'Blank Check',
+  'action.auto': 'Auto',
   'action.cancel': 'Cancel',
   'action.confirmErase': 'Confirm Erase',
   'action.confirm': 'OK',
@@ -272,6 +316,7 @@ const en: MessageRecord = {
 
   // Field labels
   'label.type': 'Type',
+  'label.detectedProgrammer': 'Detected',
   'label.serialPort': 'Serial Port',
   'label.spiMode': 'SPI Mode',
   'label.spiClock': 'SPI Clock',
@@ -283,10 +328,37 @@ const en: MessageRecord = {
   'placeholder.selectType': '-- Select Type --',
   'placeholder.selectVendor': '-- Select Vendor --',
   'placeholder.selectModel': '-- Select Model --',
+  'placeholder.noProgrammer': 'No programmer detected; use manual connect below',
 
   // Options
   'option.serprog': 'Serprog (Serial)',
   'option.hidprog': 'HIDProg (Reserved)',
+
+  // Programmer auto detection
+  'programmer.autoMode': 'Auto Detect',
+  'programmer.manualMode': 'Manual',
+  'programmer.startDetect': 'Start Scan',
+  'programmer.scanning': 'Scanning...',
+  'programmer.autoPoll': 'Auto detect after connection',
+  'programmer.autoPollHint':
+    'Press Start Scan to detect devices; enable auto detect to keep polling and stop once found',
+
+  // Auto operation
+  'auto.settings': 'Auto Flow Settings',
+  'auto.stepRead': 'Read',
+  'auto.stepErase': 'Erase',
+  'auto.stepBlankCheck': 'Blank Check',
+  'auto.stepWrite': 'Write',
+  'auto.stepVerify': 'Verify',
+  'auto.emptyHint': 'No steps selected yet',
+  'auto.allStepsUsed': 'All five steps are in the flow; use + to add duplicate steps',
+  'auto.dragHint': 'Drag by this handle to reorder',
+  'auto.run': 'Run',
+  'auto.close': 'Close',
+  'auto.save': 'Save',
+  'auto.confirmTitle': 'Confirm Auto Flow',
+  'auto.confirmBody':
+    'This flow includes erase/write operations and will irreversibly modify the chip. Make sure important data is backed up.',
 
   // Chip info labels
   'chipInfo.jedec': 'JEDEC:',
@@ -301,10 +373,14 @@ const en: MessageRecord = {
   'chipInfo.feature': 'Feature:',
   'chipInfo.addr4': '4B Address:',
   'chipInfo.none': 'No chip selected or detected yet',
+  'chip.autoDetect': 'Auto detect chip',
+  'chip.autoDetectCount': 'Attempts',
+  'chip.autoDetectInterval': 'Interval (s)',
 
   // Common
   'common.yes': 'Yes',
   'common.no': 'No',
+  'status.scanningProgrammers': 'Scanning for programmers...',
 
   // Experimental warning
   'experimental.title': 'Experimental Feature',
@@ -350,6 +426,7 @@ const en: MessageRecord = {
   'settings.autoDetectEeprom': 'Auto Detect EEPROM',
   'settings.progressEstimate': 'Fast Progress Estimation',
   'settings.checkSoundSwitch': 'Verify Success Sound',
+  'settings.blankCheckAfterErase': 'Blank check after erase',
   'settings.vccControl': 'Enable Voltage Control (programmer support required)',
   'settings.vccBusyHint': 'Power is on. Disconnect power before disabling voltage control.',
   'settings.expEnabledLog': '{0}: experimental setting saved (backend not fully implemented)',

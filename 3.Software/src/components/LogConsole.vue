@@ -114,6 +114,7 @@ function levelClass(level: LogEntry['level']) {
 
 .log-line {
   display: flex;
+  align-items: baseline;
   gap: 10px;
   padding: 1px 10px;
   line-height: 1.6;
@@ -128,6 +129,8 @@ function levelClass(level: LogEntry['level']) {
   color: var(--text-muted);
   flex-shrink: 0;
   font-size: 10px;
+  min-width: 52px;
+  white-space: nowrap;
   padding-top: 1px;
 }
 
@@ -143,6 +146,7 @@ function levelClass(level: LogEntry['level']) {
   font-size: 10px;
   font-weight: 600;
   color: var(--test-purple);
+  white-space: nowrap;
 }
 
 .log-info {

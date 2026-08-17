@@ -21,12 +21,30 @@ export const DEFAULT_SETTINGS = {
   nandProgramMode: 'main',
   vccControlEnabled: false,
   vccTargetMv: 3300,
+  programmerAutoConnect: false,
+  programmerLastId: '',
+  programmerMode: 'manual' as 'auto' | 'manual',
+  programmerAutoPoll: false,
+  programmerManualKind: 'ch341',
+  programmerSerialPort: '',
+  spiMode: 3,
+  spiFreq: 15000,
+  chipType: '',
+  chipVendor: '',
+  chipModel: '',
+  chipAutoDetectEnabled: false,
+  chipAutoDetectCount: 3,
+  chipAutoDetectIntervalSec: 2,
+  blankCheckAfterErase: false,
+  autoOrder: '',
 }
 
 const SECTION_GENERAL = 'general'
 const SECTION_AUTO = 'auto'
 const SECTION_NAND = 'nand'
 const SECTION_VCC = 'vcc'
+const SECTION_PROGRAMMER = 'programmer'
+const SECTION_CHIP = 'chip'
 
 function parseBool(value: string | undefined): boolean | undefined {
   if (value === undefined) return undefined
@@ -87,6 +105,8 @@ function parseSettingsFile(text: string): PartialSettings {
   const auto = ini[SECTION_AUTO] ?? {}
   const nand = ini[SECTION_NAND] ?? {}
   const vcc = ini[SECTION_VCC] ?? {}
+  const programmer = ini[SECTION_PROGRAMMER] ?? {}
+  const chip = ini[SECTION_CHIP] ?? {}
 
   const language = general['language']
   const theme = general['theme']
@@ -122,6 +142,62 @@ function parseSettingsFile(text: string): PartialSettings {
   if (parseBool(auto['savevoltage']) === true) {
     const targetMv = parseNumber(vcc['targetmv'])
     if (targetMv !== undefined) parsed.vccTargetMv = validVccMv(targetMv)
+  }
+
+  const autoConnect = parseBool(programmer['autoconnect'])
+  if (autoConnect !== undefined) parsed.programmerAutoConnect = autoConnect
+  if (programmer['lastid'] !== undefined) parsed.programmerLastId = programmer['lastid']
+  if (programmer['mode'] === 'auto' || programmer['mode'] === 'manual') {
+    parsed.programmerMode = programmer['mode']
+  }
+  const autoPoll = parseBool(programmer['autopoll'])
+  if (autoPoll !== undefined) parsed.programmerAutoPoll = autoPoll
+
+  const manualKinds = ['ch341', 'ch347', 'ch347f', 'serprog', 'hidprog'] as const
+  const manualKind = programmer['manualkind'] ?? ''
+  if ((manualKinds as readonly string[]).includes(manualKind)) {
+    parsed.programmerManualKind = manualKind as (typeof manualKinds)[number]
+  }
+  if (programmer['serialport'] !== undefined) {
+    parsed.programmerSerialPort = programmer['serialport']
+  }
+  const spiMode = parseNumber(programmer['spimode'])
+  if (spiMode !== undefined && spiMode >= 0 && spiMode <= 3) parsed.spiMode = spiMode
+  const spiFreq = parseNumber(programmer['spifreq'])
+  if (spiFreq !== undefined && [469, 937, 1875, 3750, 7500, 15000, 30000, 60000].includes(spiFreq)) {
+    parsed.spiFreq = spiFreq
+  }
+
+  if (chip['type'] !== undefined) parsed.chipType = chip['type']
+  if (chip['vendor'] !== undefined) parsed.chipVendor = chip['vendor']
+  if (chip['model'] !== undefined) parsed.chipModel = chip['model']
+
+  const chipAutoDetect = parseBool(auto['chipautodetectenabled'])
+  if (chipAutoDetect !== undefined) parsed.chipAutoDetectEnabled = chipAutoDetect
+  const chipAutoCount = parseNumber(auto['chipautodetectcount'])
+  if (chipAutoCount !== undefined && chipAutoCount >= 1 && chipAutoCount <= 100) {
+    parsed.chipAutoDetectCount = chipAutoCount
+  }
+  const chipAutoInterval = parseNumber(auto['chipautodetectintervalsec'])
+  if (chipAutoInterval !== undefined && chipAutoInterval >= 0.5 && chipAutoInterval <= 3600) {
+    parsed.chipAutoDetectIntervalSec = chipAutoInterval
+  }
+
+  const blankAfterErase = parseBool(auto['blankcheckaftererase'])
+  if (blankAfterErase !== undefined) parsed.blankCheckAfterErase = blankAfterErase
+
+  // 新格式：逗号分隔的顺序数组，允许重复步骤。
+  // 旧格式：五个布尔开关迁移成规范顺序（read,erase,blankCheck,write,verify）。
+  if (auto['autoorder'] !== undefined) {
+    parsed.autoOrder = auto['autoorder']
+  } else {
+    const legacyOrder: string[] = []
+    if (parseBool(auto['autoread']) === true) legacyOrder.push('read')
+    if (parseBool(auto['autoerase']) === true) legacyOrder.push('erase')
+    if (parseBool(auto['autoblankcheck']) === true) legacyOrder.push('blankCheck')
+    if (parseBool(auto['autowrite']) === true) legacyOrder.push('write')
+    if (parseBool(auto['autoverify']) === true) legacyOrder.push('verify')
+    if (legacyOrder.length > 0) parsed.autoOrder = legacyOrder.join(',')
   }
 
   return parsed
@@ -226,6 +302,22 @@ interface SerializedSettings {
   nandProgramMode: string
   vccControlEnabled: boolean
   vccTargetMv: number
+  programmerAutoConnect: boolean
+  programmerLastId: string
+  programmerMode: 'auto' | 'manual'
+  programmerAutoPoll: boolean
+  programmerManualKind: string
+  programmerSerialPort: string
+  spiMode: number
+  spiFreq: number
+  chipType: string
+  chipVendor: string
+  chipModel: string
+  chipAutoDetectEnabled: boolean
+  chipAutoDetectCount: number
+  chipAutoDetectIntervalSec: number
+  blankCheckAfterErase: boolean
+  autoOrder: string
 }
 
 function serializeSettings(state: SerializedSettings): string {
@@ -243,6 +335,11 @@ function serializeSettings(state: SerializedSettings): string {
   lines.push(`autoDetectEeprom=${state.autoDetectEeprom}`)
   lines.push(`progressEstimate=${state.progressEstimate}`)
   lines.push(`checkSoundSwitch=${state.checkSoundSwitch}`)
+  lines.push(`blankCheckAfterErase=${state.blankCheckAfterErase}`)
+  lines.push(`chipAutoDetectEnabled=${state.chipAutoDetectEnabled}`)
+  lines.push(`chipAutoDetectCount=${state.chipAutoDetectCount}`)
+  lines.push(`chipAutoDetectIntervalSec=${state.chipAutoDetectIntervalSec}`)
+  lines.push(`autoOrder=${state.autoOrder}`)
   lines.push('')
   lines.push('[nand]')
   lines.push(`readBadBlockFirst=${state.nandReadBadBlockFirst}`)
@@ -253,6 +350,21 @@ function serializeSettings(state: SerializedSettings): string {
   lines.push(`controlEnabled=${state.vccControlEnabled}`)
   // 保存设置电压未开启时，目标电压不跨启动记忆，始终回到安全默认值
   lines.push(`targetMv=${state.saveVoltage ? state.vccTargetMv : DEFAULT_SETTINGS.vccTargetMv}`)
+  lines.push('')
+  lines.push('[programmer]')
+  lines.push(`autoConnect=${state.programmerAutoConnect}`)
+  lines.push(`lastId=${state.programmerLastId}`)
+  lines.push(`mode=${state.programmerMode}`)
+  lines.push(`autoPoll=${state.programmerAutoPoll}`)
+  lines.push(`manualKind=${state.programmerManualKind}`)
+  lines.push(`serialPort=${state.programmerSerialPort}`)
+  lines.push(`spiMode=${state.spiMode}`)
+  lines.push(`spiFreq=${state.spiFreq}`)
+  lines.push('')
+  lines.push('[chip]')
+  lines.push(`type=${state.chipType}`)
+  lines.push(`vendor=${state.chipVendor}`)
+  lines.push(`model=${state.chipModel}`)
   lines.push('')
   return lines.join('\n')
 }
@@ -275,6 +387,22 @@ export const useSettingsStore = defineStore('settings', () => {
   const nandProgramMode = ref<'main' | 'oob_auto' | 'main_oob'>(DEFAULT_SETTINGS.nandProgramMode)
   const vccControlEnabled = ref(DEFAULT_SETTINGS.vccControlEnabled)
   const vccTargetMv = ref(DEFAULT_SETTINGS.vccTargetMv)
+  const programmerAutoConnect = ref(DEFAULT_SETTINGS.programmerAutoConnect)
+  const programmerLastId = ref(DEFAULT_SETTINGS.programmerLastId)
+  const programmerMode = ref<'auto' | 'manual'>(DEFAULT_SETTINGS.programmerMode)
+  const programmerAutoPoll = ref(DEFAULT_SETTINGS.programmerAutoPoll)
+  const programmerManualKind = ref(DEFAULT_SETTINGS.programmerManualKind)
+  const programmerSerialPort = ref(DEFAULT_SETTINGS.programmerSerialPort)
+  const spiMode = ref(DEFAULT_SETTINGS.spiMode)
+  const spiFreq = ref(DEFAULT_SETTINGS.spiFreq)
+  const chipType = ref(DEFAULT_SETTINGS.chipType)
+  const chipVendor = ref(DEFAULT_SETTINGS.chipVendor)
+  const chipModel = ref(DEFAULT_SETTINGS.chipModel)
+  const chipAutoDetectEnabled = ref(DEFAULT_SETTINGS.chipAutoDetectEnabled)
+  const chipAutoDetectCount = ref(DEFAULT_SETTINGS.chipAutoDetectCount)
+  const chipAutoDetectIntervalSec = ref(DEFAULT_SETTINGS.chipAutoDetectIntervalSec)
+  const blankCheckAfterErase = ref(DEFAULT_SETTINGS.blankCheckAfterErase)
+  const autoOrder = ref(DEFAULT_SETTINGS.autoOrder)
 
   function applyLocale() {
     setLocale(language.value)
@@ -323,6 +451,38 @@ export const useSettingsStore = defineStore('settings', () => {
     if (partial.nandProgramMode !== undefined) nandProgramMode.value = partial.nandProgramMode
     if (partial.vccControlEnabled !== undefined) vccControlEnabled.value = partial.vccControlEnabled
     if (partial.vccTargetMv !== undefined) vccTargetMv.value = partial.vccTargetMv
+    if (partial.programmerAutoConnect !== undefined) {
+      programmerAutoConnect.value = partial.programmerAutoConnect
+    }
+    if (partial.programmerLastId !== undefined) programmerLastId.value = partial.programmerLastId
+    if (partial.programmerMode !== undefined) programmerMode.value = partial.programmerMode
+    if (partial.programmerAutoPoll !== undefined) {
+      programmerAutoPoll.value = partial.programmerAutoPoll
+    }
+    if (partial.programmerManualKind !== undefined) {
+      programmerManualKind.value = partial.programmerManualKind
+    }
+    if (partial.programmerSerialPort !== undefined) {
+      programmerSerialPort.value = partial.programmerSerialPort
+    }
+    if (partial.spiMode !== undefined) spiMode.value = partial.spiMode
+    if (partial.spiFreq !== undefined) spiFreq.value = partial.spiFreq
+    if (partial.chipType !== undefined) chipType.value = partial.chipType
+    if (partial.chipVendor !== undefined) chipVendor.value = partial.chipVendor
+    if (partial.chipModel !== undefined) chipModel.value = partial.chipModel
+    if (partial.chipAutoDetectEnabled !== undefined) {
+      chipAutoDetectEnabled.value = partial.chipAutoDetectEnabled
+    }
+    if (partial.chipAutoDetectCount !== undefined) {
+      chipAutoDetectCount.value = partial.chipAutoDetectCount
+    }
+    if (partial.chipAutoDetectIntervalSec !== undefined) {
+      chipAutoDetectIntervalSec.value = partial.chipAutoDetectIntervalSec
+    }
+    if (partial.blankCheckAfterErase !== undefined) {
+      blankCheckAfterErase.value = partial.blankCheckAfterErase
+    }
+    if (partial.autoOrder !== undefined) autoOrder.value = partial.autoOrder
   }
 
   async function save() {
@@ -342,6 +502,22 @@ export const useSettingsStore = defineStore('settings', () => {
           nandProgramMode: nandProgramMode.value,
           vccControlEnabled: vccControlEnabled.value,
           vccTargetMv: vccTargetMv.value,
+          programmerAutoConnect: programmerAutoConnect.value,
+          programmerLastId: programmerLastId.value,
+          programmerMode: programmerMode.value,
+          programmerAutoPoll: programmerAutoPoll.value,
+          programmerManualKind: programmerManualKind.value,
+          programmerSerialPort: programmerSerialPort.value,
+          spiMode: spiMode.value,
+          spiFreq: spiFreq.value,
+          chipType: chipType.value,
+          chipVendor: chipVendor.value,
+          chipModel: chipModel.value,
+          chipAutoDetectEnabled: chipAutoDetectEnabled.value,
+          chipAutoDetectCount: chipAutoDetectCount.value,
+          chipAutoDetectIntervalSec: chipAutoDetectIntervalSec.value,
+          blankCheckAfterErase: blankCheckAfterErase.value,
+          autoOrder: autoOrder.value,
         }),
       })
       settingsFilePath.value = path
@@ -427,6 +603,22 @@ export const useSettingsStore = defineStore('settings', () => {
       nandProgramMode,
       vccControlEnabled,
       vccTargetMv,
+      programmerAutoConnect,
+      programmerLastId,
+      programmerMode,
+      programmerAutoPoll,
+      programmerManualKind,
+      programmerSerialPort,
+      spiMode,
+      spiFreq,
+      chipType,
+      chipVendor,
+      chipModel,
+      chipAutoDetectEnabled,
+      chipAutoDetectCount,
+      chipAutoDetectIntervalSec,
+      blankCheckAfterErase,
+      autoOrder,
     ],
     () => {
       if (!hydrated.value) return
@@ -454,6 +646,22 @@ export const useSettingsStore = defineStore('settings', () => {
     nandProgramMode,
     vccControlEnabled,
     vccTargetMv,
+    programmerAutoConnect,
+    programmerLastId,
+    programmerMode,
+    programmerAutoPoll,
+    programmerManualKind,
+    programmerSerialPort,
+    spiMode,
+    spiFreq,
+    chipType,
+    chipVendor,
+    chipModel,
+    chipAutoDetectEnabled,
+    chipAutoDetectCount,
+    chipAutoDetectIntervalSec,
+    blankCheckAfterErase,
+    autoOrder,
     initialize,
     save,
     applyTheme,

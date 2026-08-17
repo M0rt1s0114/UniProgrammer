@@ -31,6 +31,17 @@ export interface LogEntry {
   level: 'info' | 'warn' | 'error' | 'success' | 'functionTest'
 }
 
+export interface ProgrammerCandidate {
+  id: string
+  kind: 'ch341' | 'ch347' | 'ch347f' | 'serprog'
+  name: string
+  detail: string
+  deviceIndex: number | null
+  usbBus: number | null
+  usbAddress: number | null
+  port: string | null
+}
+
 export type OperationStatus = 'idle' | 'running' | 'success' | 'error'
 export type DetectStatus = 'idle' | 'detecting' | 'success' | 'programmer_fail' | 'chip_rule_fail'
 
@@ -50,9 +61,20 @@ export const useProgStore = defineStore('prog', () => {
   // 编程器连接
   const status = ref<OperationStatus>('idle')
   const connectedDevice = ref('')
-  // CH34X 设置：SPI 模式/时钟；目标电平与 VCC 目标轨绑定
-  const spiMode = ref(3)
-  const spiFreq = ref(15000)
+  // 自动识别候选与轮询
+  const programmerCandidates = ref<ProgrammerCandidate[]>([])
+  const programmerScanning = ref(false)
+  const programmerConnectedId = ref('')
+  let programmerPollTimer: ReturnType<typeof setInterval> | null = null
+  // CH34X 设置：SPI 模式/时钟；目标电平与 VCC 目标轨绑定（持久化）
+  const spiMode = ref(settings.spiMode)
+  const spiFreq = ref(settings.spiFreq)
+  watch(spiMode, (value) => {
+    settings.spiMode = value
+  })
+  watch(spiFreq, (value) => {
+    settings.spiFreq = value
+  })
   // VCC 输出（高危功能）：默认关闭，连接编程器时重置，不持久化
   const vccOutputEnabled = ref(false)
   const vccTargetMv = ref(settings.vccTargetMv)
@@ -206,9 +228,18 @@ export const useProgStore = defineStore('prog', () => {
   const chipVendors = ref<string[]>([])
   const chipModels = ref<string[]>([])
 
-  const selectedType = ref('')
-  const selectedVendor = ref('')
-  const selectedModel = ref('')
+  const selectedType = ref(settings.chipType)
+  const selectedVendor = ref(settings.chipVendor)
+  const selectedModel = ref(settings.chipModel)
+  watch(selectedType, (value) => {
+    settings.chipType = value
+  })
+  watch(selectedVendor, (value) => {
+    settings.chipVendor = value
+  })
+  watch(selectedModel, (value) => {
+    settings.chipModel = value
+  })
 
   // 芯片检测结果
   const chipDetected = ref(false)
@@ -233,7 +264,9 @@ export const useProgStore = defineStore('prog', () => {
 
   // 日志操作
   function addLog(message: string, level: LogEntry['level'] = 'info') {
-    const now = new Date().toLocaleTimeString()
+    const d = new Date()
+    const pad = (n: number) => String(n).padStart(2, '0')
+    const now = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
     logs.value.push({ id: ++_logId, time: now, message, level })
     if (logs.value.length > 1000) logs.value.shift()
   }
@@ -247,6 +280,26 @@ export const useProgStore = defineStore('prog', () => {
     try {
       await invoke('load_chip_lib')
       chipTypes.value = await invoke('get_chip_types')
+
+      // 恢复持久化的芯片选择，并对芯片库升级后的失效值做校验回退
+      if (selectedType.value && !chipTypes.value.includes(selectedType.value)) {
+        addLog(`已保存的芯片类型 ${selectedType.value} 在当前芯片库中不存在，已重置`, 'warn')
+        selectedType.value = ''
+      }
+      if (selectedType.value) {
+        chipVendors.value = await loadChipVendorsDirect(selectedType.value)
+        if (selectedVendor.value && !chipVendors.value.includes(selectedVendor.value)) {
+          addLog(`已保存的厂商 ${selectedVendor.value} 在当前芯片库中不存在，已重置`, 'warn')
+          selectedVendor.value = ''
+        }
+        if (selectedVendor.value) {
+          chipModels.value = await loadChipModelsDirect(selectedType.value, selectedVendor.value)
+          if (selectedModel.value && !chipModels.value.includes(selectedModel.value)) {
+            addLog(`已保存的型号 ${selectedModel.value} 在当前芯片库中不存在，已重置`, 'warn')
+            selectedModel.value = ''
+          }
+        }
+      }
     } catch (e: unknown) {
       addLog(`芯片库初始化失败: ${String(e)}`, 'error')
     }
@@ -319,7 +372,10 @@ export const useProgStore = defineStore('prog', () => {
   }
 
   // 连接编程器
-  async function initCh34x(kind: 'ch341' | 'ch347' | 'ch347f') {
+  async function initCh34x(
+    kind: 'ch341' | 'ch347' | 'ch347f',
+    target?: { deviceIndex?: number | null; usbBus?: number | null; usbAddress?: number | null },
+  ) {
     status.value = 'running'
     currentOp.value = '初始化 CH34X'
     if (vccOutputEnabled.value) {
@@ -333,6 +389,9 @@ export const useProgStore = defineStore('prog', () => {
         ioLevelMv: vccTargetMv.value,
         spiMode: spiMode.value,
         freqKhz: spiFreq.value,
+        deviceIndex: target?.deviceIndex ?? null,
+        usbBus: target?.usbBus ?? null,
+        usbAddress: target?.usbAddress ?? null,
       })) as string
       status.value = 'success'
       connectedDevice.value = msg
@@ -346,11 +405,12 @@ export const useProgStore = defineStore('prog', () => {
     } catch (e: unknown) {
       status.value = 'error'
       connectedDevice.value = ''
+      programmerConnectedId.value = ''
       addLog(`初始化失败: ${String(e)}`, 'error')
     }
   }
 
-  async function connectSerprog(port: string) {
+  async function connectSerprog(port: string, candidateId?: string) {
     status.value = 'running'
     currentOp.value = '连接 Serprog'
     if (vccOutputEnabled.value) {
@@ -362,6 +422,8 @@ export const useProgStore = defineStore('prog', () => {
       const msg = (await invoke('connect_serprog', { port })) as string
       status.value = 'success'
       connectedDevice.value = msg
+      programmerConnectedId.value = candidateId ?? `serprog:${port}`
+      settings.programmerLastId = programmerConnectedId.value
       addLog(msg, 'success')
       chipDetected.value = false
       detectedChipSize.value = 0
@@ -371,7 +433,125 @@ export const useProgStore = defineStore('prog', () => {
       }
     } catch (e: unknown) {
       status.value = 'error'
+      programmerConnectedId.value = ''
       addLog(`serprog 连接失败: ${String(e)}`, 'error')
+    }
+  }
+
+  // ── 编程器自动识别 ─────────────────────────────────────────────────────────
+  let lastScanError = ''
+  let lastAutoConnectId = ''
+  let lastAutoConnectAt = 0
+  const AUTO_CONNECT_RETRY_MS = 30_000
+
+  async function scanProgrammers(forceSerprog = false) {
+    if (programmerScanning.value || isRunning.value || status.value === 'running') return
+    programmerScanning.value = true
+    try {
+      const list = await invoke<ProgrammerCandidate[]>('scan_programmers', {
+        includeSerprog: forceSerprog,
+      })
+      programmerCandidates.value = list
+      lastScanError = ''
+
+      // 扫到任何编程器后立刻停止轮询，把设备让给用户使用。
+      if (list.length > 0) {
+        stopProgrammerPolling()
+      }
+
+      // 已连接设备被拔出：候选里没有它了
+      if (
+        status.value === 'success' &&
+        programmerConnectedId.value &&
+        !list.some((candidate) => candidate.id === programmerConnectedId.value)
+      ) {
+        status.value = 'error'
+        connectedDevice.value = ''
+        programmerConnectedId.value = ''
+        chipDetected.value = false
+        detectedChipSize.value = 0
+        chipDetails.value = null
+        addLog('编程器已断开', 'warn')
+      }
+
+      // 自动连接策略：优先上次记住的设备；只有一个候选时自动连接。
+      // 失败后 30 秒内不重复尝试，避免每隔 2 秒刷一次错误日志。
+      if (
+        settings.programmerAutoConnect &&
+        status.value !== 'success' &&
+        status.value !== 'running'
+      ) {
+        const preferred =
+          list.find((candidate) => candidate.id === settings.programmerLastId) ??
+          (list.length === 1 ? list[0] : undefined)
+        const now = Date.now()
+        if (
+          preferred &&
+          (preferred.id !== lastAutoConnectId || now - lastAutoConnectAt > AUTO_CONNECT_RETRY_MS)
+        ) {
+          lastAutoConnectId = preferred.id
+          lastAutoConnectAt = now
+          await connectCandidate(preferred, true)
+        }
+      }
+    } catch (e: unknown) {
+      const message = String(e)
+      if (message !== lastScanError) {
+        lastScanError = message
+        addLog(`扫描编程器失败: ${message}`, 'warn')
+      }
+    } finally {
+      programmerScanning.value = false
+    }
+  }
+
+  async function connectCandidate(candidate: ProgrammerCandidate, automatic = false) {
+    if (isRunning.value || status.value === 'running') return
+    if (!automatic) {
+      lastAutoConnectId = ''
+      lastAutoConnectAt = 0
+    }
+    if (automatic) {
+      addLog(`自动连接: ${candidate.name}（${candidate.detail}）`)
+    }
+    if (candidate.kind === 'serprog') {
+      if (!candidate.port) return
+      await connectSerprog(candidate.port, candidate.id)
+    } else {
+      await initCh34x(candidate.kind, {
+        deviceIndex: candidate.deviceIndex,
+        usbBus: candidate.usbBus,
+        usbAddress: candidate.usbAddress,
+      })
+      if (status.value === 'success') {
+        programmerConnectedId.value = candidate.id
+        settings.programmerLastId = candidate.id
+      }
+    }
+  }
+
+  function startProgrammerPolling(immediate = false) {
+    if (programmerPollTimer) return
+    if (immediate) {
+      void scanProgrammers(true)
+    }
+    programmerPollTimer = setInterval(() => {
+      void scanProgrammers(false)
+    }, 2000)
+  }
+
+  function stopProgrammerPolling() {
+    if (programmerPollTimer) {
+      clearInterval(programmerPollTimer)
+      programmerPollTimer = null
+    }
+  }
+
+  /// 按持久化设置恢复自动识别：只有“自动模式 + 连接后自动识别”开启时
+  /// 才在启动阶段开始轮询；否则等待用户点击“开始识别”。
+  function setupProgrammerDetection() {
+    if (settings.programmerMode === 'auto' && settings.programmerAutoPoll) {
+      startProgrammerPolling(true)
     }
   }
 
@@ -389,16 +569,19 @@ export const useProgStore = defineStore('prog', () => {
     }
   }
 
-  // 原生文件对话框打开文件（Windows IFileDialog + std::fs）
+  // 原生文件对话框打开文件（Windows IFileDialog + 固件格式解析）
   async function openFileViaDialog() {
     try {
       const path = await invoke<string | null>('open_file_dialog')
       if (!path) return
-      const bytes = await invoke<number[]>('read_file', { path })
-      hexData.value = new Uint8Array(bytes)
+      const result = await invoke<{ length: number; bytes: number[]; format: string }>(
+        'load_firmware_file',
+        { path },
+      )
+      hexData.value = new Uint8Array(result.bytes)
       filePath.value = path
-      fileSize.value = bytes.length
-      addLog(`已加载文件: ${path} (${formatBytes(bytes.length)})`, 'success')
+      fileSize.value = result.bytes.length
+      addLog(`已加载文件: ${path} (${result.format}, ${formatBytes(result.bytes.length)})`, 'success')
     } catch (e: unknown) {
       addLog(`文件加载失败: ${String(e)}`, 'error')
     }
@@ -418,6 +601,9 @@ export const useProgStore = defineStore('prog', () => {
   return {
     status,
     connectedDevice,
+    programmerCandidates,
+    programmerScanning,
+    programmerConnectedId,
     spiMode,
     spiFreq,
     vccOutputEnabled,
@@ -472,6 +658,11 @@ export const useProgStore = defineStore('prog', () => {
     onModelChanged,
     initCh34x,
     connectSerprog,
+    scanProgrammers,
+    connectCandidate,
+    startProgrammerPolling,
+    stopProgrammerPolling,
+    setupProgrammerDetection,
     loadFile,
     openFileViaDialog,
     convertLib,
