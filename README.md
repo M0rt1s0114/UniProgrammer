@@ -5,15 +5,15 @@
 [![License: GPL v3+](https://img.shields.io/badge/License-GPLv3+-blue.svg)](LICENSE)
 [![standard-readme compliant](https://img.shields.io/badge/readme%20style-standard-brightgreen.svg?style=flat-square)](https://github.com/RichardLitt/standard-readme)
 
-[涓枃鏂囨。](README_CN.md)
+[中文文档](README_CN.md)
 
-> **鈿狅笍 椤圭洰灏氭湭瀹屾垚瀹炴満楠岃瘉锛岃璋ㄦ厧浣跨敤 / Most features have NOT been
+> **⚠️ 项目尚未完成实机验证，请谨慎使用 / Most features have NOT been
 > validated on real hardware; use with caution.**
 >
 > 2026-08-16: basic CH341A + SPI NOR operations have passed on one test setup;
 > other programmer/chip combinations still require the validation checklist.
 
-> **Alpha software warning** 鈥?do not use this project on chips whose contents
+> **Alpha software warning** — do not use this project on chips whose contents
 > you cannot afford to lose.
 
 ## Table of Contents
@@ -96,7 +96,7 @@ cd 3.Software
 4. Use **Read / Write / Erase / Verify** as needed.
 
 For chips without a JEDEC ID (I2C, Microwire), select
-Type 鈫?Vendor 鈫?Model manually.
+Type → Vendor → Model manually.
 
 ## Hardware Backends
 
@@ -146,7 +146,7 @@ programmer over USART1.
   CI enforces the same checks on `main` and pull requests
 - Hardware validation is required before declaring a release stable;
   checklist: [EN](4.Docs/hardware-validation-nand-45.md) /
-  [涓枃](4.Docs/hardware-validation-nand-45_CN.md)
+  [中文](4.Docs/hardware-validation-nand-45_CN.md)
 
 ## Maintainers
 
@@ -155,7 +155,7 @@ programmer over USART1.
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) (English) /
-[CONTRIBUTING_CN.md](CONTRIBUTING_CN.md) (涓枃).
+[CONTRIBUTING_CN.md](CONTRIBUTING_CN.md) (中文).
 
 ## License
 

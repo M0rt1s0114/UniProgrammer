@@ -1,6 +1,6 @@
 # Contributing to UniProgrammer
 
-[涓枃](CONTRIBUTING_CN.md)
+[中文](CONTRIBUTING_CN.md)
 
 Thank you for your interest in contributing! UniProgrammer is a cross-platform
 SPI flash programmer with a pluggable hardware abstraction layer (HAL). This

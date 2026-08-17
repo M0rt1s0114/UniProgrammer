@@ -1,61 +1,79 @@
-# 涓?UniProgrammer 鍋氳础鐚?
+# 为 UniProgrammer 做贡献
+
 [English](CONTRIBUTING.md)
 
-鎰熻阿浣犲 UniProgrammer 鐨勫叧娉紒UniProgrammer 鏄竴涓法骞冲彴 SPI Flash 缂栫▼鍣紝
-甯︽湁鍙彃鎷旂殑纭欢鎶借薄灞傦紙HAL锛夈€傛湰鏂囨。璇存槑濡備綍鎼缓椤圭洰銆佷慨鏀逛唬鐮佷互鍙婃彁浜ゅ彉鏇淬€?
-## 鍩烘湰瑙勫垯
+感谢你对 UniProgrammer 的关注！UniProgrammer 是一个跨平台 SPI Flash 编程器，
+带有可插拔的硬件抽象层（HAL）。本文档说明如何搭建项目、修改代码以及提交变更。
 
-- **鎻愪氦淇℃伅蹇呴』浣跨敤鑻辨枃銆?*
-- 閬靛惊 [Conventional Commits](https://www.conventionalcommits.org/) 瑙勮寖銆?- 澶у瀷鍔熻兘璇峰厛鍦?issue 涓璁猴紝鍐嶆彁浜?Pull Request銆?- 鏈」鐩細鎿﹂櫎鍜屽啓鍏ョ湡瀹?Flash 鑺墖銆傛案杩滀笉瑕佸鍐呭鏃犳硶鎵垮彈涓㈠け鐨勮姱鐗?  鎵ц鍐欏叆鎴栨摝闄ゆ祴璇曘€?- 涓嶈鎻愪氦淇敼杩囩殑鍘傚晢浜岃繘鍒舵枃浠讹紙渚嬪 `CH34X.DLL`锛夈€傚巶鍟嗕簩杩涘埗鏂囦欢鍙兘
-  鐢辩淮鎶よ€呭熀浜庡畼鏂瑰彂甯冪増鏈洿鏂般€?
-## 寮€鍙戠幆澧?
-闇€瑕佺殑宸ュ叿锛?
-- Rust锛坰table锛変互鍙?`cargo`銆乣rustfmt`銆乣clippy`
-- Node.js 22+ 涓?npm
-- 骞冲彴渚濊禆
-  - Windows锛歐ebView2锛堥€氬父宸查瑁咃級
-  - Linux锛歐ebKitGTK 4.1銆丟TK 3銆乴ibusb-1.0銆乴ibudev锛屼互鍙?Tauri 鎵€闇€鐨?    鏍囧噯 Linux 渚濊禆
+## 基本规则
 
-## 鏋勫缓
+- **提交信息必须使用英文。**
+- 遵循 [Conventional Commits](https://www.conventionalcommits.org/) 规范。
+- 大型功能请先在 issue 中讨论，再提交 Pull Request。
+- 本项目会擦除和写入真实 Flash 芯片。永远不要对内容无法承受丢失的芯片
+  执行写入或擦除测试。
+- 不要提交修改过的厂商二进制文件（例如 `CH34X.DLL`）。厂商二进制文件只能
+  由维护者基于官方发布版本更新。
 
-鏋勫缓鑿滃崟鑴氭湰浼氶€夋嫨 HAL 鍚庣骞舵墽琛屽畬鏁?release 鏋勫缓銆?
-Windows锛圥owerShell锛夛細
+## 开发环境
+
+需要的工具：
+
+- Rust（stable）以及 `cargo`、`rustfmt`、`clippy`
+- Node.js 22+ 与 npm
+- 平台依赖
+  - Windows：WebView2（通常已预装）
+  - Linux：WebKitGTK 4.1、GTK 3、libusb-1.0、libudev，以及 Tauri 所需的
+    标准 Linux 依赖
+
+## 构建
+
+构建菜单脚本会选择 HAL 后端并执行完整 release 构建。
+
+Windows（PowerShell）：
 
 ```powershell
 .\build-menu.ps1
 ```
 
-Linux / macOS锛?
+Linux / macOS：
+
 ```bash
 ./build-menu.sh
 ```
 
-鍚庣閫夋嫨瑙勫垯锛?
-- 涓嶅惎鐢ㄤ换浣?feature锛氭寜骞冲彴榛樿锛坄Windows` -> `hal-dll`锛屽叾浠?-> `hal-libusb`锛?- `--features hal-libusb`锛氬己鍒朵娇鐢?rusb/libusb 鍚庣
-- `--features hal-dll`锛氬己鍒朵娇鐢?CH34X.DLL 鍚庣锛堜粎 Windows锛?
-## 鎻愪氦淇℃伅
+后端选择规则：
 
-鎵€鏈夋彁浜や娇鐢ㄨ嫳鏂?Conventional Commits锛?
+- 不启用任何 feature：按平台默认（`Windows` -> `hal-dll`，其他 -> `hal-libusb`）
+- `--features hal-libusb`：强制使用 rusb/libusb 后端
+- `--features hal-dll`：强制使用 CH34X.DLL 后端（仅 Windows）
+
+## 提交信息
+
+所有提交使用英文 Conventional Commits：
+
 ```
 type(scope): summary
 ```
 
-绫诲瀷锛?
-| Type | 鐢ㄩ€?|
-| --- | --- |
-| `feat` | 鏂板姛鑳?|
-| `fix` | 缂洪櫡淇 |
-| `docs` | 鏂囨。 |
-| `style` | 浠呮牸寮忚皟鏁?|
-| `refactor` | 涓嶆敼鍙樿涓虹殑浠ｇ爜閲嶆瀯 |
-| `perf` | 鎬ц兘浼樺寲 |
-| `test` | 娴嬭瘯 |
-| `build` | 鏋勫缓绯荤粺鎴栦緷璧?|
-| `ci` | CI 閰嶇疆 |
-| `chore` | 缁存姢鎬т换鍔?|
-| `revert` | 鍥炴粴鏌愭鎻愪氦 |
+类型：
 
-绀轰緥锛?
+| Type | 用途 |
+| --- | --- |
+| `feat` | 新功能 |
+| `fix` | 缺陷修复 |
+| `docs` | 文档 |
+| `style` | 仅格式调整 |
+| `refactor` | 不改变行为的代码重构 |
+| `perf` | 性能优化 |
+| `test` | 测试 |
+| `build` | 构建系统或依赖 |
+| `ci` | CI 配置 |
+| `chore` | 维护性任务 |
+| `revert` | 回滚某次提交 |
+
+示例：
+
 ```
 feat(hal): add Windows DLL backend
 fix(serprog): correct S_BUSTYPE and O_SPIOP opcodes
@@ -63,65 +81,79 @@ refactor(chiplib): replace XML fallback with typed loader
 chore(release): 0.3.0-alpha.1
 ```
 
-鐮村潖鎬у彉鏇翠娇鐢?`!` 鎴?`BREAKING CHANGE:` 鑴氭敞锛?
+破坏性变更使用 `!` 或 `BREAKING CHANGE:` 脚注：
+
 ```
 feat(hal)!: split backends into separate compile features
 ```
 
-## 鍒嗘敮涓?Pull Request
+## 分支与 Pull Request
 
-- 浠?`main` 鍒涘缓鐭嫳鏂囧垎鏀細
-  `feat/...`銆乣fix/...`銆乣docs/...`銆乣chore/...`
-- 姣忎釜 Pull Request 鍙叧娉ㄤ竴涓彉鏇淬€?- 涓哄彉鏇寸殑閫昏緫娣诲姞鎴栨洿鏂版祴璇曘€?- 纭繚鏈湴 `cargo check`銆乣cargo test` 浠ュ強
-  [浠ｇ爜椋庢牸](#浠ｇ爜椋庢牸) 涓殑 lint 濂椾欢閫氳繃銆?
-## 浠ｇ爜椋庢牸
+- 从 `main` 创建短英文分支：
+  `feat/...`、`fix/...`、`docs/...`、`chore/...`
+- 每个 Pull Request 只关注一个变更。
+- 为变更的逻辑添加或更新测试。
+- 确保本地 `cargo check`、`cargo test` 以及
+  [代码风格](#代码风格) 中的 lint 套件通过。
 
-鎺ㄩ€佸墠璇峰湪 `3.Software` 涓嬭繍琛屽畬鏁?lint 濂椾欢锛?
-Windows锛圥owerShell锛夛細
+## 代码风格
+
+推送前请在 `3.Software` 下运行完整 lint 套件：
+
+Windows（PowerShell）：
 
 ```powershell
 .\lint.ps1
 ```
 
-Linux / macOS锛?
+Linux / macOS：
+
 ```bash
 ./lint.sh
 ```
 
-璇ュ浠舵鏌ワ細
+该套件检查：
 
-- 鍓嶇锛歚npm run lint`锛圗SLint 10 + typescript-eslint +
-  eslint-plugin-vue锛変互鍙?`npm run format:check`锛圥rettier锛?- 鍚庣锛歚cargo fmt --check` 涓?`cargo lint`
-  锛坄cargo clippy --all-targets -- -D warnings`锛涘弬瑙?  `3.Software/src-tauri/.cargo/config.toml`锛?
-CI 閫氳繃 `.github/workflows/lint.yml` 鍦ㄦ瘡娆?`main` 鎺ㄩ€佸拰 Pull Request 涓?杩愯鍚屾牱鐨勬鏌ャ€?
-鍗曠嫭鍛戒护锛?
+- 前端：`npm run lint`（ESLint 10 + typescript-eslint +
+  eslint-plugin-vue）以及 `npm run format:check`（Prettier）
+- 后端：`cargo fmt --check` 与 `cargo lint`
+  （`cargo clippy --all-targets -- -D warnings`；参见
+  `3.Software/src-tauri/.cargo/config.toml`）
+
+CI 通过 `.github/workflows/lint.yml` 在每次 `main` 推送和 Pull Request 上
+运行同样的检查。
+
+单独命令：
+
 ```bash
-# 鍓嶇锛堝湪 3.Software 涓嬭繍琛岋級
+# 前端（在 3.Software 下运行）
 npm run lint
 npm run lint:fix
 npm run format:check
 npm run format
 
-# 鍚庣锛堝湪 3.Software/src-tauri 涓嬭繍琛岋級
+# 后端（在 3.Software/src-tauri 下运行）
 cargo fmt --check
 cargo lint
 ```
 
-鍓嶇椋庢牸璇存槑锛?
+前端风格说明：
+
 - Vue 3 `<script setup lang="ts">`
-- 鐢ㄦ埛鍙瀛楃涓叉斁鍦?`3.Software/src/i18n/index.ts`
-- 鏂扮殑鍙鐢?UI 缁勪欢鏀惧湪 `3.Software/src/components`
+- 用户可见字符串放在 `3.Software/src/i18n/index.ts`
+- 新的可复用 UI 组件放在 `3.Software/src/components`
 
-## 娴嬭瘯
+## 测试
 
-鑷冲皯杩愯锛?
+至少运行：
+
 ```bash
 cargo test
 ```
 
-纭欢鐩稿叧鏀瑰姩闇€瑕佹墜鍔ㄩ獙璇侊紝鍙娇鐢ㄤ笅琛ㄤ綔涓烘鏌ユ竻鍗曪細
+硬件相关改动需要手动验证，可使用下表作为检查清单：
 
-| 鍚庣 | 鑺墖 | 璇?ID | 鎿﹂櫎 | 璇诲彇 | 鍐欏叆 | 鏍￠獙 |
+| 后端 | 芯片 | 读 ID | 擦除 | 读取 | 写入 | 校验 |
 | --- | --- | --- | --- | --- | --- | --- |
 | CH341A DLL | SPI NOR | | | | | |
 | CH347T DLL | SPI NOR | | | | | |
@@ -129,16 +161,26 @@ cargo test
 | libusb | SPI NOR | | | | | |
 | Serprog | SPI NOR | | | | | |
 
-- 2026-08-16锛欳H341A DLL + SPI NOR 鍩虹璇?鍐?鎿?鏍￠獙宸插湪鍗曞彴娴嬭瘯鐜閫氳繃锛?  鍚庣画鎸夊疄闄呮祴璇曠户缁～鍐欍€?
-## 鑺墖鏁版嵁搴?
-- `chiplib.bin` 鏄潈濞佹暟鎹簱锛岀鐩樹笂浣跨敤杞婚噺娣锋穯銆?- `chiplib.xml` 鏄悓鏍锋贩娣嗙殑鍥為€€鏂囦欢锛屼笉鏄彲璇绘簮鏂囦欢銆?- 瑙ｇ爜鍙彂鐢熷湪鍐呭瓨涓紱涓嶅緱鎻愪氦鎴栧湪宸ヤ綔鐩綍鐣欎笅鏄庢枃鑺墖搴撱€?- 鎵归噺鏇存柊浼樺厛浣跨敤 `chipdb_tool merge <bin> <chips.tsv>`锛屽崟棰楄姱鐗囦娇鐢?  `chipdb_tool add ...`锛岄伩鍏嶈鐩栧凡鏈夎ˉ鍏ㄥ瓧娈点€?
-## 鐗堟湰绠＄悊
+- 2026-08-16：CH341A DLL + SPI NOR 基础读/写/擦/校验已在单台测试环境通过；
+  后续按实际测试继续填写。
 
-- 璇箟鍖栫増鏈?2.0.0
-- Git tag 浣跨敤 `v` 鍓嶇紑锛歚v0.3.0-alpha.1`
-- 棰勫彂甯冪増鏈細`-alpha.N`銆乣-beta.N`銆乣-rc.N`
-- 鎺ㄩ€?`v*` tag 浼氳Е鍙?release workflow
+## 芯片数据库
 
-## 璁稿彲璇?
-UniProgrammer 閲囩敤
-[GPL-3.0-or-later](https://www.gnu.org/licenses/gpl-3.0.html) 璁稿彲銆?鍙備笌璐＄尞鍗宠〃绀轰綘鍚屾剰浣犵殑璐＄尞浠ョ浉鍚屾潯娆惧彂甯冦€?
+- `chiplib.bin` 是权威数据库，磁盘上使用轻量混淆。
+- `chiplib.xml` 是同样混淆的回退文件，不是可读源文件。
+- 解码只发生在内存中；不得提交或在工作目录留下明文芯片库。
+- 批量更新优先使用 `chipdb_tool merge <bin> <chips.tsv>`，单颗芯片使用
+  `chipdb_tool add ...`，避免覆盖已有补全字段。
+
+## 版本管理
+
+- 语义化版本 2.0.0
+- Git tag 使用 `v` 前缀：`v0.3.0-alpha.1`
+- 预发布版本：`-alpha.N`、`-beta.N`、`-rc.N`
+- 推送 `v*` tag 会触发 release workflow
+
+## 许可证
+
+UniProgrammer 采用
+[GPL-3.0-or-later](https://www.gnu.org/licenses/gpl-3.0.html) 许可。
+参与贡献即表示你同意你的贡献以相同条款发布。
