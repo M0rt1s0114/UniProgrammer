@@ -1090,17 +1090,20 @@ pub fn nand_erase(
     params: &ChipParams,
     size: u64,
     bad_blocks: &[u32],
+    progress: &mut dyn FnMut(u32, u32),
 ) -> Result<(), String> {
     let block_size = params.block.max(1) as u64;
     let page_size = params.page.max(1) as u64;
     let pages_per_block = (block_size / page_size).max(1) as u32;
     let blocks = size.div_ceil(block_size) as u32;
     let bad_set: std::collections::HashSet<u32> = bad_blocks.iter().copied().collect();
+    let mut done = 0u32;
     for block_no in 0..blocks {
-        if bad_set.contains(&block_no) {
-            continue;
+        if !bad_set.contains(&block_no) {
+            nand_block_erase(dev, params, block_no, pages_per_block)?;
         }
-        nand_block_erase(dev, params, block_no, pages_per_block)?;
+        done += 1;
+        progress(done, blocks);
     }
     Ok(())
 }
@@ -1241,11 +1244,15 @@ pub fn i2c_write(
     Ok(())
 }
 
-pub fn i2c_erase(dev: &Ch34xDevice, params: &ChipParams, size: u64) -> Result<(), String> {
+pub fn i2c_erase(
+    dev: &Ch34xDevice,
+    params: &ChipParams,
+    size: u64,
+    progress: &mut dyn FnMut(u64, u64),
+) -> Result<(), String> {
     // I2C EEPROM "erase" == write 0xFF to every cell.
     let erased = vec![0xFFu8; size as usize];
-    let mut progress = |_done: u64, _total: u64| {};
-    i2c_write(dev, params, &erased, 0, &mut progress)
+    i2c_write(dev, params, &erased, 0, progress)
 }
 
 // ═════════════════════════════ Microwire 93xx (CH341 only) ═══════════════════

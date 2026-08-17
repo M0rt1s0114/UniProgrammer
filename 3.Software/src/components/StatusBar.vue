@@ -25,6 +25,21 @@ const fileName = computed(() => {
   if (!store.filePath) return ''
   return store.filePath.split(/[\\/]/).pop() ?? store.filePath
 })
+
+function formatElapsed(ms: number): string {
+  const totalSec = Math.floor(ms / 1000)
+  const minutes = Math.floor(totalSec / 60)
+  const seconds = totalSec % 60
+  if (minutes > 0) return `${minutes}m${seconds.toString().padStart(2, '0')}s`
+  return `${(ms / 1000).toFixed(1)}s`
+}
+
+const progressLabel = computed(() => {
+  if (store.progressIndeterminate) {
+    return store.progressElapsedMs > 0 ? formatElapsed(store.progressElapsedMs) : '···'
+  }
+  return `${Math.round(store.progress)}%`
+})
 </script>
 
 <template>
@@ -49,9 +64,13 @@ const fileName = computed(() => {
 
     <div v-if="store.isRunning" class="status-progress">
       <div class="progress-track" style="width: 140px">
-        <div class="progress-fill" :style="{ width: store.progress + '%' }" />
+        <div
+          class="progress-fill"
+          :class="{ indeterminate: store.progressIndeterminate }"
+          :style="{ width: store.progressIndeterminate ? '30%' : store.progress + '%' }"
+        />
       </div>
-      <span class="progress-pct">{{ Math.round(store.progress) }}%</span>
+      <span class="progress-pct">{{ progressLabel }}</span>
       <span class="progress-msg text-muted">{{ store.progressMessage }}</span>
     </div>
 
@@ -135,8 +154,23 @@ const fileName = computed(() => {
 .progress-pct {
   font-size: 11px;
   color: var(--text-secondary);
-  width: 32px;
+  width: 48px;
   text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.progress-fill.indeterminate {
+  animation: progress-indeterminate 1.2s ease-in-out infinite;
+}
+@keyframes progress-indeterminate {
+  0% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(230%);
+  }
+  100% {
+    transform: translateX(0);
+  }
 }
 .progress-msg {
   font-size: 10px;

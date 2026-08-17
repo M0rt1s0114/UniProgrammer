@@ -70,6 +70,16 @@ struct BadBlockProgressEvent {
     total: u32,
 }
 
+#[derive(Clone, Serialize)]
+struct EraseProgressEvent {
+    done: u64,
+    total: u64,
+    phase: String,
+    message: String,
+    #[serde(rename = "elapsedMs")]
+    elapsed_ms: Option<u64>,
+}
+
 #[derive(Serialize)]
 struct BadBlockScanResult {
     total_blocks: u32,
@@ -205,6 +215,79 @@ fn spi_wait_ready(dev: &Ch34xDevice, timeout_ms: u64) -> Result<(), String> {
         }
         if start.elapsed() > Duration::from_millis(timeout_ms) {
             return Err("等待闪存就绪超时".into());
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    }
+}
+
+fn emit_erase_progress_event(
+    app: &tauri::AppHandle,
+    done: u64,
+    total: u64,
+    phase: &str,
+    message: &str,
+    elapsed_ms: Option<u64>,
+) {
+    app.emit(
+        "erase_progress",
+        EraseProgressEvent {
+            done,
+            total,
+            phase: phase.to_string(),
+            message: message.to_string(),
+            elapsed_ms,
+        },
+    )
+    .ok();
+}
+
+fn emit_erase_progress(app: &tauri::AppHandle, done: u64, total: u64, phase: &str, message: &str) {
+    emit_erase_progress_event(app, done, total, phase, message, None);
+}
+
+/// Indeterminate progress: no real percentage, only a message and an elapsed
+/// timer. Used while the chip is busy with a full-chip erase.
+fn emit_erase_progress_elapsed(
+    app: &tauri::AppHandle,
+    phase: &str,
+    message: &str,
+    elapsed_ms: u64,
+) {
+    emit_erase_progress_event(app, 0, 0, phase, message, Some(elapsed_ms));
+}
+
+/// Same as `spi_wait_ready`, but reports elapsed time to the frontend every
+/// 250 ms so a long full-chip erase never looks frozen.
+fn spi_wait_ready_with_progress(
+    dev: &Ch34xDevice,
+    timeout_ms: u64,
+    app: &tauri::AppHandle,
+    phase: &str,
+    message_prefix: &str,
+) -> Result<(), String> {
+    let start = Instant::now();
+    let mut last_report = start;
+    loop {
+        let status = spi_read_status(dev)?;
+        if (status & 0x01 | status & 0x20 | status & 0x02) == 0 {
+            return Ok(());
+        }
+        let elapsed_ms = start.elapsed().as_millis() as u64;
+        if elapsed_ms > timeout_ms {
+            return Err("等待闪存就绪超时".into());
+        }
+        if last_report.elapsed() >= Duration::from_millis(250) {
+            emit_erase_progress_elapsed(
+                app,
+                phase,
+                &format!(
+                    "{} · 最长等待 {:.0}s",
+                    message_prefix,
+                    timeout_ms as f64 / 1000.0
+                ),
+                elapsed_ms,
+            );
+            last_report = Instant::now();
         }
         std::thread::sleep(Duration::from_millis(5));
     }
@@ -725,7 +808,7 @@ fn require_nand_ch34x(state: &AppState) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn chip_erase(
+async fn chip_erase(
     state: State<'_, Mutex<AppState>>,
     app: tauri::AppHandle,
     bad_block_mode: Option<String>,
@@ -739,15 +822,21 @@ fn chip_erase(
             None => {
                 // No detection cached: default to NOR behaviour.
                 let dev = open_ch34x(&s)?;
+                emit_erase_progress(&app, 0, 0, "prepare", "等待芯片就绪...");
                 spi_wait_ready(&dev, 2000)?;
+                emit_erase_progress(&app, 0, 0, "prepare", "写使能 (WREN)...");
                 spi_write_enable(&dev)?;
+                emit_erase_progress(&app, 0, 0, "prepare", "解除写保护...");
                 spi_unprotect(&dev)?;
+                emit_erase_progress(&app, 0, 0, "prepare", "再次写使能 (WREN)...");
                 spi_write_enable(&dev)?;
+                emit_erase_progress(&app, 0, 0, "erase", "已发送全片擦除命令 (C7h)，芯片内部擦除中...");
                 dev.cs_low()?;
                 dev.spi_tx(&[0xC7])?;
                 dev.cs_high()?;
-                spi_wait_ready(&dev, 120_000)?;
+                spi_wait_ready_with_progress(&dev, 120_000, &app, "erase", "全片擦除中")?;
                 spi_write_disable(&dev)?;
+                emit_erase_progress(&app, 1, 1, "done", "全片擦除完成");
                 return Ok("全片擦除完成".to_string());
             }
         };
@@ -755,28 +844,39 @@ fn chip_erase(
         match info.protocol.as_str() {
             "SPI_NOR" => {
                 let dev = open_ch34x_mode(&s, bus)?;
+                emit_erase_progress(&app, 0, 0, "prepare", "等待芯片就绪...");
                 spi_wait_ready(&dev, 2000)?;
+                emit_erase_progress(&app, 0, 0, "prepare", "写使能 (WREN)...");
                 spi_write_enable(&dev)?;
+                emit_erase_progress(&app, 0, 0, "prepare", "解除写保护...");
                 spi_unprotect(&dev)?;
+                emit_erase_progress(&app, 0, 0, "prepare", "再次写使能 (WREN)...");
                 spi_write_enable(&dev)?;
+                emit_erase_progress(&app, 0, 0, "erase", "已发送全片擦除命令 (C7h)，芯片内部擦除中...");
                 dev.cs_low()?;
                 dev.spi_tx(&[0xC7])?;
                 dev.cs_high()?;
-                spi_wait_ready(&dev, 120_000)?;
+                spi_wait_ready_with_progress(&dev, 120_000, &app, "erase", "全片擦除中")?;
                 spi_write_disable(&dev)?;
+                emit_erase_progress(&app, 1, 1, "done", "全片擦除完成");
             }
             "SPI_EEPROM" => {
                 let dev = open_ch34x_mode(&s, bus)?;
+                emit_erase_progress(&app, 0, 0, "erase", "EEPROM 全片擦除中...");
                 protocols::s95_erase(&dev)?;
+                emit_erase_progress(&app, 1, 1, "done", "全片擦除完成");
             }
             "SPI_DATA_45" => {
                 let dev = open_ch34x_mode(&s, bus)?;
+                emit_erase_progress(&app, 0, 0, "erase", "DataFlash 全片擦除中...");
                 protocols::at45_erase(&dev)?;
+                emit_erase_progress(&app, 1, 1, "done", "全片擦除完成");
             }
             "SPI_NAND" => {
                 let dev = open_ch34x_mode(&s, bus)?;
                 let params = protocols::ChipParams::from_info(&info);
                 let mode = parse_nand_bad_block_mode(bad_block_mode.as_deref());
+                emit_erase_progress(&app, 0, 0, "bad_block", "正在扫描坏块...");
                 let bad_blocks = scan_nand_bad_blocks_for_mode(&dev, &info, &app, mode)?;
                 let links = prepare_bypass_if_needed(&dev, &info, mode, &bad_blocks)?;
                 let op_bad = if mode == protocols::NandBadBlockMode::Bypass {
@@ -784,7 +884,16 @@ fn chip_erase(
                 } else {
                     bad_blocks
                 };
-                protocols::nand_erase(&dev, &params, info.size, &op_bad)?;
+                protocols::nand_erase(&dev, &params, info.size, &op_bad, &mut |done, total| {
+                    emit_erase_progress(
+                        &app,
+                        done as u64,
+                        total as u64,
+                        "erase",
+                        &format!("SPI NAND 块擦除 {}/{}", done, total),
+                    );
+                })?;
+                emit_erase_progress(&app, 1, 1, "done", "全片擦除完成");
                 if !links.is_empty() {
                     return Ok(format!(
                         "全片擦除完成（已写入 {} 条 BBM 坏块映射）",
@@ -795,19 +904,34 @@ fn chip_erase(
             "I2C" | "I2C_F-RAM" | "I2C_SPD" => {
                 let dev = open_ch34x_mode(&s, bus)?;
                 let params = protocols::ChipParams::from_info(&info);
-                protocols::i2c_erase(&dev, &params, info.size)?;
+                emit_erase_progress(&app, 0, 0, "erase", "I2C 芯片擦除中（写 0xFF）...");
+                protocols::i2c_erase(&dev, &params, info.size, &mut |done, total| {
+                    emit_erase_progress(
+                        &app,
+                        done,
+                        total,
+                        "erase",
+                        &format!("I2C 擦除 {}/{} 字节", done, total),
+                    );
+                })?;
+                emit_erase_progress(&app, 1, 1, "done", "全片擦除完成");
             }
             "Microwire" => {
                 let dev = open_ch34x_mode(&s, bus)?;
                 let params = protocols::ChipParams::from_info(&info);
+                emit_erase_progress(&app, 0, 0, "erase", "Microwire 全片擦除中...");
                 protocols::mw_erase(&dev, &params)?;
+                emit_erase_progress(&app, 1, 1, "done", "全片擦除完成");
             }
             other => return Err(format!("协议 {} 暂未实现", other)),
         }
     } else if let Some(ser) = &mut s.serprog {
+        emit_erase_progress(&app, 0, 0, "prepare", "写使能 (WREN)...");
         ser.spi_command(&[0x06], 0)?;
+        emit_erase_progress(&app, 0, 0, "erase", "已发送全片擦除命令 (C7h)，芯片内部擦除中...");
         ser.spi_command(&[0xC7], 0)?;
         serprog_wait_ready(ser, 120_000)?;
+        emit_erase_progress(&app, 1, 1, "done", "全片擦除完成");
     } else {
         return Err("没有可用的编程器，请先初始化".into());
     }

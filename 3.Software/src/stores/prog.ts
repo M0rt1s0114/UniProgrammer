@@ -89,6 +89,8 @@ export const useProgStore = defineStore('prog', () => {
   const currentOp = ref('')
   const progress = ref(0)
   const progressMessage = ref('')
+  const progressIndeterminate = ref(false)
+  const progressElapsedMs = ref(0)
 
   // Hex 查看器数据
   const hexData = ref<Uint8Array | null>(null)
@@ -429,6 +431,8 @@ export const useProgStore = defineStore('prog', () => {
     currentOp,
     progress,
     progressMessage,
+    progressIndeterminate,
+    progressElapsedMs,
     hexData,
     filePath,
     fileSize,

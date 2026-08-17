@@ -338,23 +338,64 @@ export function useSpiNor() {
     store.isRunning = true
     store.currentOp = '全片擦除'
     store.progress = 0
-    store.progressMessage = '正在擦除...'
+    store.progressIndeterminate = true
+    store.progressElapsedMs = 0
+    store.progressMessage = '正在准备擦除...'
     store.addLog('开始全片擦除...')
+
+    let unlistenErase: UnlistenFn | null = null
+    let unlistenBadBlock: UnlistenFn | null = null
     try {
+      unlistenErase = await listen<{
+        done: number
+        total: number
+        phase: string
+        message: string
+        elapsedMs?: number | null
+      }>('erase_progress', ({ payload }) => {
+        if (payload.total > 0) {
+          store.progressIndeterminate = false
+          store.progressElapsedMs = 0
+          store.progress = Math.min(99, Math.floor((payload.done / payload.total) * 100))
+        } else {
+          // 全片擦除只有忙/不忙状态：不编造百分比，只显示动画 + 计时器
+          store.progressIndeterminate = true
+          store.progressElapsedMs = payload.elapsedMs ?? 0
+        }
+        store.progressMessage = payload.message
+      })
+      // NAND 擦除前的坏块扫描复用 bad_block_progress 事件
+      unlistenBadBlock = await listen<{ done: number; total: number }>(
+        'bad_block_progress',
+        ({ payload }) => {
+          store.progressIndeterminate = false
+          store.progressElapsedMs = 0
+          store.progress = Math.min(99, Math.floor((payload.done / payload.total) * 100))
+          store.progressMessage = `正在扫描坏块 ${payload.done} / ${payload.total}`
+        },
+      )
       const msg = (await invoke('chip_erase', {
         badBlockMode: store.nandBadBlockMode,
       })) as string
+      store.progressIndeterminate = false
+      store.progressElapsedMs = 0
+      store.progress = 100
+      store.progressMessage = '擦除完成'
       store.addLog(msg, 'success')
       if (store.detectedChipSize > 0) {
         fillHexWithFF(store.detectedChipSize)
       }
-      store.progress = 100
     } catch (e: unknown) {
+      store.progressIndeterminate = false
+      store.progressElapsedMs = 0
+      store.progress = 0
+      store.progressMessage = ''
       store.addLog(`擦除失败: ${String(e)}`, 'error')
     } finally {
+      unlistenErase?.()
+      unlistenBadBlock?.()
       store.isRunning = false
       store.currentOp = ''
-      store.progress = 0
     }
   }
 

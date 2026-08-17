@@ -619,16 +619,6 @@ onMounted(async () => {
       </div>
       <div v-if="!store.vccOutputEnabled" class="vcc-hint">{{ t('vcc.offHint') }}</div>
     </section>
-
-    <!-- 运行状态条 -->
-    <Transition name="slide-up">
-      <div v-if="store.isRunning" class="running-bar">
-        <div class="progress-track">
-          <div class="progress-fill" :style="{ width: store.progress + '%' }" />
-        </div>
-        <div class="running-label">{{ store.currentOp }} — {{ Math.round(store.progress) }}%</div>
-      </div>
-    </Transition>
   </div>
 
   <!-- 实验性功能警告弹窗（黄色等级，低于 VCC 高危红色） -->
@@ -829,25 +819,6 @@ onMounted(async () => {
   font-size: 12px;
   color: var(--text-secondary);
   font-family: var(--font-sans);
-}
-
-.running-bar {
-  margin: 0 12px;
-  padding: 10px;
-  background: var(--bg-elevated);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--info-border);
-}
-
-.running-label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 6px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--color-info);
-  text-transform: capitalize;
 }
 
 .vcc-box {
