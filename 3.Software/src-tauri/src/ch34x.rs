@@ -277,13 +277,9 @@ pub(crate) struct Ch341 {
 #[cfg(hal_backend_libusb)]
 impl Ch341 {
     fn open(settings: &Ch34xSettings, mode: DeviceMode) -> Result<Self, String> {
-        let device = open_device_matching(
-            CH341_VID,
-            CH341_PID,
-            settings.usb_bus,
-            settings.usb_address,
-        )
-        .ok_or_else(|| "未找到 CH341A 设备 (1A86:5512)".to_string())?;
+        let device =
+            open_device_matching(CH341_VID, CH341_PID, settings.usb_bus, settings.usb_address)
+                .ok_or_else(|| "未找到 CH341A 设备 (1A86:5512)".to_string())?;
         let handle = device
             .open()
             .map_err(|e| format!("打开 CH341A 设备失败: {e}"))?;
@@ -506,13 +502,9 @@ pub(crate) struct Ch347 {
 #[cfg(hal_backend_libusb)]
 impl Ch347 {
     fn open(settings: &Ch34xSettings, mode: DeviceMode) -> Result<Self, String> {
-        let device = open_device_matching(
-            CH347_VID,
-            CH347_PID,
-            settings.usb_bus,
-            settings.usb_address,
-        )
-        .ok_or_else(|| "未找到 CH347T 设备 (1A86:55DB)".to_string())?;
+        let device =
+            open_device_matching(CH347_VID, CH347_PID, settings.usb_bus, settings.usb_address)
+                .ok_or_else(|| "未找到 CH347T 设备 (1A86:55DB)".to_string())?;
         let handle = device
             .open()
             .map_err(|e| format!("打开 CH347T 设备失败: {e}"))?;
@@ -1106,9 +1098,7 @@ mod dll_hal {
                     unsafe { std::mem::transmute::<FnGetProc, FnClose>(close_ptr) };
                 let get_type: Option<FnGetChipType> =
                     unsafe { GetProcAddress(lib, PCSTR(type_name.as_ptr() as *const u8)) }
-                        .map(|ptr| unsafe {
-                            std::mem::transmute::<FnGetProc, FnGetChipType>(ptr)
-                        });
+                        .map(|ptr| unsafe { std::mem::transmute::<FnGetProc, FnGetChipType>(ptr) });
 
                 for index in 0..8u32 {
                     let handle = unsafe { open(index) };

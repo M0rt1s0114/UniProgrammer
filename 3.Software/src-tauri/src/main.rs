@@ -518,6 +518,7 @@ fn load_chip_lib(state: State<'_, Mutex<AppState>>) -> Result<String, String> {
     Ok("芯片库加载成功".to_string())
 }
 
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 async fn initialize(
     state: State<'_, Mutex<AppState>>,
@@ -582,7 +583,10 @@ async fn initialize(
 }
 
 #[tauri::command]
-async fn connect_serprog(state: State<'_, Mutex<AppState>>, port: String) -> Result<String, String> {
+async fn connect_serprog(
+    state: State<'_, Mutex<AppState>>,
+    port: String,
+) -> Result<String, String> {
     let mut s = state.lock().map_err(|e| e.to_string())?;
     let dev = serprog::Serprog::open(&port)?;
     let info = format!("serprog ({})", port);
@@ -887,7 +891,13 @@ async fn chip_erase(
                 spi_unprotect(&dev)?;
                 emit_erase_progress(&app, 0, 0, "prepare", "再次写使能 (WREN)...");
                 spi_write_enable(&dev)?;
-                emit_erase_progress(&app, 0, 0, "erase", "已发送全片擦除命令 (C7h)，芯片内部擦除中...");
+                emit_erase_progress(
+                    &app,
+                    0,
+                    0,
+                    "erase",
+                    "已发送全片擦除命令 (C7h)，芯片内部擦除中...",
+                );
                 dev.cs_low()?;
                 dev.spi_tx(&[0xC7])?;
                 dev.cs_high()?;
@@ -909,7 +919,13 @@ async fn chip_erase(
                 spi_unprotect(&dev)?;
                 emit_erase_progress(&app, 0, 0, "prepare", "再次写使能 (WREN)...");
                 spi_write_enable(&dev)?;
-                emit_erase_progress(&app, 0, 0, "erase", "已发送全片擦除命令 (C7h)，芯片内部擦除中...");
+                emit_erase_progress(
+                    &app,
+                    0,
+                    0,
+                    "erase",
+                    "已发送全片擦除命令 (C7h)，芯片内部擦除中...",
+                );
                 dev.cs_low()?;
                 dev.spi_tx(&[0xC7])?;
                 dev.cs_high()?;
@@ -985,7 +1001,13 @@ async fn chip_erase(
     } else if let Some(ser) = &mut s.serprog {
         emit_erase_progress(&app, 0, 0, "prepare", "写使能 (WREN)...");
         ser.spi_command(&[0x06], 0)?;
-        emit_erase_progress(&app, 0, 0, "erase", "已发送全片擦除命令 (C7h)，芯片内部擦除中...");
+        emit_erase_progress(
+            &app,
+            0,
+            0,
+            "erase",
+            "已发送全片擦除命令 (C7h)，芯片内部擦除中...",
+        );
         ser.spi_command(&[0xC7], 0)?;
         serprog_wait_ready(ser, 120_000)?;
         emit_erase_progress(&app, 1, 1, "done", "全片擦除完成");
@@ -1057,7 +1079,7 @@ async fn blank_check(
             if let Some(pos) = first_non_blank_byte(&data, addr) {
                 return Ok(BlankCheckResult {
                     blank: false,
-                    checked: offset + pos as u64 - addr,
+                    checked: offset + pos - addr,
                     first_non_blank: Some(pos),
                 });
             }
@@ -1119,8 +1141,7 @@ async fn blank_check(
                     )?,
                     "SPI_NAND" => {
                         let mode = parse_nand_bad_block_mode(bad_block_mode.as_deref());
-                        let bad_blocks =
-                            scan_nand_bad_blocks_for_mode(&dev, info, &app, mode)?;
+                        let bad_blocks = scan_nand_bad_blocks_for_mode(&dev, info, &app, mode)?;
                         let links = prepare_bypass_if_needed(&dev, info, mode, &bad_blocks)?;
                         let op_bad = if mode == protocols::NandBadBlockMode::Bypass {
                             Vec::new()

@@ -129,14 +129,17 @@ fn parse_intel_hex(data: &[u8]) -> Result<Vec<u8>, String> {
             return Err(format!("Intel HEX 第 {} 行不是 ':' 记录", line_no + 1));
         }
         let body = &line[1..];
-        if body.len() < 10 || body.len() % 2 != 0 {
+        if body.len() < 10 || !body.len().is_multiple_of(2) {
             return Err(format!("Intel HEX 第 {} 行记录长度无效", line_no + 1));
         }
         let count = hex_byte(body[0], body[1])
             .ok_or_else(|| format!("Intel HEX 第 {} 行字节计数无效", line_no + 1))?
             as usize;
         if body.len() != (count + 5) * 2 {
-            return Err(format!("Intel HEX 第 {} 行记录长度与字节计数不符", line_no + 1));
+            return Err(format!(
+                "Intel HEX 第 {} 行记录长度与字节计数不符",
+                line_no + 1
+            ));
         }
 
         let mut record = Vec::with_capacity(count + 5);
@@ -224,7 +227,10 @@ fn parse_srec(data: &[u8]) -> Result<Vec<u8>, String> {
             .ok_or_else(|| format!("S-record 第 {} 行字节计数无效", line_no + 1))?
             as usize;
         if body.len() != 2 + count * 2 {
-            return Err(format!("S-record 第 {} 行记录长度与字节计数不符", line_no + 1));
+            return Err(format!(
+                "S-record 第 {} 行记录长度与字节计数不符",
+                line_no + 1
+            ));
         }
         let mut record = Vec::with_capacity(count);
         for i in 0..count {
@@ -233,7 +239,7 @@ fn parse_srec(data: &[u8]) -> Result<Vec<u8>, String> {
                     .ok_or_else(|| format!("S-record 第 {} 行含非法十六进制字符", line_no + 1))?,
             );
         }
-        if count as u32 + record.iter().map(|&b| b as u32).sum::<u32>() & 0xFF != 0xFF {
+        if (count as u32 + record.iter().map(|&b| b as u32).sum::<u32>()) & 0xFF != 0xFF {
             return Err(format!("S-record 第 {} 行校验和错误", line_no + 1));
         }
 
@@ -291,7 +297,7 @@ fn looks_like_uf2(data: &[u8]) -> bool {
 }
 
 fn parse_uf2(data: &[u8]) -> Result<Vec<u8>, String> {
-    if data.len() % UF2_BLOCK_SIZE != 0 {
+    if !data.len().is_multiple_of(UF2_BLOCK_SIZE) {
         return Err(format!(
             "UF2 文件大小应为 {} 字节的整数倍（实际 {} 字节）",
             UF2_BLOCK_SIZE,
@@ -443,7 +449,10 @@ mod tests {
 
         let image = parse_uf2(&block).unwrap();
         assert_eq!(image.len(), 256);
-        assert_eq!(&image[0..8], &[0xAA, 0xBB, 0xCC, 0xDD, 0x00, 0x11, 0x22, 0x33]);
+        assert_eq!(
+            &image[0..8],
+            &[0xAA, 0xBB, 0xCC, 0xDD, 0x00, 0x11, 0x22, 0x33]
+        );
         assert_eq!(image[8], 0xFF);
         assert_eq!(image[255], 0xFF);
     }
@@ -489,7 +498,8 @@ mod tests {
 
     #[test]
     fn load_dispatch_uses_extension_and_magic_sniffing() {
-        let dir = std::env::temp_dir().join(format!("uniprogrammer-fw-test-{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("uniprogrammer-fw-test-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
 
         let raw_path = dir.join("image.BIN");
