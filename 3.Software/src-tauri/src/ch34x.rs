@@ -1078,7 +1078,12 @@ mod dll_hal {
                 .map_err(|e| format!("加载 CH34X.DLL 失败: {e}"))?;
 
             let mut found: Vec<(u32, ChipKind)> = Vec::new();
-            for prefix in ["CH341", "CH347"] {
+            let mut seen_index = [false; 8];
+            // 新版 WCH DLL 同时导出 CH341* 和 CH347* 两套 API。CH347* 能
+            // 正确报告 CH341/CH347T/CH347F 类型，因此优先用它；CH341* 只
+            // 用来兜底旧版纯 CH341 DLL，避免同一台 CH347T 被重复识别成
+            // “CH341A + CH347T”两个候选。
+            for prefix in ["CH347", "CH341"] {
                 let open_name = CString::new(format!("{}OpenDevice", prefix)).unwrap();
                 let close_name = CString::new(format!("{}CloseDevice", prefix)).unwrap();
                 let type_name = CString::new(format!("{}GetChipType", prefix)).unwrap();
@@ -1119,6 +1124,11 @@ mod dll_hal {
                         CHIP_TYPE_CH347F => ChipKind::Ch347F,
                         _ => continue, // CH339W and unknown WCH chips are not programmers
                     };
+                    let idx = index as usize;
+                    if prefix == "CH341" && seen_index[idx] {
+                        continue;
+                    }
+                    seen_index[idx] = true;
                     found.push((index, kind));
                 }
             }
