@@ -453,9 +453,12 @@ export const useProgStore = defineStore('prog', () => {
 
   function ensureSerprogListener() {
     if (!serprogListenerPromise) {
-      serprogListenerPromise = listen<ProgrammerCandidate[]>('serprog_scan_result', ({ payload }) => {
-        applyScanResult(payload, true)
-      }).then(() => undefined)
+      serprogListenerPromise = listen<ProgrammerCandidate[]>(
+        'serprog_scan_result',
+        ({ payload }) => {
+          applyScanResult(payload, true)
+        },
+      ).then(() => undefined)
     }
     return serprogListenerPromise
   }
@@ -619,7 +622,10 @@ export const useProgStore = defineStore('prog', () => {
       hexData.value = new Uint8Array(result.bytes)
       filePath.value = path
       fileSize.value = result.bytes.length
-      addLog(`已加载文件: ${path} (${result.format}, ${formatBytes(result.bytes.length)})`, 'success')
+      addLog(
+        `已加载文件: ${path} (${result.format}, ${formatBytes(result.bytes.length)})`,
+        'success',
+      )
     } catch (e: unknown) {
       addLog(`文件加载失败: ${String(e)}`, 'error')
     }

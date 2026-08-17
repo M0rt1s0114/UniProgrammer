@@ -289,7 +289,10 @@ onMounted(async () => {
       </div>
 
       <div class="mode-switch">
-        <div class="mode-switch-thumb" :class="{ 'is-manual': settings.programmerMode === 'manual' }" />
+        <div
+          class="mode-switch-thumb"
+          :class="{ 'is-manual': settings.programmerMode === 'manual' }"
+        />
         <button
           type="button"
           class="mode-switch-item"

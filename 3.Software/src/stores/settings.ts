@@ -164,7 +164,10 @@ function parseSettingsFile(text: string): PartialSettings {
   const spiMode = parseNumber(programmer['spimode'])
   if (spiMode !== undefined && spiMode >= 0 && spiMode <= 3) parsed.spiMode = spiMode
   const spiFreq = parseNumber(programmer['spifreq'])
-  if (spiFreq !== undefined && [469, 937, 1875, 3750, 7500, 15000, 30000, 60000].includes(spiFreq)) {
+  if (
+    spiFreq !== undefined &&
+    [469, 937, 1875, 3750, 7500, 15000, 30000, 60000].includes(spiFreq)
+  ) {
     parsed.spiFreq = spiFreq
   }
 

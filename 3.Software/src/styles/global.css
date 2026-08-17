@@ -57,11 +57,10 @@
 
   /* Typography */
   --font-sans:
-    'Inter Variable', 'Inter', 'Noto Sans SC', 'Microsoft YaHei UI', 'PingFang SC',
-    system-ui, sans-serif;
+    'Inter Variable', 'Inter', 'Noto Sans SC', 'Microsoft YaHei UI', 'PingFang SC', system-ui,
+    sans-serif;
   --font-mono:
-    'JetBrains Mono Variable', 'JetBrains Mono', 'Maple Mono CN', 'Fira Code', 'Consolas',
-    monospace;
+    'JetBrains Mono Variable', 'JetBrains Mono', 'Maple Mono CN', 'Fira Code', 'Consolas', monospace;
 
   /* Spacing */
   --radius-sm: 4px;

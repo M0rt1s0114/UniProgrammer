@@ -80,7 +80,8 @@ const zh: MessageRecord = {
   'programmer.startDetect': '开始识别',
   'programmer.scanning': '识别中...',
   'programmer.autoPoll': '连接后自动识别',
-  'programmer.autoPollHint': '点击“开始识别”检测设备；勾选“连接后自动识别”后持续轮询，找到设备即停止',
+  'programmer.autoPollHint':
+    '点击“开始识别”检测设备；勾选“连接后自动识别”后持续轮询，找到设备即停止',
 
   // Auto operation
   'auto.settings': '自动流程设置',

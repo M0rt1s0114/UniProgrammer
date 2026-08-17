@@ -50,7 +50,9 @@ function entriesFromOrder(value: string): AutoEntry[] {
 
 // 设置弹窗内部使用草稿；点“保存”才写回 settings，“关闭”直接丢弃。
 const draftAutoEntries = ref<AutoEntry[]>([])
-const draftAutoSteps = computed<AutoStepKey[]>(() => draftAutoEntries.value.map((entry) => entry.step))
+const draftAutoSteps = computed<AutoStepKey[]>(() =>
+  draftAutoEntries.value.map((entry) => entry.step),
+)
 const savedAutoSteps = computed<AutoStepKey[]>(() => parseAutoOrder(settings.autoOrder))
 const availableAutoSteps = computed<AutoStepKey[]>(() => [...AUTO_STEP_KEYS])
 const allAutoStepsUsed = computed(
@@ -496,7 +498,9 @@ async function confirmErase() {
               <span class="auto-order-name">{{ autoStepLabels[entry.step] }}</span>
               <button class="auto-order-btn" @click="moveAutoStep(index, -1)">↑</button>
               <button class="auto-order-btn" @click="moveAutoStep(index, 1)">↓</button>
-              <button class="auto-order-btn auto-order-remove" @click="removeAutoStep(index)">✕</button>
+              <button class="auto-order-btn auto-order-remove" @click="removeAutoStep(index)">
+                ✕
+              </button>
             </div>
           </TransitionGroup>
 
