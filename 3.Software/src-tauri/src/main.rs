@@ -6,6 +6,7 @@ mod chiplib;
 mod core;
 mod dialogs;
 mod firmware;
+mod operations;
 mod protocols;
 mod serprog;
 mod settings;
@@ -14,15 +15,15 @@ mod sfdp;
 use ch34x::{Ch34xDevice, Ch34xSettings, ChipKind};
 use core::{
     chip_info_to_detect, get_lib, nor_params, open_ch34x, open_ch34x_mode, serprog_wait_ready,
-    spi_4byte_mode, spi_read_jedec, spi_read_status, spi_unprotect, spi_wait_ready,
-    spi_write_disable, spi_write_enable, AppState, At45PageModeResult, BadBlockScanResult,
-    BbmLutResult, ChipDetectInfo, ChipDetectResult, NorParams, NorWriteProtectStatus,
-    RawBytesResult, NOR_BP_MASK_SR1,
+    spi_4byte_mode, spi_read_jedec, spi_read_status, spi_wait_ready, spi_write_disable,
+    spi_write_enable, AppState, At45PageModeResult, BadBlockScanResult, BbmLutResult,
+    ChipDetectInfo, ChipDetectResult, NorParams, NorWriteProtectStatus, RawBytesResult,
+    NOR_BP_MASK_SR1,
 };
+use operations::BlankCheckResult;
 use serde::Serialize;
 use std::path::PathBuf;
 use std::sync::Mutex;
-use std::time::{Duration, Instant};
 use tauri::{Emitter, Manager, State, WindowEvent};
 
 #[derive(Clone, Serialize)]
@@ -55,14 +56,6 @@ struct BlankCheckProgressEvent {
     total: u64,
 }
 
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct BlankCheckResult {
-    blank: bool,
-    checked: u64,
-    first_non_blank: Option<u64>,
-}
-
 #[derive(Clone, Serialize)]
 struct EraseProgressEvent {
     done: u64,
@@ -89,79 +82,6 @@ fn exe_dir() -> PathBuf {
     {
         let exe = std::env::current_exe().expect("无法获取 exe 路径");
         exe.parent().unwrap().to_path_buf()
-    }
-}
-
-fn emit_erase_progress_event(
-    app: &tauri::AppHandle,
-    done: u64,
-    total: u64,
-    phase: &str,
-    message: &str,
-    elapsed_ms: Option<u64>,
-) {
-    app.emit(
-        "erase_progress",
-        EraseProgressEvent {
-            done,
-            total,
-            phase: phase.to_string(),
-            message: message.to_string(),
-            elapsed_ms,
-        },
-    )
-    .ok();
-}
-
-fn emit_erase_progress(app: &tauri::AppHandle, done: u64, total: u64, phase: &str, message: &str) {
-    emit_erase_progress_event(app, done, total, phase, message, None);
-}
-
-/// Indeterminate progress: no real percentage, only a message and an elapsed
-/// timer. Used while the chip is busy with a full-chip erase.
-fn emit_erase_progress_elapsed(
-    app: &tauri::AppHandle,
-    phase: &str,
-    message: &str,
-    elapsed_ms: u64,
-) {
-    emit_erase_progress_event(app, 0, 0, phase, message, Some(elapsed_ms));
-}
-
-/// Same as `spi_wait_ready`, but reports elapsed time to the frontend every
-/// 250 ms so a long full-chip erase never looks frozen.
-fn spi_wait_ready_with_progress(
-    dev: &Ch34xDevice,
-    timeout_ms: u64,
-    app: &tauri::AppHandle,
-    phase: &str,
-    message_prefix: &str,
-) -> Result<(), String> {
-    let start = Instant::now();
-    let mut last_report = start;
-    loop {
-        let status = core::spi_read_status(dev)?;
-        if (status & 0x01 | status & 0x20 | status & 0x02) == 0 {
-            return Ok(());
-        }
-        let elapsed_ms = start.elapsed().as_millis() as u64;
-        if elapsed_ms > timeout_ms {
-            return Err("等待闪存就绪超时".into());
-        }
-        if last_report.elapsed() >= Duration::from_millis(250) {
-            emit_erase_progress_elapsed(
-                app,
-                phase,
-                &format!(
-                    "{} · 最长等待 {:.0}s",
-                    message_prefix,
-                    timeout_ms as f64 / 1000.0
-                ),
-                elapsed_ms,
-            );
-            last_report = Instant::now();
-        }
-        std::thread::sleep(Duration::from_millis(5));
     }
 }
 
@@ -397,158 +317,27 @@ async fn chip_erase(
     bad_block_mode: Option<String>,
 ) -> Result<String, String> {
     let mut s = state.lock().map_err(|e| e.to_string())?;
-
-    if s.ch34x.is_some() {
-        let detected = s.detected.clone();
-        let info = match detected.as_ref() {
-            Some(info) => info.clone(),
-            None => {
-                // No detection cached: default to NOR behaviour.
-                let dev = open_ch34x(&s)?;
-                emit_erase_progress(&app, 0, 0, "prepare", "等待芯片就绪...");
-                spi_wait_ready(&dev, 2000)?;
-                emit_erase_progress(&app, 0, 0, "prepare", "写使能 (WREN)...");
-                spi_write_enable(&dev)?;
-                emit_erase_progress(&app, 0, 0, "prepare", "解除写保护...");
-                spi_unprotect(&dev)?;
-                emit_erase_progress(&app, 0, 0, "prepare", "再次写使能 (WREN)...");
-                spi_write_enable(&dev)?;
-                emit_erase_progress(
-                    &app,
-                    0,
-                    0,
-                    "erase",
-                    "已发送全片擦除命令 (C7h)，芯片内部擦除中...",
-                );
-                dev.cs_low()?;
-                dev.spi_tx(&[0xC7])?;
-                dev.cs_high()?;
-                spi_wait_ready_with_progress(&dev, 120_000, &app, "erase", "全片擦除中")?;
-                spi_write_disable(&dev)?;
-                emit_erase_progress(&app, 1, 1, "done", "全片擦除完成");
-                return Ok("全片擦除完成".to_string());
-            }
-        };
-        let bus = protocols::bus_mode_for_protocol(&info.protocol);
-        match info.protocol.as_str() {
-            "SPI_NOR" => {
-                let dev = open_ch34x_mode(&s, bus)?;
-                emit_erase_progress(&app, 0, 0, "prepare", "等待芯片就绪...");
-                spi_wait_ready(&dev, 2000)?;
-                emit_erase_progress(&app, 0, 0, "prepare", "写使能 (WREN)...");
-                spi_write_enable(&dev)?;
-                emit_erase_progress(&app, 0, 0, "prepare", "解除写保护...");
-                spi_unprotect(&dev)?;
-                emit_erase_progress(&app, 0, 0, "prepare", "再次写使能 (WREN)...");
-                spi_write_enable(&dev)?;
-                emit_erase_progress(
-                    &app,
-                    0,
-                    0,
-                    "erase",
-                    "已发送全片擦除命令 (C7h)，芯片内部擦除中...",
-                );
-                dev.cs_low()?;
-                dev.spi_tx(&[0xC7])?;
-                dev.cs_high()?;
-                spi_wait_ready_with_progress(&dev, 120_000, &app, "erase", "全片擦除中")?;
-                spi_write_disable(&dev)?;
-                emit_erase_progress(&app, 1, 1, "done", "全片擦除完成");
-            }
-            "SPI_EEPROM" => {
-                let dev = open_ch34x_mode(&s, bus)?;
-                emit_erase_progress(&app, 0, 0, "erase", "EEPROM 全片擦除中...");
-                protocols::s95_erase(&dev)?;
-                emit_erase_progress(&app, 1, 1, "done", "全片擦除完成");
-            }
-            "SPI_DATA_45" => {
-                let dev = open_ch34x_mode(&s, bus)?;
-                emit_erase_progress(&app, 0, 0, "erase", "DataFlash 全片擦除中...");
-                protocols::at45_erase(&dev)?;
-                emit_erase_progress(&app, 1, 1, "done", "全片擦除完成");
-            }
-            "SPI_NAND" => {
-                let dev = open_ch34x_mode(&s, bus)?;
-                let params = protocols::ChipParams::from_info(&info);
-                let mode = core::parse_nand_bad_block_mode(bad_block_mode.as_deref());
-                emit_erase_progress(&app, 0, 0, "bad_block", "正在扫描坏块...");
-                let bad_blocks =
-                    core::scan_nand_bad_blocks_for_mode(&dev, &info, mode, &mut |done, total| {
-                        app.emit("bad_block_progress", BadBlockProgressEvent { done, total })
-                            .ok();
-                    })?;
-                let links = core::prepare_bypass_if_needed(&dev, &info, mode, &bad_blocks)?;
-                let op_bad = if mode == protocols::NandBadBlockMode::Bypass {
-                    Vec::new()
-                } else {
-                    bad_blocks
-                };
-                protocols::nand_erase(&dev, &params, info.size, &op_bad, &mut |done, total| {
-                    emit_erase_progress(
-                        &app,
-                        done as u64,
-                        total as u64,
-                        "erase",
-                        &format!("SPI NAND 块擦除 {}/{}", done, total),
-                    );
-                })?;
-                emit_erase_progress(&app, 1, 1, "done", "全片擦除完成");
-                if !links.is_empty() {
-                    return Ok(format!(
-                        "全片擦除完成（已写入 {} 条 BBM 坏块映射）",
-                        links.len()
-                    ));
-                }
-            }
-            "I2C" | "I2C_F-RAM" | "I2C_SPD" => {
-                let dev = open_ch34x_mode(&s, bus)?;
-                let params = protocols::ChipParams::from_info(&info);
-                emit_erase_progress(&app, 0, 0, "erase", "I2C 芯片擦除中（写 0xFF）...");
-                protocols::i2c_erase(&dev, &params, info.size, &mut |done, total| {
-                    emit_erase_progress(
-                        &app,
-                        done,
-                        total,
-                        "erase",
-                        &format!("I2C 擦除 {}/{} 字节", done, total),
-                    );
-                })?;
-                emit_erase_progress(&app, 1, 1, "done", "全片擦除完成");
-            }
-            "Microwire" => {
-                let dev = open_ch34x_mode(&s, bus)?;
-                let params = protocols::ChipParams::from_info(&info);
-                emit_erase_progress(&app, 0, 0, "erase", "Microwire 全片擦除中...");
-                protocols::mw_erase(&dev, &params)?;
-                emit_erase_progress(&app, 1, 1, "done", "全片擦除完成");
-            }
-            other => return Err(format!("协议 {} 暂未实现", other)),
-        }
-    } else if let Some(ser) = &mut s.serprog {
-        emit_erase_progress(&app, 0, 0, "prepare", "写使能 (WREN)...");
-        ser.spi_command(&[0x06], 0)?;
-        emit_erase_progress(
-            &app,
-            0,
-            0,
-            "erase",
-            "已发送全片擦除命令 (C7h)，芯片内部擦除中...",
-        );
-        ser.spi_command(&[0xC7], 0)?;
-        serprog_wait_ready(ser, 120_000)?;
-        emit_erase_progress(&app, 1, 1, "done", "全片擦除完成");
-    } else {
-        return Err("没有可用的编程器，请先初始化".into());
-    }
-
-    Ok("全片擦除完成".to_string())
-}
-
-/// Return the absolute address of the first byte that is not 0xFF.
-fn first_non_blank_byte(data: &[u8], base: u64) -> Option<u64> {
-    data.iter()
-        .position(|&b| b != 0xFF)
-        .map(|index| base + index as u64)
+    operations::chip_erase(
+        &mut s,
+        bad_block_mode.as_deref(),
+        &mut |p| {
+            app.emit(
+                "erase_progress",
+                EraseProgressEvent {
+                    done: p.done,
+                    total: p.total,
+                    phase: p.phase,
+                    message: p.message,
+                    elapsed_ms: p.elapsed_ms,
+                },
+            )
+            .ok();
+        },
+        &mut |done, total| {
+            app.emit("bad_block_progress", BadBlockProgressEvent { done, total })
+                .ok();
+        },
+    )
 }
 
 /// Stream a blank check: read the requested range in chunks and stop at the
@@ -562,256 +351,23 @@ async fn blank_check(
     bad_block_mode: Option<String>,
 ) -> Result<BlankCheckResult, String> {
     let mut s = state.lock().map_err(|e| e.to_string())?;
-    let total = size.saturating_sub(start_addr);
-    if total == 0 {
-        return Ok(BlankCheckResult {
-            blank: true,
-            checked: 0,
-            first_non_blank: None,
-        });
-    }
-
-    // serprog path: stream reads through O_SPIOP.
-    if s.serprog.is_some() && s.ch34x.is_none() {
-        let ser = s.serprog.as_mut().unwrap();
-        let use_4b = size > 0x0100_0000;
-        let cmd_read: u8 = if use_4b { 0x13 } else { 0x03 };
-        let make_header = |addr: u64| -> Vec<u8> {
-            let mut h = vec![cmd_read];
-            if use_4b {
-                h.push(((addr >> 24) & 0xFF) as u8);
-            }
-            h.push(((addr >> 16) & 0xFF) as u8);
-            h.push(((addr >> 8) & 0xFF) as u8);
-            h.push((addr & 0xFF) as u8);
-            h
-        };
-        let chunk_max = ser.max_read_len().min(4096);
-        let mut offset: u64 = 0;
-        while offset < total {
-            let addr = start_addr + offset;
-            let chunk = (total - offset).min(chunk_max as u64) as usize;
-            let data = ser
-                .spi_command(&make_header(addr), chunk)
-                .map_err(|e| format!("查空读取失败 @ 0x{:08X}: {}", addr, e))?;
-            if data.len() != chunk {
-                return Err(format!(
-                    "查空读取长度不符 @ 0x{:08X}: 预期 {} 实际 {}",
-                    addr,
-                    chunk,
-                    data.len()
-                ));
-            }
-            if let Some(pos) = first_non_blank_byte(&data, addr) {
-                return Ok(BlankCheckResult {
-                    blank: false,
-                    checked: offset + pos - addr,
-                    first_non_blank: Some(pos),
-                });
-            }
-            offset += chunk as u64;
+    operations::blank_check(
+        &mut s,
+        size,
+        start_addr,
+        bad_block_mode.as_deref(),
+        &mut |done, total| {
             app.emit(
                 "blank_check_progress",
-                BlankCheckProgressEvent {
-                    done: offset,
-                    total,
-                },
+                BlankCheckProgressEvent { done, total },
             )
             .ok();
-        }
-        return Ok(BlankCheckResult {
-            blank: true,
-            checked: total,
-            first_non_blank: None,
-        });
-    }
-
-    // Small / non-streaming protocols reuse the existing read paths and scan
-    // the returned buffer. Capped so a pathological request cannot OOM.
-    if let Some(info) = s.detected.as_ref() {
-        let bus = protocols::bus_mode_for_protocol(&info.protocol);
-        match info.protocol.as_str() {
-            "SPI_NOR" => {}
-            other => {
-                if size > 256 * 1024 * 1024 {
-                    return Err(format!("{} 协议查空暂不支持超过 256 MiB", other));
-                }
-                let dev = open_ch34x_mode(&s, bus)?;
-                let params = protocols::ChipParams::from_info(info);
-                let data = match other {
-                    "SPI_EEPROM" => protocols::s95_read(
-                        &dev,
-                        &params,
-                        start_addr,
-                        size as usize,
-                        &mut |done, total| {
-                            app.emit(
-                                "blank_check_progress",
-                                BlankCheckProgressEvent { done, total },
-                            )
-                            .ok();
-                        },
-                    )?,
-                    "SPI_DATA_45" => protocols::at45_read(
-                        &dev,
-                        &params,
-                        start_addr,
-                        size as usize,
-                        &mut |done, total| {
-                            app.emit(
-                                "blank_check_progress",
-                                BlankCheckProgressEvent { done, total },
-                            )
-                            .ok();
-                        },
-                    )?,
-                    "SPI_NAND" => {
-                        let mode = core::parse_nand_bad_block_mode(bad_block_mode.as_deref());
-                        let bad_blocks = core::scan_nand_bad_blocks_for_mode(
-                            &dev,
-                            info,
-                            mode,
-                            &mut |done, total| {
-                                app.emit(
-                                    "bad_block_progress",
-                                    BadBlockProgressEvent { done, total },
-                                )
-                                .ok();
-                            },
-                        )?;
-                        let links = core::prepare_bypass_if_needed(&dev, info, mode, &bad_blocks)?;
-                        let op_bad = if mode == protocols::NandBadBlockMode::Bypass {
-                            Vec::new()
-                        } else {
-                            bad_blocks
-                        };
-                        let data = protocols::nand_read(
-                            &dev,
-                            &params,
-                            size,
-                            &op_bad,
-                            &mut |done, total| {
-                                app.emit(
-                                    "blank_check_progress",
-                                    BlankCheckProgressEvent { done, total },
-                                )
-                                .ok();
-                            },
-                        )?;
-                        let _ = links;
-                        data
-                    }
-                    "I2C" | "I2C_F-RAM" | "I2C_SPD" => protocols::i2c_read(
-                        &dev,
-                        &params,
-                        start_addr,
-                        size as usize,
-                        &mut |done, total| {
-                            app.emit(
-                                "blank_check_progress",
-                                BlankCheckProgressEvent { done, total },
-                            )
-                            .ok();
-                        },
-                    )?,
-                    "Microwire" => protocols::mw_read(
-                        &dev,
-                        &params,
-                        start_addr,
-                        size as usize,
-                        &mut |done, total| {
-                            app.emit(
-                                "blank_check_progress",
-                                BlankCheckProgressEvent { done, total },
-                            )
-                            .ok();
-                        },
-                    )?,
-                    other => return Err(format!("协议 {} 暂未实现查空", other)),
-                };
-                if let Some(pos) = first_non_blank_byte(&data, start_addr) {
-                    return Ok(BlankCheckResult {
-                        blank: false,
-                        checked: pos - start_addr,
-                        first_non_blank: Some(pos),
-                    });
-                }
-                return Ok(BlankCheckResult {
-                    blank: true,
-                    checked: data.len() as u64,
-                    first_non_blank: None,
-                });
-            }
-        }
-    }
-
-    // CH34X SPI NOR: manual CS read, chunked, no whole-image buffer.
-    let params = match s.detected.as_ref() {
-        Some(info) if info.protocol == "SPI_NOR" => nor_params(info),
-        _ => NorParams {
-            page: 256,
-            _sector: 4096,
-            _block: 64 * 1024,
-            addr4b: size > 0x0100_0000,
-            alg: 0,
         },
-    };
-    let dev = open_ch34x(&s)?;
-    spi_wait_ready(&dev, 1000)?;
-    if params.addr4b {
-        spi_4byte_mode(&dev, params.alg, true)?;
-    }
-
-    let chunk_limit = dev.spi_frame_limit();
-    let mut offset: u64 = 0;
-    while offset < total {
-        let addr = start_addr + offset;
-        let hdr_len = if params.addr4b { 5 } else { 4 };
-        let chunk = (total - offset).min((chunk_limit.saturating_sub(hdr_len)) as u64) as usize;
-        dev.cs_low()?;
-        let mut hdr = vec![0x03u8];
-        if params.addr4b {
-            hdr.push(((addr >> 24) & 0xFF) as u8);
-        }
-        hdr.push(((addr >> 16) & 0xFF) as u8);
-        hdr.push(((addr >> 8) & 0xFF) as u8);
-        hdr.push((addr & 0xFF) as u8);
-        dev.spi_tx(&hdr)
-            .map_err(|e| format!("查空读取失败 @ 0x{:08X}: {}", addr, e))?;
-        let mut buf = vec![0xFFu8; chunk];
-        dev.spi_rx(&mut buf)
-            .map_err(|e| format!("查空读取失败 @ 0x{:08X}: {}", addr, e))?;
-        dev.cs_high()?;
-
-        if let Some(pos) = first_non_blank_byte(&buf, addr) {
-            if params.addr4b {
-                spi_4byte_mode(&dev, params.alg, false)?;
-            }
-            return Ok(BlankCheckResult {
-                blank: false,
-                checked: offset + (pos - addr),
-                first_non_blank: Some(pos),
-            });
-        }
-        offset += chunk as u64;
-        app.emit(
-            "blank_check_progress",
-            BlankCheckProgressEvent {
-                done: offset,
-                total,
-            },
-        )
-        .ok();
-    }
-
-    if params.addr4b {
-        spi_4byte_mode(&dev, params.alg, false)?;
-    }
-    Ok(BlankCheckResult {
-        blank: true,
-        checked: total,
-        first_non_blank: None,
-    })
+        &mut |done, total| {
+            app.emit("bad_block_progress", BadBlockProgressEvent { done, total })
+                .ok();
+        },
+    )
 }
 
 /// NOR read, IMSProg style: manual CS, 0x03 read, optional 4-byte address mode
