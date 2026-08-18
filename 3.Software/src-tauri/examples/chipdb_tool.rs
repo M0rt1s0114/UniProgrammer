@@ -4,6 +4,7 @@
 //!   cargo run --example chipdb_tool -- <chiplib.bin> <IMSProg.Dat> [--backup]
 //!   cargo run --example chipdb_tool -- add <chiplib.bin> <id> <vendor> <model> <protocol> [key=value ...]
 //!   cargo run --example chipdb_tool -- merge <chiplib.bin> <chips.tsv>
+//!   cargo run --example chipdb_tool -- xml2bin <chiplib.xml> <chiplib.bin>
 //!
 //! The first form enriches chiplib.bin with IMSProg.Dat fields (sector,
 //! block, addr4bit, timing, vcc) without overwriting values already present.
@@ -11,7 +12,8 @@
 //! useful for chips reported by the programmer as unknown IDs.
 //! The `merge` form imports a TSV table (header + one chip per line) with
 //! merge semantics: new chips are inserted, existing chips only receive
-//! missing attributes.
+//! missing attributes. The `xml2bin` form rebuilds chiplib.bin from the
+//! (possibly obfuscated) XML source without writing any plaintext to disk.
 
 #[path = "../src/chiplib.rs"]
 #[allow(dead_code)]
@@ -27,6 +29,10 @@ fn main() {
     }
     if args.len() >= 2 && args[1] == "merge" {
         run_merge(&args);
+        return;
+    }
+    if args.len() >= 2 && args[1] == "xml2bin" {
+        run_xml_to_bin(&args);
         return;
     }
 
@@ -79,6 +85,33 @@ fn main() {
         stats.entries_updated,
         bin_path
     );
+}
+
+fn run_xml_to_bin(args: &[String]) {
+    if args.len() < 4 {
+        eprintln!("用法: chipdb_tool xml2bin <chiplib.xml> <chiplib.bin>");
+        std::process::exit(2);
+    }
+    let xml_path = &args[2];
+    let bin_path = &args[3];
+    match chiplib::Chiplib::convert_xml_to_bin(xml_path, bin_path) {
+        Ok(()) => {
+            let lib = chiplib::Chiplib::load_bin(bin_path).unwrap_or_else(|e| {
+                eprintln!("回读校验 {} 失败: {}", bin_path, e);
+                std::process::exit(1);
+            });
+            println!(
+                "已由 {} 重建 {}，共 {} 条记录",
+                xml_path,
+                bin_path,
+                lib.entry_count()
+            );
+        }
+        Err(e) => {
+            eprintln!("重建 {} -> {} 失败: {}", xml_path, bin_path, e);
+            std::process::exit(1);
+        }
+    }
 }
 
 fn run_merge(args: &[String]) {

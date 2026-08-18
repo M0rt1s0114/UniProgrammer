@@ -944,7 +944,7 @@ mod tests {
     #[test]
     fn xml_fallback_contains_new_chip() {
         let lib = Chiplib::load_xml("../chiplib.xml").expect("load chiplib.xml");
-        assert_eq!(lib.entry_count(), 1173);
+        assert_eq!(lib.entry_count(), 1429);
         let d40 = lib.find_by_id("5E3213").expect("ZB25D40B in XML fallback");
         assert_eq!(d40.vendor, "Zbit");
         assert_eq!(d40.model, "ZB25D40B");
@@ -962,6 +962,14 @@ mod tests {
         assert_eq!(merged.protocol, "SPI_NOR");
         assert_eq!(merged.size, 16 * 1024 * 1024);
 
+        let ratchet_merged = lib
+            .find_by_id("EF4021")
+            .expect("W25Q01JV imported from ratchet chip database");
+        assert_eq!(ratchet_merged.protocol, "SPI_NOR");
+        assert_eq!(ratchet_merged.size, 128 * 1024 * 1024);
+        assert_eq!(ratchet_merged.attr_u32("sector"), Some(4096));
+        assert_eq!(ratchet_merged.attr_u32("block"), Some(65536));
+
         let prepend = lib
             .find_by_id("C8B1")
             .expect("GD5F1GQ4UC imported with dummy mode");
@@ -974,7 +982,7 @@ mod tests {
     #[test]
     fn load_enriched_bin() {
         let lib = Chiplib::load_bin("chiplib.bin").expect("load chiplib.bin");
-        assert_eq!(lib.entries.len(), 1173);
+        assert_eq!(lib.entries.len(), 1429);
 
         let nor = lib.find_by_id("EF4018").expect("W25Q128 JEDEC");
         assert_eq!(nor.protocol, "SPI_NOR");
@@ -982,6 +990,15 @@ mod tests {
         assert_eq!(nor.size, 16 * 1024 * 1024);
         assert!(nor.attr_u32("sector").is_some());
         assert!(nor.attr_u32("block").is_some());
+
+        let ratchet_merged = lib
+            .find_by_id("EF4021")
+            .expect("W25Q01JV imported from ratchet chip database");
+        assert_eq!(ratchet_merged.protocol, "SPI_NOR");
+        assert_eq!(ratchet_merged.size, 128 * 1024 * 1024);
+        assert_eq!(ratchet_merged.attr_u32("sector"), Some(4096));
+        assert_eq!(ratchet_merged.attr_u32("block"), Some(65536));
+        assert_eq!(ratchet_merged.attr("addr4bit"), Some("01"));
 
         let d40 = lib.find_by_id("5E3213").expect("Zbit ZB25D40B JEDEC");
         assert_eq!(d40.protocol, "SPI_NOR");
