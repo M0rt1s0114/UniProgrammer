@@ -1,7 +1,6 @@
 import { ref, shallowRef, computed, watch } from 'vue'
 import { defineStore } from 'pinia'
-import { invoke } from '@tauri-apps/api/core'
-import { listen } from '@tauri-apps/api/event'
+import { call, onEvent } from '@/services/ipc'
 import { t } from '@/i18n'
 import { useSettingsStore } from '@/stores/settings'
 
@@ -117,7 +116,7 @@ export const useProgStore = defineStore('prog', () => {
 
   // 把“操作中”状态同步给 Rust，任务栏关闭/Alt+F4 由 Rust 侧拦截。
   watch(isRunning, (running) => {
-    void invoke('set_operation_running', { running }).catch(() => undefined)
+    void call('set_operation_running', { running }).catch(() => undefined)
   })
 
   // Hex 查看器数据。
@@ -286,8 +285,8 @@ export const useProgStore = defineStore('prog', () => {
   // 芯片库加载
   async function loadLibAndTypes() {
     try {
-      await invoke('load_chip_lib')
-      chipTypes.value = await invoke('get_chip_types')
+      await call('load_chip_lib')
+      chipTypes.value = await call('get_chip_types')
 
       // 恢复持久化的芯片选择，并对芯片库升级后的失效值做校验回退
       if (selectedType.value && !chipTypes.value.includes(selectedType.value)) {
@@ -316,7 +315,7 @@ export const useProgStore = defineStore('prog', () => {
   // 级联菜单辅助
   async function loadChipVendorsDirect(protocol: string): Promise<string[]> {
     try {
-      return await invoke('get_chip_vendors', { protocol })
+      return await call('get_chip_vendors', { protocol })
     } catch (e: unknown) {
       addLog(`加载厂商失败: ${String(e)}`, 'error')
       return []
@@ -325,7 +324,7 @@ export const useProgStore = defineStore('prog', () => {
 
   async function loadChipModelsDirect(protocol: string, vendor: string): Promise<string[]> {
     try {
-      return await invoke('get_chip_models', { protocol, vendor })
+      return await call('get_chip_models', { protocol, vendor })
     } catch (e: unknown) {
       addLog(`加载型号失败: ${String(e)}`, 'error')
       return []
@@ -365,7 +364,7 @@ export const useProgStore = defineStore('prog', () => {
     chipDetails.value = null
     if (!selectedType.value || !selectedVendor.value || !selectedModel.value) return
     try {
-      const info = (await invoke('get_chip_info', {
+      const info = (await call('get_chip_info', {
         protocol: selectedType.value,
         vendor: selectedVendor.value,
         model: selectedModel.value,
@@ -392,7 +391,7 @@ export const useProgStore = defineStore('prog', () => {
     }
     addLog('正在初始化 CH34X...')
     try {
-      const msg = (await invoke('initialize', {
+      const msg = (await call('initialize', {
         kind,
         ioLevelMv: vccTargetMv.value,
         spiMode: spiMode.value,
@@ -427,7 +426,7 @@ export const useProgStore = defineStore('prog', () => {
     }
     addLog(`正在连接 serprog (${port})...`)
     try {
-      const msg = (await invoke('connect_serprog', { port })) as string
+      const msg = (await call('connect_serprog', { port })) as string
       status.value = 'success'
       connectedDevice.value = msg
       programmerConnectedId.value = candidateId ?? `serprog:${port}`
@@ -455,7 +454,7 @@ export const useProgStore = defineStore('prog', () => {
 
   function ensureSerprogListener() {
     if (!serprogListenerPromise) {
-      serprogListenerPromise = listen<ProgrammerCandidate[]>(
+      serprogListenerPromise = onEvent<ProgrammerCandidate[]>(
         'serprog_scan_result',
         ({ payload }) => {
           applyScanResult(payload, true)
@@ -532,7 +531,7 @@ export const useProgStore = defineStore('prog', () => {
     try {
       await ensureSerprogListener()
       // USB 结果立即返回；串口在 Rust 后台探测并通过事件补充。
-      const list = await invoke<ProgrammerCandidate[]>('scan_programmers', {
+      const list = await call<ProgrammerCandidate[]>('scan_programmers', {
         includeSerprog: forceSerprog,
         quickSerprog,
       })
@@ -615,9 +614,9 @@ export const useProgStore = defineStore('prog', () => {
   // 原生文件对话框打开文件（Windows IFileDialog + 固件格式解析）
   async function openFileViaDialog() {
     try {
-      const path = await invoke<string | null>('open_file_dialog')
+      const path = await call<string | null>('open_file_dialog')
       if (!path) return
-      const result = await invoke<{ length: number; bytes: number[]; format: string }>(
+      const result = await call<{ length: number; bytes: number[]; format: string }>(
         'load_firmware_file',
         { path },
       )
@@ -637,7 +636,7 @@ export const useProgStore = defineStore('prog', () => {
   async function convertLib() {
     addLog('正在转换芯片库...')
     try {
-      const msg = (await invoke('convert_chip_lib')) as string
+      const msg = (await call('convert_chip_lib')) as string
       addLog(msg, 'success')
     } catch (e: unknown) {
       addLog(`转换失败: ${String(e)}`, 'error')

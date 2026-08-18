@@ -1,5 +1,4 @@
-import { invoke } from '@tauri-apps/api/core'
-import { listen, type UnlistenFn } from '@tauri-apps/api/event'
+import { call, onEvent, onProgress, type UnlistenFn } from '@/services/ipc'
 import { useProgStore, type DetectedChipInfo, formatBytes } from '@/stores/prog'
 import { useSettingsStore } from '@/stores/settings'
 
@@ -61,10 +60,10 @@ export function useSpiNor() {
   // ── 通用：订阅一个进度 event，返回取消订阅函数 ──────────────────────────────
   async function listenProgress(
     eventName: string,
-    onProgress: (done: number, total: number) => void,
+    handleProgress: (done: number, total: number) => void,
   ): Promise<UnlistenFn> {
-    return listen<{ done: number; total: number }>(eventName, ({ payload }) => {
-      onProgress(payload.done, payload.total)
+    return onProgress<{ done: number; total: number }>(eventName, (payload) => {
+      handleProgress(payload.done, payload.total)
     })
   }
 
@@ -75,7 +74,7 @@ export function useSpiNor() {
     store.currentOp = '检测芯片'
     store.addLog('正在检测 SPI Flash...')
     try {
-      const result = (await invoke('detect_chip')) as {
+      const result = (await call('detect_chip')) as {
         text: string
         info: DetectedChipInfo | null
       }
@@ -162,7 +161,7 @@ export function useSpiNor() {
     store.currentOp = label
     store.addLog(`${label}：实验性功能，开始执行`, 'functionTest')
     try {
-      const result = (await invoke(command)) as { length: number; hex: string }
+      const result = (await call(command)) as { length: number; hex: string }
       store.addLog(`${label} 完成（${result.length} 字节，实验性命令，需真机验证）`, 'functionTest')
       store.addLog(result.hex, 'info')
     } catch (e: unknown) {
@@ -190,7 +189,7 @@ export function useSpiNor() {
     store.currentOp = '读取 NAND BBM 映射表'
     store.addLog('读取 NAND BBM 映射表：实验性功能，开始执行', 'functionTest')
     try {
-      const result = (await invoke('read_nand_bbm_lut')) as {
+      const result = (await call('read_nand_bbm_lut')) as {
         length: number
         hex: string
         entries: { index: number; lba: number; pba: number; free: boolean; valid: boolean }[]
@@ -221,7 +220,7 @@ export function useSpiNor() {
     store.currentOp = `读取 NAND OTP 页 ${page}`
     store.addLog(`读取 NAND OTP 页 ${page}：实验性功能，开始执行`, 'functionTest')
     try {
-      const result = (await invoke('read_nand_otp_page', { page })) as {
+      const result = (await call('read_nand_otp_page', { page })) as {
         length: number
         hex: string
       }
@@ -244,7 +243,7 @@ export function useSpiNor() {
     store.currentOp = enable ? '开启硬件 ECC' : '关闭硬件 ECC'
     store.addLog(`${store.currentOp}：实验性功能，开始执行`, 'functionTest')
     try {
-      const enabled = (await invoke('set_nand_ecc', { enable })) as boolean
+      const enabled = (await call('set_nand_ecc', { enable })) as boolean
       store.addLog(
         `芯片内置 ECC 已${enabled ? '开启' : '关闭'}（实验性，需真机验证）`,
         'functionTest',
@@ -267,7 +266,7 @@ export function useSpiNor() {
     store.currentOp = kind === 'page' ? '读45页面模式' : '读45芯片模式'
     store.addLog(`${store.currentOp}：实验性功能，开始执行`, 'functionTest')
     try {
-      const result = (await invoke('read_at45_page_mode')) as { raw: number; binaryPage: boolean }
+      const result = (await call('read_at45_page_mode')) as { raw: number; binaryPage: boolean }
       store.addLog(
         `45 状态寄存器原始值：0x${result.raw.toString(16).padStart(2, '0')}；当前模式：${
           result.binaryPage ? '二进制页面（2 的幂）' : '标准 DataFlash 页面'
@@ -297,7 +296,7 @@ export function useSpiNor() {
     store.currentOp = binary ? '切换为二进制页面模式' : '切换为 DataFlash 页面模式'
     store.addLog(`${store.currentOp}：实验性功能，开始执行`, 'functionTest')
     try {
-      const result = (await invoke('set_at45_page_mode', { binary })) as {
+      const result = (await call('set_at45_page_mode', { binary })) as {
         raw: number
         binaryPage: boolean
       }
@@ -325,7 +324,7 @@ export function useSpiNor() {
     store.isRunning = true
     store.currentOp = '检查 NOR 写保护'
     try {
-      const status = (await invoke('nor_wp_status')) as {
+      const status = (await call('nor_wp_status')) as {
         sr1: number
         sr2: number
         sr3: number
@@ -359,7 +358,7 @@ export function useSpiNor() {
     store.isRunning = true
     store.currentOp = '解除 NOR 写保护'
     try {
-      const msg = (await invoke('nor_wp_disable')) as string
+      const msg = (await call('nor_wp_disable')) as string
       store.addLog(msg, 'success')
     } catch (e: unknown) {
       store.addLog(`解除 NOR 写保护失败: ${String(e)}`, 'error')
@@ -386,7 +385,7 @@ export function useSpiNor() {
       store.progressMessage = withEstimate(`坏块扫描 ${done} / ${total}`, opStart, done, total)
     })
     try {
-      const result = (await invoke('scan_bad_blocks')) as {
+      const result = (await call('scan_bad_blocks')) as {
         totalBlocks: number
         badBlocks: number[]
         badCount: number
@@ -438,7 +437,7 @@ export function useSpiNor() {
     let unlistenErase: UnlistenFn | null = null
     let unlistenBadBlock: UnlistenFn | null = null
     try {
-      unlistenErase = await listen<{
+      unlistenErase = await onEvent<{
         done: number
         total: number
         phase: string
@@ -457,16 +456,16 @@ export function useSpiNor() {
         store.progressMessage = payload.message
       })
       // NAND 擦除前的坏块扫描复用 bad_block_progress 事件
-      unlistenBadBlock = await listen<{ done: number; total: number }>(
+      unlistenBadBlock = await onProgress<{ done: number; total: number }>(
         'bad_block_progress',
-        ({ payload }) => {
+        (payload) => {
           store.progressIndeterminate = false
           store.progressElapsedMs = 0
           store.progress = Math.min(99, Math.floor((payload.done / payload.total) * 100))
           store.progressMessage = `正在扫描坏块 ${payload.done} / ${payload.total}`
         },
       )
-      const msg = (await invoke('chip_erase', {
+      const msg = (await call('chip_erase', {
         badBlockMode: store.nandBadBlockMode,
       })) as string
       store.progressIndeterminate = false
@@ -516,7 +515,7 @@ export function useSpiNor() {
         store.progress = pct
         store.progressMessage = `已检查 ${done} / ${total} 字节 (${pct}%)`
       })
-      const result = (await invoke('blank_check', {
+      const result = (await call('blank_check', {
         size: store.detectedChipSize,
         startAddr: 0,
         badBlockMode: store.nandBadBlockMode,
@@ -580,7 +579,7 @@ export function useSpiNor() {
       })
       // 后端用 tauri::ipc::Response 返回原始字节（ArrayBuffer），
       // 大容量 NAND（如 128MB）不再经过 JSON number[] 序列化，避免前端卡死。
-      const raw = await invoke<ArrayBuffer>('read_chip', {
+      const raw = await call<ArrayBuffer>('read_chip', {
         size: store.detectedChipSize,
         startAddr: 0,
         badBlockMode: store.nandBadBlockMode,
@@ -648,7 +647,7 @@ export function useSpiNor() {
         'x-force-segmented': String(forceSegmented),
         'x-bad-block-mode': store.nandBadBlockMode,
       }
-      const msg = await invoke<string>('write_chip', payload, { headers })
+      const msg = await call<string>('write_chip', payload, { headers })
       store.progress = 100
       store.progressMessage = '写入完成'
       store.addLog(msg, 'success')
@@ -710,7 +709,7 @@ export function useSpiNor() {
         'x-start-addr': '0',
         'x-bad-block-mode': store.nandBadBlockMode,
       }
-      const msg = await invoke<string>('verify_chip', payload, { headers })
+      const msg = await call<string>('verify_chip', payload, { headers })
       store.progress = 100
       store.progressMessage = '校验完成'
       store.addLog(msg, 'success')
@@ -774,7 +773,7 @@ export function useSpiNor() {
     }
     const defaultName = `${stemForSave()}.${format}`
     try {
-      const path = await invoke<string | null>('save_file_dialog', {
+      const path = await call<string | null>('save_file_dialog', {
         defaultName,
         defaultExt: format,
       })
@@ -786,7 +785,7 @@ export function useSpiNor() {
       } else {
         bytes = new TextEncoder().encode(buildIntelHex(store.hexData))
       }
-      await invoke('write_file', { path, data: Array.from(bytes) })
+      await call('write_file', { path, data: Array.from(bytes) })
       store.addLog(`已保存: ${path}`, 'success')
     } catch (e: unknown) {
       store.addLog(`保存失败: ${String(e)}`, 'error')

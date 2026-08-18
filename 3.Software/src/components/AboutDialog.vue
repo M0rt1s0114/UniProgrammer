@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { invoke } from '@tauri-apps/api/core'
+import { call } from '@/services/ipc'
 import { getVersion } from '@tauri-apps/api/app'
 import { t } from '@/i18n'
 
@@ -32,8 +32,8 @@ function protocolLabel(protocol: string): string {
 
 async function loadAbout() {
   try {
-    await invoke('load_chip_lib')
-    const result = (await invoke('get_chip_lib_stats')) as {
+    await call('load_chip_lib')
+    const result = (await call('get_chip_lib_stats')) as {
       total: number
       counts: { protocol: string; count: number }[]
     }
@@ -54,7 +54,7 @@ async function loadAbout() {
 
 async function openGitHub() {
   try {
-    await invoke('open_external_url', { url: REPO_URL })
+    await call('open_external_url', { url: REPO_URL })
   } catch (e: unknown) {
     console.warn('open github failed:', e)
   }

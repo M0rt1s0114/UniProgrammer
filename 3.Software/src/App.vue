@@ -2,8 +2,7 @@
 import { onMounted, ref, nextTick, watch } from 'vue'
 import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window'
 import { getVersion } from '@tauri-apps/api/app'
-import { invoke } from '@tauri-apps/api/core'
-import { listen } from '@tauri-apps/api/event'
+import { call, onEvent } from '@/services/ipc'
 import { useProgStore } from '@/stores/prog'
 import { t } from '@/i18n'
 import OperationPanel from '@/components/OperationPanel.vue'
@@ -47,7 +46,7 @@ async function closeWindow() {
     return
   }
   try {
-    await invoke('force_close_window')
+    await call('force_close_window')
   } catch (backendError) {
     console.warn('force_close_window failed:', backendError)
     try {
@@ -62,7 +61,7 @@ async function confirmClose() {
   showCloseConfirm.value = false
   // 优先走 Rust 后端销毁窗口，绕开 WebView2 的 close-requested 拦截问题。
   try {
-    await invoke('force_close_window')
+    await call('force_close_window')
     return
   } catch (backendError) {
     console.warn('force_close_window failed:', backendError)
@@ -109,7 +108,7 @@ onMounted(() => {
   loadVersion()
   fitWindowToSidebar()
   // Rust 侧检测到“运行中关闭请求”后通知前端弹确认框。
-  void listen('close_requested_while_busy', () => {
+  void onEvent('close_requested_while_busy', () => {
     showCloseConfirm.value = true
   })
 })

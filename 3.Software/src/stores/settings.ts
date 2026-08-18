@@ -1,6 +1,6 @@
 import { ref, watch } from 'vue'
 import { defineStore } from 'pinia'
-import { invoke } from '@tauri-apps/api/core'
+import { call } from '@/services/ipc'
 import { setLocale, type Locale } from '@/i18n'
 
 export type ThemeMode = 'dark' | 'light' | 'system'
@@ -490,7 +490,7 @@ export const useSettingsStore = defineStore('settings', () => {
 
   async function save() {
     try {
-      const path = await invoke<string>('save_settings', {
+      const path = await call<string>('save_settings', {
         content: serializeSettings({
           language: language.value,
           theme: theme.value,
@@ -537,7 +537,7 @@ export const useSettingsStore = defineStore('settings', () => {
     let fileText = ''
     let legacyFound = false
     try {
-      fileText = await invoke<string>('load_settings')
+      fileText = await call<string>('load_settings')
     } catch (e: unknown) {
       lastSaveError.value = String(e)
       console.warn('load settings failed:', e)
