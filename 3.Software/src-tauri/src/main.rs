@@ -13,8 +13,10 @@ mod sfdp;
 
 use ch34x::{Ch34xDevice, Ch34xSettings, ChipKind, DeviceMode};
 use core::{
-    chip_info_to_detect, get_lib, open_ch34x, open_ch34x_mode, spi_read_jedec, AppState,
-    ChipDetectInfo, ChipDetectResult,
+    chip_info_to_detect, get_lib, nor_params, open_ch34x, open_ch34x_mode, serprog_wait_ready,
+    spi_4byte_mode, spi_read_jedec, spi_read_status, spi_unprotect, spi_wait_ready,
+    spi_write_disable, spi_write_enable, AppState, ChipDetectInfo, ChipDetectResult, NorParams,
+    NorWriteProtectStatus, NOR_BP_MASK_SR1,
 };
 use serde::Serialize;
 use std::path::PathBuf;
@@ -77,16 +79,6 @@ struct BadBlockScanResult {
     bad_count: u32,
 }
 
-#[derive(Clone, Serialize)]
-struct NorWriteProtectStatus {
-    sr1: u8,
-    sr2: u8,
-    sr3: u8,
-    /// BP0..BP2 (SR1 bits 2-4) plus common BP4 (SR2 bit 6) when SR2 is valid.
-    bp_bits: u8,
-    write_protected: bool,
-}
-
 #[derive(Serialize)]
 struct RawBytesResult {
     length: usize,
@@ -130,115 +122,6 @@ fn exe_dir() -> PathBuf {
     {
         let exe = std::env::current_exe().expect("无法获取 exe 路径");
         exe.parent().unwrap().to_path_buf()
-    }
-}
-
-// ═══════════════════════════════ CH34X SPI helpers (IMPROG style) ═════════════
-
-/// 3-byte addressing covers exactly 16 MiB (addresses 0x000000..0xFFFFFF).
-/// 4-byte mode is only required above 16 MiB; 16 MiB chips such as
-/// EN25QH128 must stay in 3-byte mode.
-fn nor_requires_4byte(size: u64) -> bool {
-    size > 0x0100_0000
-}
-
-/// NOR parameters used by the read/write/erase paths. Missing fields fall back
-/// to safe defaults until the chip database is enriched with IMSProg fields.
-struct NorParams {
-    page: usize,
-    _sector: usize,
-    _block: usize,
-    addr4b: bool,
-    alg: u8,
-}
-
-fn nor_params(info: &chiplib::ChipInfo) -> NorParams {
-    let page = info.page.max(1) as usize;
-    // attr names follow IMSProg database semantics after the importer runs:
-    // addr4bit: low nibble 1 = use 4-byte addressing, high nibble = algorithm
-    // (0 default B7/E9, 1 Winbond, 2 Spansion BRWR).
-    let addr4bit = info.attr_u32("addr4bit").unwrap_or(0) as u8;
-    let addr4b = (addr4bit & 0x0F) != 0 || nor_requires_4byte(info.size);
-    let alg = (addr4bit >> 4) & 0x0F;
-    NorParams {
-        page,
-        _sector: info.attr_u32("sector").unwrap_or(4096) as usize,
-        _block: info.attr_u32("block").unwrap_or(64 * 1024) as usize,
-        addr4b,
-        alg,
-    }
-}
-
-fn spi_read_status_register(dev: &Ch34xDevice, opcode: u8) -> Result<u8, String> {
-    dev.cs_low()?;
-    dev.spi_tx(&[opcode])?;
-    let mut status = [0xFFu8; 1];
-    dev.spi_rx(&mut status)?;
-    dev.cs_high()?;
-    Ok(status[0])
-}
-
-fn spi_read_status(dev: &Ch34xDevice) -> Result<u8, String> {
-    spi_read_status_register(dev, 0x05)
-}
-
-/// SR1 BP0..BP2. A few parts keep BP4 in SR2; callers can add it when SR2
-/// actually answered (all-0xFF usually means the register does not exist).
-const NOR_BP_MASK_SR1: u8 = 0x04 | 0x08 | 0x10;
-
-/// Raw status-register snapshot used by the write-protect commands.
-fn nor_wp_snapshot(dev: &Ch34xDevice) -> Result<NorWriteProtectStatus, String> {
-    let sr1 = spi_read_status_register(dev, 0x05)?;
-    let sr2 = spi_read_status_register(dev, 0x35).unwrap_or(0xFF);
-    let sr3 = spi_read_status_register(dev, 0x15).unwrap_or(0xFF);
-    let mut bp_bits = sr1 & NOR_BP_MASK_SR1;
-    if sr2 != 0xFF && (sr2 & 0x40) != 0 {
-        bp_bits |= 0x20;
-    }
-    Ok(NorWriteProtectStatus {
-        sr1,
-        sr2,
-        sr3,
-        bp_bits,
-        write_protected: bp_bits != 0,
-    })
-}
-
-/// Clear block-protect bits in SR1. Kept separate from `spi_unprotect` so the
-/// erase path can keep its IMSProg-compatible behavior while the explicit
-/// "disable write protect" command reports what it changed.
-fn nor_clear_block_protect(dev: &Ch34xDevice) -> Result<NorWriteProtectStatus, String> {
-    let before = nor_wp_snapshot(dev)?;
-    if before.bp_bits == 0 {
-        return Ok(before);
-    }
-    spi_wait_ready(dev, 1000)?;
-    // EWSR for legacy parts that predate WREN-gated WRSR; WREN covers modern
-    // parts. Both are harmless on the other family.
-    dev.cs_low()?;
-    dev.spi_tx(&[0x50])?;
-    dev.cs_high()?;
-    spi_write_enable(dev)?;
-    let sr1_new = before.sr1 & !NOR_BP_MASK_SR1;
-    dev.cs_low()?;
-    dev.spi_tx(&[0x01, sr1_new])?;
-    dev.cs_high()?;
-    spi_wait_ready(dev, 2000)?;
-    nor_wp_snapshot(dev)
-}
-
-/// IMSProg snor_wait_ready(): poll RDSR until WIP|EPE|WEL are all clear.
-fn spi_wait_ready(dev: &Ch34xDevice, timeout_ms: u64) -> Result<(), String> {
-    let start = Instant::now();
-    loop {
-        let status = spi_read_status(dev)?;
-        if (status & 0x01 | status & 0x20 | status & 0x02) == 0 {
-            return Ok(());
-        }
-        if start.elapsed() > Duration::from_millis(timeout_ms) {
-            return Err("等待闪存就绪超时".into());
-        }
-        std::thread::sleep(Duration::from_millis(5));
     }
 }
 
@@ -290,7 +173,7 @@ fn spi_wait_ready_with_progress(
     let start = Instant::now();
     let mut last_report = start;
     loop {
-        let status = spi_read_status(dev)?;
+        let status = core::spi_read_status(dev)?;
         if (status & 0x01 | status & 0x20 | status & 0x02) == 0 {
             return Ok(());
         }
@@ -313,70 +196,6 @@ fn spi_wait_ready_with_progress(
         }
         std::thread::sleep(Duration::from_millis(5));
     }
-}
-
-fn spi_write_enable(dev: &Ch34xDevice) -> Result<(), String> {
-    dev.cs_low()?;
-    dev.spi_tx(&[0x06])?;
-    dev.cs_high()
-}
-
-fn spi_write_disable(dev: &Ch34xDevice) -> Result<(), String> {
-    dev.cs_low()?;
-    dev.spi_tx(&[0x04])?;
-    dev.cs_high()
-}
-
-/// IMSProg snor_unprotect(): clear BP0-BP2 when they are set.
-fn spi_unprotect(dev: &Ch34xDevice) -> Result<(), String> {
-    let sr = spi_read_status(dev)?;
-    if (sr & (0x04 | 0x08 | 0x10)) != 0 {
-        spi_write_enable(dev)?;
-        dev.cs_low()?;
-        dev.spi_tx(&[0x01, 0x00])?;
-        dev.cs_high()?;
-        spi_wait_ready(dev, 1000)?;
-    }
-    Ok(())
-}
-
-/// IMSProg snor_4byte_mode(): B7/E9 (default), Winbond exit fix-up,
-/// Spansion BRWR/BWRR path.
-fn spi_4byte_mode(dev: &Ch34xDevice, alg: u8, enable: bool) -> Result<(), String> {
-    spi_wait_ready(dev, 1000)?;
-    if alg == 0x02 {
-        // Spansion: write BRWR (0x17) and verify BRRD (0x16)
-        let br = if enable { 0x81u8 } else { 0x00 };
-        dev.cs_low()?;
-        dev.spi_tx(&[0x17, br])?;
-        dev.cs_high()?;
-        dev.cs_low()?;
-        dev.spi_tx(&[0x16])?;
-        let mut readback = [0u8; 1];
-        dev.spi_rx(&mut readback)?;
-        dev.cs_high()?;
-        if readback[0] != br {
-            return Err(format!(
-                "4B 模式切换失败 {}: 写入 0x{:02X}, 读回 0x{:02X}",
-                if enable { "使能" } else { "退出" },
-                br,
-                readback[0]
-            ));
-        }
-    } else {
-        let cmd: u8 = if enable { 0xB7 } else { 0xE9 };
-        dev.cs_low()?;
-        dev.spi_tx(&[cmd])?;
-        dev.cs_high()?;
-        if !enable && alg == 0x01 {
-            // Winbond: after exiting 4B mode, clear the extended register
-            spi_write_enable(dev)?;
-            dev.cs_low()?;
-            dev.spi_tx(&[0xC5, 0x00])?;
-            dev.cs_high()?;
-        }
-    }
-    Ok(())
 }
 
 fn parse_nand_bad_block_mode(value: Option<&str>) -> protocols::NandBadBlockMode {
@@ -415,22 +234,6 @@ fn prepare_bypass_if_needed(
     }
     let params = protocols::ChipParams::from_info(info);
     protocols::nand_prepare_bypass_lut(dev, &params, info.size, bad_blocks)
-}
-
-// ═══════════════════════════════ serprog helpers ═════════════════════════════
-
-fn serprog_wait_ready(ser: &mut serprog::Serprog, timeout_ms: u64) -> Result<(), String> {
-    let start = Instant::now();
-    loop {
-        let resp = ser.spi_command(&[0x05], 1)?;
-        if resp.len() == 1 && (resp[0] & 0x01) == 0 {
-            return Ok(());
-        }
-        if start.elapsed() > Duration::from_millis(timeout_ms) {
-            return Err("等待闪存就绪超时".into());
-        }
-        std::thread::sleep(Duration::from_millis(5));
-    }
 }
 
 // ═══════════════════════════════ Tauri commands ══════════════════════════════
@@ -580,90 +383,16 @@ async fn detect_chip(state: State<'_, Mutex<AppState>>) -> Result<ChipDetectResu
     core::detect_chip(&mut s)
 }
 
-/// Read SPI NOR status registers (SR1/SR2/SR3) over serprog. Registers that
-/// the chip does not implement return 0xFF and are treated as absent.
-fn serprog_nor_wp_snapshot(ser: &mut serprog::Serprog) -> Result<NorWriteProtectStatus, String> {
-    let sr1 = ser.spi_command(&[0x05], 1)?[0];
-    let sr2 = ser.spi_command(&[0x35], 1).map(|v| v[0]).unwrap_or(0xFF);
-    let sr3 = ser.spi_command(&[0x15], 1).map(|v| v[0]).unwrap_or(0xFF);
-    let mut bp_bits = sr1 & NOR_BP_MASK_SR1;
-    if sr2 != 0xFF && (sr2 & 0x40) != 0 {
-        bp_bits |= 0x20;
-    }
-    Ok(NorWriteProtectStatus {
-        sr1,
-        sr2,
-        sr3,
-        bp_bits,
-        write_protected: bp_bits != 0,
-    })
-}
-
 #[tauri::command]
 async fn nor_wp_status(state: State<'_, Mutex<AppState>>) -> Result<NorWriteProtectStatus, String> {
     let mut s = state.lock().map_err(|e| e.to_string())?;
-    let info = s
-        .detected
-        .as_ref()
-        .ok_or("请先检测或选择 SPI NOR 芯片")?
-        .clone();
-    if info.protocol != "SPI_NOR" {
-        return Err("当前芯片不是 SPI NOR".into());
-    }
-    if s.ch34x.is_some() {
-        let dev = open_ch34x_mode(&s, DeviceMode::Spi)?;
-        nor_wp_snapshot(&dev)
-    } else if let Some(ser) = s.serprog.as_mut() {
-        serprog_nor_wp_snapshot(ser)
-    } else {
-        Err("没有可用的编程器".into())
-    }
+    core::nor_wp_status(&mut s)
 }
 
 #[tauri::command]
 async fn nor_wp_disable(state: State<'_, Mutex<AppState>>) -> Result<String, String> {
     let mut s = state.lock().map_err(|e| e.to_string())?;
-    let info = s
-        .detected
-        .as_ref()
-        .ok_or("请先检测或选择 SPI NOR 芯片")?
-        .clone();
-    if info.protocol != "SPI_NOR" {
-        return Err("当前芯片不是 SPI NOR".into());
-    }
-
-    if s.ch34x.is_some() {
-        let dev = open_ch34x_mode(&s, DeviceMode::Spi)?;
-        let before = nor_wp_snapshot(&dev)?;
-        let after = nor_clear_block_protect(&dev)?;
-        Ok(format!(
-            "NOR 写保护已处理：SR1 0x{:02X} -> 0x{:02X}（保护位 {} -> {}）",
-            before.sr1,
-            after.sr1,
-            if before.write_protected { "开" } else { "关" },
-            if after.write_protected { "开" } else { "关" }
-        ))
-    } else if let Some(ser) = s.serprog.as_mut() {
-        let before = serprog_nor_wp_snapshot(ser)?;
-        if !before.write_protected {
-            return Ok(format!(
-                "NOR 写保护未开启（SR1=0x{:02X}），无需解除",
-                before.sr1
-            ));
-        }
-        let sr1_new = before.sr1 & !NOR_BP_MASK_SR1;
-        ser.spi_command(&[0x50], 0)?; // EWSR (legacy parts)
-        ser.spi_command(&[0x06], 0)?; // WREN (modern parts)
-        ser.spi_command(&[0x01, sr1_new], 0)?; // WRSR
-        serprog_wait_ready(ser, 2000)?;
-        let after = serprog_nor_wp_snapshot(ser)?;
-        Ok(format!(
-            "NOR 写保护已解除：SR1 0x{:02X} -> 0x{:02X}",
-            before.sr1, after.sr1
-        ))
-    } else {
-        Err("没有可用的编程器".into())
-    }
+    core::nor_wp_disable(&mut s)
 }
 
 #[tauri::command]
@@ -2167,9 +1896,9 @@ mod tests {
 
     #[test]
     fn nor_4byte_boundary() {
-        assert!(!nor_requires_4byte(0x0100_0000)); // exactly 16 MiB: 3-byte mode
-        assert!(nor_requires_4byte(0x0100_0001)); // above 16 MiB: 4-byte mode
-        assert!(nor_requires_4byte(0x0200_0000));
+        assert!(!core::nor_requires_4byte(0x0100_0000)); // exactly 16 MiB: 3-byte mode
+        assert!(core::nor_requires_4byte(0x0100_0001)); // above 16 MiB: 4-byte mode
+        assert!(core::nor_requires_4byte(0x0200_0000));
     }
 
     #[test]
