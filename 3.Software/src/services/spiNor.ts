@@ -316,6 +316,59 @@ export function useSpiNor() {
   }
 
   // ── 坏块扫描（SPI NAND）────────────────────────────────────────────────────
+  // ── SPI NOR 写保护 ─────────────────────────────────────────────────────────
+  async function checkNorWriteProtect() {
+    if (store.selectedType !== 'SPI_NOR' || !store.canOperate) {
+      store.addLog('写保护检查仅支持已连接的 SPI NOR 芯片', 'warn')
+      return
+    }
+    store.isRunning = true
+    store.currentOp = '检查 NOR 写保护'
+    try {
+      const status = (await invoke('nor_wp_status')) as {
+        sr1: number
+        sr2: number
+        sr3: number
+        bpBits: number
+        writeProtected: boolean
+      }
+      store.addLog(
+        `NOR 写保护状态：SR1=0x${status.sr1.toString(16).padStart(2, '0')} SR2=0x${status.sr2
+          .toString(16)
+          .padStart(2, '0')} SR3=0x${status.sr3
+          .toString(16)
+          .padStart(
+            2,
+            '0',
+          )}；BP=0x${status.bpBits.toString(16)}；${status.writeProtected ? '已保护' : '未保护'}`,
+        status.writeProtected ? 'warn' : 'success',
+      )
+    } catch (e: unknown) {
+      store.addLog(`NOR 写保护检查失败: ${String(e)}`, 'error')
+    } finally {
+      store.isRunning = false
+      store.currentOp = ''
+    }
+  }
+
+  async function disableNorWriteProtect() {
+    if (store.selectedType !== 'SPI_NOR' || !store.canOperate) {
+      store.addLog('解除写保护仅支持已连接的 SPI NOR 芯片', 'warn')
+      return
+    }
+    store.isRunning = true
+    store.currentOp = '解除 NOR 写保护'
+    try {
+      const msg = (await invoke('nor_wp_disable')) as string
+      store.addLog(msg, 'success')
+    } catch (e: unknown) {
+      store.addLog(`解除 NOR 写保护失败: ${String(e)}`, 'error')
+    } finally {
+      store.isRunning = false
+      store.currentOp = ''
+    }
+  }
+
   async function scanBadBlocks(): Promise<{ totalBlocks: number; badBlocks: number[] }> {
     if (store.selectedType !== 'SPI_NAND' || !store.canOperate) {
       store.addLog('坏块扫描仅支持已连接的 SPI NAND 芯片', 'warn')
@@ -846,6 +899,8 @@ export function useSpiNor() {
     detectChip,
     autoDetectChip,
     cancelChipAutoDetect,
+    checkNorWriteProtect,
+    disableNorWriteProtect,
     scanBadBlocks,
     readNandUid,
     readNandParamPage,

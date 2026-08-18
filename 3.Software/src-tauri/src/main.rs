@@ -8,9 +8,11 @@ mod firmware;
 mod protocols;
 mod serprog;
 mod settings;
+mod sfdp;
 
 use ch34x::{Ch34xDevice, Ch34xSettings, ChipKind, DeviceMode};
 use serde::Serialize;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
@@ -101,6 +103,16 @@ struct BadBlockScanResult {
     total_blocks: u32,
     bad_blocks: Vec<u32>,
     bad_count: u32,
+}
+
+#[derive(Clone, Serialize)]
+struct NorWriteProtectStatus {
+    sr1: u8,
+    sr2: u8,
+    sr3: u8,
+    /// BP0..BP2 (SR1 bits 2-4) plus common BP4 (SR2 bit 6) when SR2 is valid.
+    bp_bits: u8,
+    write_protected: bool,
 }
 
 #[derive(Serialize)]
@@ -227,13 +239,112 @@ fn nor_params(info: &chiplib::ChipInfo) -> NorParams {
     }
 }
 
-fn spi_read_status(dev: &Ch34xDevice) -> Result<u8, String> {
+fn spi_read_status_register(dev: &Ch34xDevice, opcode: u8) -> Result<u8, String> {
     dev.cs_low()?;
-    dev.spi_tx(&[0x05])?;
+    dev.spi_tx(&[opcode])?;
     let mut status = [0xFFu8; 1];
     dev.spi_rx(&mut status)?;
     dev.cs_high()?;
     Ok(status[0])
+}
+
+fn spi_read_status(dev: &Ch34xDevice) -> Result<u8, String> {
+    spi_read_status_register(dev, 0x05)
+}
+
+/// SR1 BP0..BP2. A few parts keep BP4 in SR2; callers can add it when SR2
+/// actually answered (all-0xFF usually means the register does not exist).
+const NOR_BP_MASK_SR1: u8 = 0x04 | 0x08 | 0x10;
+
+/// Raw status-register snapshot used by the write-protect commands.
+fn nor_wp_snapshot(dev: &Ch34xDevice) -> Result<NorWriteProtectStatus, String> {
+    let sr1 = spi_read_status_register(dev, 0x05)?;
+    let sr2 = spi_read_status_register(dev, 0x35).unwrap_or(0xFF);
+    let sr3 = spi_read_status_register(dev, 0x15).unwrap_or(0xFF);
+    let mut bp_bits = sr1 & NOR_BP_MASK_SR1;
+    if sr2 != 0xFF && (sr2 & 0x40) != 0 {
+        bp_bits |= 0x20;
+    }
+    Ok(NorWriteProtectStatus {
+        sr1,
+        sr2,
+        sr3,
+        bp_bits,
+        write_protected: bp_bits != 0,
+    })
+}
+
+/// Clear block-protect bits in SR1. Kept separate from `spi_unprotect` so the
+/// erase path can keep its IMSProg-compatible behavior while the explicit
+/// "disable write protect" command reports what it changed.
+fn nor_clear_block_protect(dev: &Ch34xDevice) -> Result<NorWriteProtectStatus, String> {
+    let before = nor_wp_snapshot(dev)?;
+    if before.bp_bits == 0 {
+        return Ok(before);
+    }
+    spi_wait_ready(dev, 1000)?;
+    // EWSR for legacy parts that predate WREN-gated WRSR; WREN covers modern
+    // parts. Both are harmless on the other family.
+    dev.cs_low()?;
+    dev.spi_tx(&[0x50])?;
+    dev.cs_high()?;
+    spi_write_enable(dev)?;
+    let sr1_new = before.sr1 & !NOR_BP_MASK_SR1;
+    dev.cs_low()?;
+    dev.spi_tx(&[0x01, sr1_new])?;
+    dev.cs_high()?;
+    spi_wait_ready(dev, 2000)?;
+    nor_wp_snapshot(dev)
+}
+
+/// SFDP read (JESD216): 0x5A + 3-byte SFDP-space address + one dummy byte.
+fn sfdp_read_ch34x(dev: &Ch34xDevice, addr: u32, len: usize) -> Result<Vec<u8>, String> {
+    let hdr = [
+        0x5A,
+        (addr >> 16) as u8,
+        (addr >> 8) as u8,
+        addr as u8,
+        0x00, // dummy cycle
+    ];
+    if hdr.len() + len > dev.spi_frame_limit() {
+        return Err("SFDP 读取长度超过当前 HAL 单帧上限".into());
+    }
+    dev.cs_low()?;
+    dev.spi_tx(&hdr)?;
+    let mut out = vec![0xFFu8; len];
+    dev.spi_rx(&mut out)?;
+    dev.cs_high()?;
+    Ok(out)
+}
+
+fn sfdp_read_serprog(ser: &mut serprog::Serprog, addr: u32, len: usize) -> Result<Vec<u8>, String> {
+    ser.spi_command(
+        &[
+            0x5A,
+            (addr >> 16) as u8,
+            (addr >> 8) as u8,
+            addr as u8,
+            0x00, // dummy cycle
+        ],
+        len,
+    )
+}
+
+fn synthesize_sfdp_chip(jedec_id: &str, params: &sfdp::SfdpBasicFlashParams) -> chiplib::ChipInfo {
+    let mut attrs = HashMap::new();
+    attrs.insert("sector".to_string(), params.sector_size.to_string());
+    attrs.insert("block".to_string(), params.block_size.to_string());
+    attrs.insert("vcc".to_string(), "3.3".to_string());
+    attrs.insert("sfdp".to_string(), "1".to_string());
+    chiplib::ChipInfo {
+        id: jedec_id.to_string(),
+        vendor: "SFDP".to_string(),
+        model: format!("Unknown {} (SFDP)", jedec_id.to_ascii_uppercase()),
+        protocol: "SPI_NOR".to_string(),
+        size: params.density_bytes,
+        page: params.page_size,
+        attrs,
+    }
 }
 
 /// IMSProg snor_wait_ready(): poll RDSR until WIP|EPE|WEL are all clear.
@@ -712,6 +823,46 @@ async fn detect_chip(state: State<'_, Mutex<AppState>>) -> Result<ChipDetectResu
             Ok(result)
         }
         None => {
+            // JEDEC ID is absent from chiplib. Before giving up, try JESD216
+            // SFDP: an unlisted but SFDP-compliant NOR can be sized and used
+            // from its Basic Flash Parameter Table. Mirrors flashrom/ratchet
+            // behavior for unknown parts.
+            let first = probes[0];
+            let jedec_id = format!("{:02X}{:02X}{:02X}", first[0], first[1], first[2]);
+            let plausible_id = jedec_id != "FFFFFF" && jedec_id != "000000";
+            let sfdp_match: Option<chiplib::ChipInfo> = if !plausible_id {
+                None
+            } else if s.ch34x.is_some() {
+                let dev = open_ch34x(&s)?;
+                sfdp::discover_sfdp(|addr, len| sfdp_read_ch34x(&dev, addr, len))?
+                    .map(|params| synthesize_sfdp_chip(&jedec_id, &params))
+            } else if let Some(ser) = s.serprog.as_mut() {
+                sfdp::discover_sfdp(|addr, len| sfdp_read_serprog(ser, addr, len))?
+                    .map(|params| synthesize_sfdp_chip(&jedec_id, &params))
+            } else {
+                None
+            };
+
+            if let Some(info) = sfdp_match {
+                let text = format!(
+                    "✅ SFDP 兜底匹配成功！\n厂商: {}\n型号: {}\n容量: {}\n页大小: {} 字节\n协议: {}\nJEDEC: {}（未收录，参数来自 SFDP）\n（设备: {}）",
+                    info.vendor,
+                    info.model,
+                    format_human_size(info.size),
+                    info.page,
+                    info.protocol,
+                    jedec_id,
+                    s.connected_device.as_deref().unwrap_or("未知")
+                );
+                let detected = info.clone();
+                let result = ChipDetectResult {
+                    text,
+                    info: Some(chip_info_to_detect(&info)),
+                };
+                s.detected = Some(detected);
+                return Ok(result);
+            }
+
             let raw = probes
                 .iter()
                 .map(|p| {
@@ -728,6 +879,92 @@ async fn detect_chip(state: State<'_, Mutex<AppState>>) -> Result<ChipDetectResu
                 info: None,
             })
         }
+    }
+}
+
+/// Read SPI NOR status registers (SR1/SR2/SR3) over serprog. Registers that
+/// the chip does not implement return 0xFF and are treated as absent.
+fn serprog_nor_wp_snapshot(ser: &mut serprog::Serprog) -> Result<NorWriteProtectStatus, String> {
+    let sr1 = ser.spi_command(&[0x05], 1)?[0];
+    let sr2 = ser.spi_command(&[0x35], 1).map(|v| v[0]).unwrap_or(0xFF);
+    let sr3 = ser.spi_command(&[0x15], 1).map(|v| v[0]).unwrap_or(0xFF);
+    let mut bp_bits = sr1 & NOR_BP_MASK_SR1;
+    if sr2 != 0xFF && (sr2 & 0x40) != 0 {
+        bp_bits |= 0x20;
+    }
+    Ok(NorWriteProtectStatus {
+        sr1,
+        sr2,
+        sr3,
+        bp_bits,
+        write_protected: bp_bits != 0,
+    })
+}
+
+#[tauri::command]
+async fn nor_wp_status(state: State<'_, Mutex<AppState>>) -> Result<NorWriteProtectStatus, String> {
+    let mut s = state.lock().map_err(|e| e.to_string())?;
+    let info = s
+        .detected
+        .as_ref()
+        .ok_or("请先检测或选择 SPI NOR 芯片")?
+        .clone();
+    if info.protocol != "SPI_NOR" {
+        return Err("当前芯片不是 SPI NOR".into());
+    }
+    if s.ch34x.is_some() {
+        let dev = open_ch34x_mode(&s, DeviceMode::Spi)?;
+        nor_wp_snapshot(&dev)
+    } else if let Some(ser) = s.serprog.as_mut() {
+        serprog_nor_wp_snapshot(ser)
+    } else {
+        Err("没有可用的编程器".into())
+    }
+}
+
+#[tauri::command]
+async fn nor_wp_disable(state: State<'_, Mutex<AppState>>) -> Result<String, String> {
+    let mut s = state.lock().map_err(|e| e.to_string())?;
+    let info = s
+        .detected
+        .as_ref()
+        .ok_or("请先检测或选择 SPI NOR 芯片")?
+        .clone();
+    if info.protocol != "SPI_NOR" {
+        return Err("当前芯片不是 SPI NOR".into());
+    }
+
+    if s.ch34x.is_some() {
+        let dev = open_ch34x_mode(&s, DeviceMode::Spi)?;
+        let before = nor_wp_snapshot(&dev)?;
+        let after = nor_clear_block_protect(&dev)?;
+        Ok(format!(
+            "NOR 写保护已处理：SR1 0x{:02X} -> 0x{:02X}（保护位 {} -> {}）",
+            before.sr1,
+            after.sr1,
+            if before.write_protected { "开" } else { "关" },
+            if after.write_protected { "开" } else { "关" }
+        ))
+    } else if let Some(ser) = s.serprog.as_mut() {
+        let before = serprog_nor_wp_snapshot(ser)?;
+        if !before.write_protected {
+            return Ok(format!(
+                "NOR 写保护未开启（SR1=0x{:02X}），无需解除",
+                before.sr1
+            ));
+        }
+        let sr1_new = before.sr1 & !NOR_BP_MASK_SR1;
+        ser.spi_command(&[0x50], 0)?; // EWSR (legacy parts)
+        ser.spi_command(&[0x06], 0)?; // WREN (modern parts)
+        ser.spi_command(&[0x01, sr1_new], 0)?; // WRSR
+        serprog_wait_ready(ser, 2000)?;
+        let after = serprog_nor_wp_snapshot(ser)?;
+        Ok(format!(
+            "NOR 写保护已解除：SR1 0x{:02X} -> 0x{:02X}",
+            before.sr1, after.sr1
+        ))
+    } else {
+        Err("没有可用的编程器".into())
     }
 }
 
@@ -1550,6 +1787,13 @@ async fn write_chip(
 
     if s.serprog.is_some() && s.ch34x.is_none() {
         let ser = s.serprog.as_mut().unwrap();
+        let sr1 = ser.spi_command(&[0x05], 1)?[0];
+        if (sr1 & NOR_BP_MASK_SR1) != 0 {
+            return Err(format!(
+                "SPI NOR 处于写保护状态（SR1=0x{:02X}）。请先执行“解除 NOR 写保护”",
+                sr1
+            ));
+        }
         let use_4b = (start_addr + total as u64) > 0x0100_0000;
         let make_header = |addr: u64| -> Vec<u8> {
             let mut h = vec![0x02u8];
@@ -1704,6 +1948,13 @@ async fn write_chip(
     };
 
     spi_wait_ready(&dev, 2000)?;
+    let sr1 = spi_read_status(&dev)?;
+    if (sr1 & NOR_BP_MASK_SR1) != 0 {
+        return Err(format!(
+            "SPI NOR 处于写保护状态（SR1=0x{:02X}）。请先执行“解除 NOR 写保护”",
+            sr1
+        ));
+    }
     if params.addr4b {
         spi_4byte_mode(&dev, params.alg, true)?;
     }
@@ -2202,6 +2453,8 @@ fn main() {
             connect_serprog,
             scan_programmers,
             detect_chip,
+            nor_wp_status,
+            nor_wp_disable,
             scan_bad_blocks,
             read_nand_uid,
             read_nand_param_page,

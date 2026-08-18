@@ -469,6 +469,25 @@ onMounted(async () => {
         </button>
       </div>
 
+      <div v-if="store.selectedType === 'SPI_NOR'" style="display: flex; gap: 8px; margin-top: 8px">
+        <button
+          class="btn btn-ghost btn-sm"
+          style="flex: 1"
+          :disabled="!store.canOperate || store.isRunning"
+          @click="spiNor.checkNorWriteProtect()"
+        >
+          {{ t('nor.wpCheck') }}
+        </button>
+        <button
+          class="btn btn-ghost btn-sm"
+          style="flex: 1"
+          :disabled="!store.canOperate || store.isRunning"
+          @click="confirmExperimentalAction('nor.wpDisable', () => spiNor.disableNorWriteProtect())"
+        >
+          {{ t('nor.wpDisable') }}
+        </button>
+      </div>
+
       <div class="field" style="margin-top: 8px">
         <label class="toggle-row">
           <input

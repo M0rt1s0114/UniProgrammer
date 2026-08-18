@@ -126,6 +126,10 @@ const zh: MessageRecord = {
   'experimental.body': '该功能尚未经过真机验证，可能无法正常工作或造成数据异常。',
   'experimental.continue': '仍然继续',
 
+  // SPI NOR write protection
+  'nor.wpCheck': '检查写保护',
+  'nor.wpDisable': '解除写保护',
+
   // SPI NAND settings
   'section.nand': 'NAND 设置',
   'nand.readBadBlockFirst': '读写前默认先读坏块',
@@ -314,6 +318,10 @@ const en: MessageRecord = {
   'section.chip': 'Chip',
   'section.chipInfo': 'Chip Information',
   'section.operations': 'Operations',
+
+  // SPI NOR write protection
+  'nor.wpCheck': 'Check Write Protect',
+  'nor.wpDisable': 'Disable Write Protect',
 
   // Field labels
   'label.type': 'Type',
