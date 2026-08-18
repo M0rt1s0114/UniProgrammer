@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
 use crate::ch34x::{Ch34xDevice, DeviceMode};
-use crate::{chiplib, serprog, sfdp};
+use crate::{chiplib, protocols, serprog, sfdp};
 
 #[derive(Serialize)]
 pub struct ChipDetectResult {
@@ -55,6 +55,46 @@ pub struct AppState {
     /// Mirrored from the frontend: true while read/write/erase/verify/auto
     /// flow is executing. Used by the Rust close-requested handler.
     pub operation_running: bool,
+}
+
+#[derive(Serialize)]
+pub struct BadBlockScanResult {
+    total_blocks: u32,
+    bad_blocks: Vec<u32>,
+    bad_count: u32,
+}
+
+#[derive(Serialize)]
+pub struct RawBytesResult {
+    length: usize,
+    hex: String,
+    bytes: Vec<u8>,
+}
+
+#[derive(Serialize)]
+pub struct BbmLutResult {
+    length: usize,
+    hex: String,
+    entries: Vec<protocols::BbmLutEntry>,
+}
+
+#[derive(Serialize)]
+pub struct At45PageModeResult {
+    raw: u8,
+    binary_page: bool,
+}
+
+pub fn raw_bytes_result(bytes: Vec<u8>) -> RawBytesResult {
+    let hex: String = bytes
+        .iter()
+        .map(|b| format!("{:02X}", b))
+        .collect::<Vec<_>>()
+        .join(" ");
+    RawBytesResult {
+        length: bytes.len(),
+        hex,
+        bytes,
+    }
 }
 
 pub fn format_human_size(size: u64) -> String {
@@ -631,4 +671,175 @@ pub fn detect_chip(state: &mut AppState) -> Result<ChipDetectResult, String> {
             })
         }
     }
+}
+
+// ═══════════════════════════════ SPI NAND / AT45 helpers ═════════════════════════
+
+pub fn parse_nand_bad_block_mode(value: Option<&str>) -> protocols::NandBadBlockMode {
+    match value {
+        Some("skip") => protocols::NandBadBlockMode::Skip,
+        Some("bypass") => protocols::NandBadBlockMode::Bypass,
+        Some("ignore") => protocols::NandBadBlockMode::Ignore,
+        _ => protocols::NandBadBlockMode::Ignore,
+    }
+}
+
+pub fn scan_nand_bad_blocks_for_mode(
+    dev: &Ch34xDevice,
+    info: &chiplib::ChipInfo,
+    mode: protocols::NandBadBlockMode,
+    progress: &mut dyn FnMut(u32, u32),
+) -> Result<Vec<u32>, String> {
+    if mode == protocols::NandBadBlockMode::Ignore {
+        return Ok(Vec::new());
+    }
+    let params = protocols::ChipParams::from_info(info);
+    protocols::nand_scan_bad_blocks(dev, &params, info.size, progress)
+}
+
+pub fn prepare_bypass_if_needed(
+    dev: &Ch34xDevice,
+    info: &chiplib::ChipInfo,
+    mode: protocols::NandBadBlockMode,
+    bad_blocks: &[u32],
+) -> Result<Vec<(u16, u16)>, String> {
+    if mode != protocols::NandBadBlockMode::Bypass || bad_blocks.is_empty() {
+        return Ok(Vec::new());
+    }
+    let params = protocols::ChipParams::from_info(info);
+    protocols::nand_prepare_bypass_lut(dev, &params, info.size, bad_blocks)
+}
+
+pub fn require_nand_ch34x(state: &AppState) -> Result<(), String> {
+    let info = state
+        .detected
+        .as_ref()
+        .ok_or("请先检测或选择 SPI NAND 芯片")?;
+    if info.protocol != "SPI_NAND" {
+        return Err("当前芯片不是 SPI NAND".into());
+    }
+    if state.ch34x.is_none() {
+        return Err("此功能目前仅支持 CH34X 后端".into());
+    }
+    Ok(())
+}
+
+pub fn scan_bad_blocks(
+    state: &mut AppState,
+    progress: &mut dyn FnMut(u32, u32),
+) -> Result<BadBlockScanResult, String> {
+    let info = state
+        .detected
+        .clone()
+        .ok_or("请先检测或选择 SPI NAND 芯片")?;
+    if info.protocol != "SPI_NAND" {
+        return Err("当前芯片不是 SPI NAND".into());
+    }
+    if state.ch34x.is_none() {
+        return Err("坏块扫描目前仅支持 CH34X 后端，serprog 后端待实现".into());
+    }
+
+    let dev = open_ch34x_mode(state, DeviceMode::Spi)?;
+    let params = protocols::ChipParams::from_info(&info);
+    let block_size = (params.block as u64).max(params.page as u64);
+    let total_blocks = info.size.div_ceil(block_size).min(u32::MAX as u64) as u32;
+    let bad_blocks = protocols::nand_scan_bad_blocks(&dev, &params, info.size, progress)?;
+    let bad_count = bad_blocks.len() as u32;
+    Ok(BadBlockScanResult {
+        total_blocks,
+        bad_blocks,
+        bad_count,
+    })
+}
+
+pub fn read_nand_uid(state: &mut AppState) -> Result<RawBytesResult, String> {
+    require_nand_ch34x(state)?;
+    let dev = open_ch34x_mode(state, DeviceMode::Spi)?;
+    Ok(raw_bytes_result(protocols::nand_read_uid(&dev, 64)?))
+}
+
+pub fn read_nand_param_page(state: &mut AppState) -> Result<RawBytesResult, String> {
+    require_nand_ch34x(state)?;
+    let dev = open_ch34x_mode(state, DeviceMode::Spi)?;
+    Ok(raw_bytes_result(protocols::nand_read_param_page(&dev)?))
+}
+
+pub fn read_nand_bbm_lut(state: &mut AppState) -> Result<BbmLutResult, String> {
+    require_nand_ch34x(state)?;
+    let dev = open_ch34x_mode(state, DeviceMode::Spi)?;
+    let (entries, raw) = protocols::nand_read_bbm_lut(&dev)?;
+    let result = raw_bytes_result(raw);
+    Ok(BbmLutResult {
+        length: result.length,
+        hex: result.hex,
+        entries,
+    })
+}
+
+pub fn read_nand_otp_page(state: &mut AppState, page: u32) -> Result<RawBytesResult, String> {
+    if page > 63 {
+        return Err("OTP 页号超出范围（0-63）".into());
+    }
+    require_nand_ch34x(state)?;
+    let info = state.detected.as_ref().unwrap();
+    let params = protocols::ChipParams::from_info(info);
+    let dev = open_ch34x_mode(state, DeviceMode::Spi)?;
+    Ok(raw_bytes_result(protocols::nand_read_otp_page(
+        &dev, &params, page,
+    )?))
+}
+
+pub fn get_nand_ecc(state: &mut AppState) -> Result<bool, String> {
+    require_nand_ch34x(state)?;
+    let dev = open_ch34x_mode(state, DeviceMode::Spi)?;
+    protocols::nand_get_ecc(&dev)
+}
+
+pub fn set_nand_ecc(state: &mut AppState, enable: bool) -> Result<bool, String> {
+    require_nand_ch34x(state)?;
+    let dev = open_ch34x_mode(state, DeviceMode::Spi)?;
+    protocols::nand_set_ecc(&dev, enable)?;
+    protocols::nand_get_ecc(&dev)
+}
+
+pub fn read_at45_page_mode(state: &mut AppState) -> Result<At45PageModeResult, String> {
+    let info = state
+        .detected
+        .as_ref()
+        .ok_or("请先检测或选择 45 系列 DataFlash 芯片")?;
+    if info.protocol != "SPI_DATA_45" {
+        return Err("当前芯片不是 45 系列 DataFlash".into());
+    }
+    if state.ch34x.is_none() {
+        return Err("此功能目前仅支持 CH34X 后端".into());
+    }
+    let dev = open_ch34x_mode(state, DeviceMode::Spi)?;
+    let raw = protocols::at45_read_page_mode(&dev)?;
+    Ok(At45PageModeResult {
+        raw,
+        binary_page: (raw & 0x01) != 0,
+    })
+}
+
+pub fn set_at45_page_mode(
+    state: &mut AppState,
+    binary: bool,
+) -> Result<At45PageModeResult, String> {
+    let info = state
+        .detected
+        .as_ref()
+        .ok_or("请先检测或选择 45 系列 DataFlash 芯片")?;
+    if info.protocol != "SPI_DATA_45" {
+        return Err("当前芯片不是 45 系列 DataFlash".into());
+    }
+    if state.ch34x.is_none() {
+        return Err("此功能目前仅支持 CH34X 后端".into());
+    }
+    let dev = open_ch34x_mode(state, DeviceMode::Spi)?;
+    protocols::at45_set_page_mode(&dev, binary)?;
+    let raw = protocols::at45_read_page_mode(&dev)?;
+    Ok(At45PageModeResult {
+        raw,
+        binary_page: (raw & 0x01) != 0,
+    })
 }

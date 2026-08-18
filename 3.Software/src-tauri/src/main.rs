@@ -11,12 +11,13 @@ mod serprog;
 mod settings;
 mod sfdp;
 
-use ch34x::{Ch34xDevice, Ch34xSettings, ChipKind, DeviceMode};
+use ch34x::{Ch34xDevice, Ch34xSettings, ChipKind};
 use core::{
     chip_info_to_detect, get_lib, nor_params, open_ch34x, open_ch34x_mode, serprog_wait_ready,
     spi_4byte_mode, spi_read_jedec, spi_read_status, spi_unprotect, spi_wait_ready,
-    spi_write_disable, spi_write_enable, AppState, ChipDetectInfo, ChipDetectResult, NorParams,
-    NorWriteProtectStatus, NOR_BP_MASK_SR1,
+    spi_write_disable, spi_write_enable, AppState, At45PageModeResult, BadBlockScanResult,
+    BbmLutResult, ChipDetectInfo, ChipDetectResult, NorParams, NorWriteProtectStatus,
+    RawBytesResult, NOR_BP_MASK_SR1,
 };
 use serde::Serialize;
 use std::path::PathBuf;
@@ -73,44 +74,10 @@ struct EraseProgressEvent {
 }
 
 #[derive(Serialize)]
-struct BadBlockScanResult {
-    total_blocks: u32,
-    bad_blocks: Vec<u32>,
-    bad_count: u32,
-}
-
-#[derive(Serialize)]
-struct RawBytesResult {
-    length: usize,
-    hex: String,
-    bytes: Vec<u8>,
-}
-
-#[derive(Serialize)]
 struct FirmwareLoadResult {
     length: usize,
     bytes: Vec<u8>,
     format: String,
-}
-
-#[derive(Serialize)]
-struct BbmLutResult {
-    length: usize,
-    hex: String,
-    entries: Vec<protocols::BbmLutEntry>,
-}
-
-fn raw_bytes_result(bytes: Vec<u8>) -> RawBytesResult {
-    let hex: String = bytes
-        .iter()
-        .map(|b| format!("{:02X}", b))
-        .collect::<Vec<_>>()
-        .join(" ");
-    RawBytesResult {
-        length: bytes.len(),
-        hex,
-        bytes,
-    }
 }
 
 fn exe_dir() -> PathBuf {
@@ -196,44 +163,6 @@ fn spi_wait_ready_with_progress(
         }
         std::thread::sleep(Duration::from_millis(5));
     }
-}
-
-fn parse_nand_bad_block_mode(value: Option<&str>) -> protocols::NandBadBlockMode {
-    match value {
-        Some("skip") => protocols::NandBadBlockMode::Skip,
-        Some("bypass") => protocols::NandBadBlockMode::Bypass,
-        Some("ignore") => protocols::NandBadBlockMode::Ignore,
-        _ => protocols::NandBadBlockMode::Ignore,
-    }
-}
-
-fn scan_nand_bad_blocks_for_mode(
-    dev: &Ch34xDevice,
-    info: &chiplib::ChipInfo,
-    app: &tauri::AppHandle,
-    mode: protocols::NandBadBlockMode,
-) -> Result<Vec<u32>, String> {
-    if mode == protocols::NandBadBlockMode::Ignore {
-        return Ok(Vec::new());
-    }
-    let params = protocols::ChipParams::from_info(info);
-    protocols::nand_scan_bad_blocks(dev, &params, info.size, &mut |done, total| {
-        app.emit("bad_block_progress", BadBlockProgressEvent { done, total })
-            .ok();
-    })
-}
-
-fn prepare_bypass_if_needed(
-    dev: &Ch34xDevice,
-    info: &chiplib::ChipInfo,
-    mode: protocols::NandBadBlockMode,
-    bad_blocks: &[u32],
-) -> Result<Vec<(u16, u16)>, String> {
-    if mode != protocols::NandBadBlockMode::Bypass || bad_blocks.is_empty() {
-        return Ok(Vec::new());
-    }
-    let params = protocols::ChipParams::from_info(info);
-    protocols::nand_prepare_bypass_lut(dev, &params, info.size, bad_blocks)
 }
 
 // ═══════════════════════════════ Tauri commands ══════════════════════════════
@@ -400,60 +329,29 @@ async fn scan_bad_blocks(
     state: State<'_, Mutex<AppState>>,
     app: tauri::AppHandle,
 ) -> Result<BadBlockScanResult, String> {
-    let s = state.lock().map_err(|e| e.to_string())?;
-    let info = s.detected.clone().ok_or("请先检测或选择 SPI NAND 芯片")?;
-    if info.protocol != "SPI_NAND" {
-        return Err("当前芯片不是 SPI NAND".into());
-    }
-    if s.ch34x.is_none() {
-        return Err("坏块扫描目前仅支持 CH34X 后端，serprog 后端待实现".into());
-    }
-
-    let dev = open_ch34x_mode(&s, DeviceMode::Spi)?;
-    let params = protocols::ChipParams::from_info(&info);
-    let block_size = (params.block as u64).max(params.page as u64);
-    let total_blocks = info.size.div_ceil(block_size).min(u32::MAX as u64) as u32;
-    let bad_blocks =
-        protocols::nand_scan_bad_blocks(&dev, &params, info.size, &mut |done, total| {
-            app.emit("bad_block_progress", BadBlockProgressEvent { done, total })
-                .ok();
-        })?;
-    let bad_count = bad_blocks.len() as u32;
-    Ok(BadBlockScanResult {
-        total_blocks,
-        bad_blocks,
-        bad_count,
+    let mut s = state.lock().map_err(|e| e.to_string())?;
+    core::scan_bad_blocks(&mut s, &mut |done, total| {
+        app.emit("bad_block_progress", BadBlockProgressEvent { done, total })
+            .ok();
     })
 }
 
 #[tauri::command]
 fn read_nand_uid(state: State<'_, Mutex<AppState>>) -> Result<RawBytesResult, String> {
-    let s = state.lock().map_err(|e| e.to_string())?;
-    require_nand_ch34x(&s)?;
-    let dev = open_ch34x_mode(&s, DeviceMode::Spi)?;
-    Ok(raw_bytes_result(protocols::nand_read_uid(&dev, 64)?))
+    let mut s = state.lock().map_err(|e| e.to_string())?;
+    core::read_nand_uid(&mut s)
 }
 
 #[tauri::command]
 fn read_nand_param_page(state: State<'_, Mutex<AppState>>) -> Result<RawBytesResult, String> {
-    let s = state.lock().map_err(|e| e.to_string())?;
-    require_nand_ch34x(&s)?;
-    let dev = open_ch34x_mode(&s, DeviceMode::Spi)?;
-    Ok(raw_bytes_result(protocols::nand_read_param_page(&dev)?))
+    let mut s = state.lock().map_err(|e| e.to_string())?;
+    core::read_nand_param_page(&mut s)
 }
 
 #[tauri::command]
 fn read_nand_bbm_lut(state: State<'_, Mutex<AppState>>) -> Result<BbmLutResult, String> {
-    let s = state.lock().map_err(|e| e.to_string())?;
-    require_nand_ch34x(&s)?;
-    let dev = open_ch34x_mode(&s, DeviceMode::Spi)?;
-    let (entries, raw) = protocols::nand_read_bbm_lut(&dev)?;
-    let result = raw_bytes_result(raw);
-    Ok(BbmLutResult {
-        length: result.length,
-        hex: result.hex,
-        entries,
-    })
+    let mut s = state.lock().map_err(|e| e.to_string())?;
+    core::read_nand_bbm_lut(&mut s)
 }
 
 #[tauri::command]
@@ -461,61 +359,26 @@ fn read_nand_otp_page(
     state: State<'_, Mutex<AppState>>,
     page: u32,
 ) -> Result<RawBytesResult, String> {
-    if page > 63 {
-        return Err("OTP 页号超出范围（0-63）".into());
-    }
-    let s = state.lock().map_err(|e| e.to_string())?;
-    require_nand_ch34x(&s)?;
-    let info = s.detected.as_ref().unwrap();
-    let params = protocols::ChipParams::from_info(info);
-    let dev = open_ch34x_mode(&s, DeviceMode::Spi)?;
-    Ok(raw_bytes_result(protocols::nand_read_otp_page(
-        &dev, &params, page,
-    )?))
+    let mut s = state.lock().map_err(|e| e.to_string())?;
+    core::read_nand_otp_page(&mut s, page)
 }
 
 #[tauri::command]
 fn get_nand_ecc(state: State<'_, Mutex<AppState>>) -> Result<bool, String> {
-    let s = state.lock().map_err(|e| e.to_string())?;
-    require_nand_ch34x(&s)?;
-    let dev = open_ch34x_mode(&s, DeviceMode::Spi)?;
-    protocols::nand_get_ecc(&dev)
+    let mut s = state.lock().map_err(|e| e.to_string())?;
+    core::get_nand_ecc(&mut s)
 }
 
 #[tauri::command]
 fn set_nand_ecc(state: State<'_, Mutex<AppState>>, enable: bool) -> Result<bool, String> {
-    let s = state.lock().map_err(|e| e.to_string())?;
-    require_nand_ch34x(&s)?;
-    let dev = open_ch34x_mode(&s, DeviceMode::Spi)?;
-    protocols::nand_set_ecc(&dev, enable)?;
-    protocols::nand_get_ecc(&dev)
-}
-
-#[derive(Serialize)]
-struct At45PageModeResult {
-    raw: u8,
-    binary_page: bool,
+    let mut s = state.lock().map_err(|e| e.to_string())?;
+    core::set_nand_ecc(&mut s, enable)
 }
 
 #[tauri::command]
 fn read_at45_page_mode(state: State<'_, Mutex<AppState>>) -> Result<At45PageModeResult, String> {
-    let s = state.lock().map_err(|e| e.to_string())?;
-    let info = s
-        .detected
-        .as_ref()
-        .ok_or("请先检测或选择 45 系列 DataFlash 芯片")?;
-    if info.protocol != "SPI_DATA_45" {
-        return Err("当前芯片不是 45 系列 DataFlash".into());
-    }
-    if s.ch34x.is_none() {
-        return Err("此功能目前仅支持 CH34X 后端".into());
-    }
-    let dev = open_ch34x_mode(&s, DeviceMode::Spi)?;
-    let raw = protocols::at45_read_page_mode(&dev)?;
-    Ok(At45PageModeResult {
-        raw,
-        binary_page: (raw & 0x01) != 0,
-    })
+    let mut s = state.lock().map_err(|e| e.to_string())?;
+    core::read_at45_page_mode(&mut s)
 }
 
 #[tauri::command]
@@ -523,38 +386,8 @@ fn set_at45_page_mode(
     state: State<'_, Mutex<AppState>>,
     binary: bool,
 ) -> Result<At45PageModeResult, String> {
-    let s = state.lock().map_err(|e| e.to_string())?;
-    let info = s
-        .detected
-        .as_ref()
-        .ok_or("请先检测或选择 45 系列 DataFlash 芯片")?;
-    if info.protocol != "SPI_DATA_45" {
-        return Err("当前芯片不是 45 系列 DataFlash".into());
-    }
-    if s.ch34x.is_none() {
-        return Err("此功能目前仅支持 CH34X 后端".into());
-    }
-    let dev = open_ch34x_mode(&s, DeviceMode::Spi)?;
-    protocols::at45_set_page_mode(&dev, binary)?;
-    let raw = protocols::at45_read_page_mode(&dev)?;
-    Ok(At45PageModeResult {
-        raw,
-        binary_page: (raw & 0x01) != 0,
-    })
-}
-
-fn require_nand_ch34x(state: &AppState) -> Result<(), String> {
-    let info = state
-        .detected
-        .as_ref()
-        .ok_or("请先检测或选择 SPI NAND 芯片")?;
-    if info.protocol != "SPI_NAND" {
-        return Err("当前芯片不是 SPI NAND".into());
-    }
-    if state.ch34x.is_none() {
-        return Err("此功能目前仅支持 CH34X 后端".into());
-    }
-    Ok(())
+    let mut s = state.lock().map_err(|e| e.to_string())?;
+    core::set_at45_page_mode(&mut s, binary)
 }
 
 #[tauri::command]
@@ -637,10 +470,14 @@ async fn chip_erase(
             "SPI_NAND" => {
                 let dev = open_ch34x_mode(&s, bus)?;
                 let params = protocols::ChipParams::from_info(&info);
-                let mode = parse_nand_bad_block_mode(bad_block_mode.as_deref());
+                let mode = core::parse_nand_bad_block_mode(bad_block_mode.as_deref());
                 emit_erase_progress(&app, 0, 0, "bad_block", "正在扫描坏块...");
-                let bad_blocks = scan_nand_bad_blocks_for_mode(&dev, &info, &app, mode)?;
-                let links = prepare_bypass_if_needed(&dev, &info, mode, &bad_blocks)?;
+                let bad_blocks =
+                    core::scan_nand_bad_blocks_for_mode(&dev, &info, mode, &mut |done, total| {
+                        app.emit("bad_block_progress", BadBlockProgressEvent { done, total })
+                            .ok();
+                    })?;
+                let links = core::prepare_bypass_if_needed(&dev, &info, mode, &bad_blocks)?;
                 let op_bad = if mode == protocols::NandBadBlockMode::Bypass {
                     Vec::new()
                 } else {
@@ -829,9 +666,20 @@ async fn blank_check(
                         },
                     )?,
                     "SPI_NAND" => {
-                        let mode = parse_nand_bad_block_mode(bad_block_mode.as_deref());
-                        let bad_blocks = scan_nand_bad_blocks_for_mode(&dev, info, &app, mode)?;
-                        let links = prepare_bypass_if_needed(&dev, info, mode, &bad_blocks)?;
+                        let mode = core::parse_nand_bad_block_mode(bad_block_mode.as_deref());
+                        let bad_blocks = core::scan_nand_bad_blocks_for_mode(
+                            &dev,
+                            info,
+                            mode,
+                            &mut |done, total| {
+                                app.emit(
+                                    "bad_block_progress",
+                                    BadBlockProgressEvent { done, total },
+                                )
+                                .ok();
+                            },
+                        )?;
+                        let links = core::prepare_bypass_if_needed(&dev, info, mode, &bad_blocks)?;
                         let op_bad = if mode == protocols::NandBadBlockMode::Bypass {
                             Vec::new()
                         } else {
@@ -1064,9 +912,13 @@ async fn read_chip(
             "SPI_NAND" => {
                 let dev = open_ch34x_mode(&s, bus)?;
                 let params = protocols::ChipParams::from_info(info);
-                let mode = parse_nand_bad_block_mode(bad_block_mode.as_deref());
-                let bad_blocks = scan_nand_bad_blocks_for_mode(&dev, info, &app, mode)?;
-                prepare_bypass_if_needed(&dev, info, mode, &bad_blocks)?;
+                let mode = core::parse_nand_bad_block_mode(bad_block_mode.as_deref());
+                let bad_blocks =
+                    core::scan_nand_bad_blocks_for_mode(&dev, info, mode, &mut |done, total| {
+                        app.emit("bad_block_progress", BadBlockProgressEvent { done, total })
+                            .ok();
+                    })?;
+                core::prepare_bypass_if_needed(&dev, info, mode, &bad_blocks)?;
                 let op_bad = if mode == protocols::NandBadBlockMode::Bypass {
                     Vec::new()
                 } else {
@@ -1296,10 +1148,14 @@ async fn write_chip(
             "SPI_NAND" => {
                 let dev = open_ch34x_mode(&s, bus)?;
                 let params = protocols::ChipParams::from_info(info);
-                let mode = parse_nand_bad_block_mode(bad_block_mode.as_deref());
-                let bad_blocks = scan_nand_bad_blocks_for_mode(&dev, info, &app, mode)?;
+                let mode = core::parse_nand_bad_block_mode(bad_block_mode.as_deref());
+                let bad_blocks =
+                    core::scan_nand_bad_blocks_for_mode(&dev, info, mode, &mut |done, total| {
+                        app.emit("bad_block_progress", BadBlockProgressEvent { done, total })
+                            .ok();
+                    })?;
                 let bad_count = bad_blocks.len();
-                let links = prepare_bypass_if_needed(&dev, info, mode, &bad_blocks)?;
+                let links = core::prepare_bypass_if_needed(&dev, info, mode, &bad_blocks)?;
                 let op_bad = if mode == protocols::NandBadBlockMode::Bypass {
                     Vec::new()
                 } else {
@@ -1513,9 +1369,13 @@ async fn verify_chip(
             }
             "SPI_NAND" => {
                 let dev = open_ch34x_mode(&s, bus)?;
-                let mode = parse_nand_bad_block_mode(bad_block_mode.as_deref());
-                let bad_blocks = scan_nand_bad_blocks_for_mode(&dev, info, &app, mode)?;
-                prepare_bypass_if_needed(&dev, info, mode, &bad_blocks)?;
+                let mode = core::parse_nand_bad_block_mode(bad_block_mode.as_deref());
+                let bad_blocks =
+                    core::scan_nand_bad_blocks_for_mode(&dev, info, mode, &mut |done, total| {
+                        app.emit("bad_block_progress", BadBlockProgressEvent { done, total })
+                            .ok();
+                    })?;
+                core::prepare_bypass_if_needed(&dev, info, mode, &bad_blocks)?;
                 let op_bad = if mode == protocols::NandBadBlockMode::Bypass {
                     Vec::new()
                 } else {
