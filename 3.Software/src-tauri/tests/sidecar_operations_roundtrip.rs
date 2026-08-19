@@ -15,10 +15,6 @@ mod autodetect;
 #[allow(dead_code)] // pulled in by core; only the sidecar path is exercised
 mod serprog;
 
-#[path = "../src/sfdp.rs"]
-#[allow(dead_code)] // pulled in by core; only the sidecar path is exercised
-mod sfdp;
-
 #[path = "../src/core.rs"]
 #[allow(dead_code)] // pulled in by operations; only the sidecar path is exercised
 mod core;
@@ -38,6 +34,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use uni_chipdb as chiplib;
 use uni_hal::hal_router::{HalRouter, SidecarSelection};
 use uni_plugin::PluginManager;
+use uni_proto::sfdp;
 
 static TMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 

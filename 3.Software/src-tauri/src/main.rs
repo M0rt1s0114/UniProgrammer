@@ -4,14 +4,12 @@ mod autodetect;
 mod ch34x;
 mod core;
 mod dialogs;
-mod firmware;
 mod operations;
 pub mod plugin_install;
 mod protocols;
 pub mod script_plugin;
 mod serprog;
 mod settings;
-mod sfdp;
 pub mod spi_bus_impl;
 
 use ch34x::{Ch34xDevice, Ch34xSettings, ChipKind};
@@ -28,6 +26,7 @@ use uni_chipdb as chiplib;
 use uni_hal::hal_router::{HalRouter, SidecarSelection};
 use uni_hal::sidecar_nor::SidecarNor;
 use uni_plugin::{self as plugin, BootCheck, BuiltinModule, PluginManager};
+use uni_proto::{firmware, sfdp};
 
 #[derive(Clone, Serialize)]
 struct ReadProgressEvent {

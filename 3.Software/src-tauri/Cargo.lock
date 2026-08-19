@@ -3945,6 +3945,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "uni-proto"
+version = "0.1.0"
+
+[[package]]
 name = "unic-char-property"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4016,6 +4020,7 @@ dependencies = [
  "uni-chipdb",
  "uni-hal",
  "uni-plugin",
+ "uni-proto",
  "ureq",
  "windows 0.58.0",
  "zip",

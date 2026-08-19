@@ -5,8 +5,8 @@ edition = "2021"
 license = "GPL-3.0-or-later"
 
 [workspace]
-members = [".", "crates/uni-chipdb", "crates/uni-hal", "crates/uni-plugin"]
-default-members = [".", "crates/uni-chipdb", "crates/uni-hal", "crates/uni-plugin"]
+members = [".", "crates/uni-chipdb", "crates/uni-hal", "crates/uni-plugin", "crates/uni-proto"]
+default-members = [".", "crates/uni-chipdb", "crates/uni-hal", "crates/uni-plugin", "crates/uni-proto"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
@@ -28,6 +28,7 @@ ureq = "2.12"
 uni-chipdb = { path = "crates/uni-chipdb" }
 uni-hal = { path = "crates/uni-hal" }
 uni-plugin = { path = "crates/uni-plugin" }
+uni-proto = { path = "crates/uni-proto" }
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.58", features = ["Win32_Foundation", "Win32_System_Com", "Win32_System_LibraryLoader", "Win32_UI_Shell", "Win32_UI_Shell_Common"] }
