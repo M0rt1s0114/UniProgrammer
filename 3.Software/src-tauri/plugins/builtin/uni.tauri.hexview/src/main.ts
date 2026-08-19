@@ -3,10 +3,10 @@ import HexViewer from './HexViewer.vue'
 import { setLocale, type Locale } from './i18n'
 import './styles.css'
 
-// uni.hexview plugin contract: this package is an isolated web page loaded by
-// the UI shell inside an iframe. The shell sends the buffer (and theme/locale)
-// in, and this page sends edits / whole-buffer replacements / log lines back.
-// See plugins/README.md for the complete message format.
+// uni.tauri.hexview plugin contract: this package is an isolated web page
+// loaded by the UI shell inside an iframe. The shell sends the buffer (and
+// theme/locale) in, and this page sends edits / whole-buffer replacements /
+// log lines back. See plugins/README.md for the complete message format.
 
 interface HexMessage {
   type: string

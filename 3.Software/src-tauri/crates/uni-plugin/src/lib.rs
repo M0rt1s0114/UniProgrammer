@@ -17,10 +17,10 @@ pub const UNI_BASE_API_VERSION: &str = "1.0.0";
 /// L1 required plugin set. These plugins are implicit and must be present at
 /// boot; they are compile-time builtins represented by shipped manifests.
 pub const REQUIRED_PLUGIN_NAMES: &[&str] = &[
-    "uni.ui.webview",
+    "uni.tauri",
     "uni.hal",
     "uni.chipdb",
-    "uni.hexview",
+    "uni.tauri.hexview",
     "uni.proto",
 ];
 
@@ -290,9 +290,14 @@ pub fn builtin_modules() -> Vec<BuiltinModule> {
             "芯片数据库查询、导入与统计",
         ),
         module(
-            "uni.hexview",
+            "uni.tauri",
             CapabilitySet::default(),
-            "十六进制视图与数据可视化",
+            "Tauri UI 壳（主窗口宿主）",
+        ),
+        module(
+            "uni.tauri.hexview",
+            CapabilitySet::default(),
+            "Tauri UI 的十六进制视图贡献页",
         ),
         module(
             "uni.proto.spi-nor",
@@ -320,8 +325,11 @@ pub fn builtin_modules() -> Vec<BuiltinModule> {
             CapabilitySet::default(),
             "MicroWire 芯片协议",
         ),
-        module("uni.hal.ch341", spi_capability(), "CH341A 编程器适配器"),
-        module("uni.hal.ch347", spi_capability(), "CH347T/F 编程器适配器"),
+        module(
+            "uni.hal.ch34x",
+            spi_capability(),
+            "CH341A / CH347T / CH347F 编程器适配器",
+        ),
         module("uni.hal.serprog", spi_capability(), "serprog 编程器适配器"),
     ]
 }
@@ -330,17 +338,17 @@ pub fn builtin_modules() -> Vec<BuiltinModule> {
 pub fn builtin_version(name: &str) -> Option<&'static str> {
     match name {
         "uni.core"
+        | "uni.tauri"
         | "uni.hal"
         | "uni.chipdb"
-        | "uni.hexview"
+        | "uni.tauri.hexview"
         | "uni.proto.spi-nor"
         | "uni.proto.spi-nand"
         | "uni.proto.spi-eeprom"
         | "uni.proto.data45"
         | "uni.proto.i2c"
         | "uni.proto.microwire"
-        | "uni.hal.ch341"
-        | "uni.hal.ch347"
+        | "uni.hal.ch34x"
         | "uni.hal.serprog" => Some("1.0.0"),
         _ => None,
     }
@@ -1224,10 +1232,10 @@ provider = "builtin"
 
     fn write_required_builtin_set(root: &Path) {
         for (name, kind) in [
-            ("uni.ui.webview", "ui"),
+            ("uni.tauri", "ui"),
             ("uni.hal", "adapter"),
             ("uni.chipdb", "chipdb"),
-            ("uni.hexview", "ui"),
+            ("uni.tauri.hexview", "ui"),
             ("uni.proto", "protocol"),
         ] {
             write_builtin_manifest(root, name, &builtin_manifest(name, kind));
@@ -1774,7 +1782,7 @@ entry = "plugin.exe"
         let root = test_root("builtin-cold");
         let manifest = r#"
 [package]
-name = "uni.adapter.ch34x"
+name = "uni.hal.ch34x"
 version = "1.0.0"
 plugin_api = 1
 kind = "adapter"
@@ -1788,7 +1796,7 @@ pins = { cs = "CS0", sck = "SCK", mosi = "MOSI", miso = "MISO" }
 max_frame = 4092
 max_freq_khz = 60000
 "#;
-        write_builtin_manifest(&root, "uni.adapter.ch34x", manifest);
+        write_builtin_manifest(&root, "uni.hal.ch34x", manifest);
 
         let manager = PluginManager::load(&root);
         assert_eq!(manager.plugins.len(), 1);
@@ -1797,11 +1805,11 @@ max_freq_khz = 60000
 
         save_plugin_state(&root, &manager).expect("state should save");
         let state = load_plugin_state(&root);
-        assert_eq!(state.get("uni.adapter.ch34x"), Some(&true));
+        assert_eq!(state.get("uni.hal.ch34x"), Some(&true));
 
         let mut disabled = manager;
         disabled
-            .disable("uni.adapter.ch34x")
+            .disable("uni.hal.ch34x")
             .expect("cold plugin can be disabled");
         save_plugin_state(&root, &disabled).expect("disabled state should save");
         let reloaded = PluginManager::load(&root);
@@ -1877,9 +1885,9 @@ max_freq_khz = 60000
         assert_eq!(
             boot.missing,
             vec![
-                "uni.ui.webview".to_string(),
+                "uni.tauri".to_string(),
                 "uni.chipdb".to_string(),
-                "uni.hexview".to_string(),
+                "uni.tauri.hexview".to_string(),
                 "uni.proto".to_string(),
             ]
         );

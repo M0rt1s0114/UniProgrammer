@@ -3,7 +3,7 @@
 # 崩溃隔离在独立进程内，不会影响主程序。内置冷启动插件默认启用，
 # 可在插件管理器中禁用（重启后生效）。
 [package]
-name = "uni.adapter.ch34x"
+name = "uni.hal.ch34x"
 version = "1.0.0"
 plugin_api = 1
 kind = "adapter"

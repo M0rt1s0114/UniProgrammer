@@ -4,11 +4,11 @@ import { fileURLToPath, URL } from 'node:url'
 
 export default defineConfig(({ command }) => ({
   root: fileURLToPath(new URL('.', import.meta.url)),
-  // The built page is served at `unipkg://localhost/uni.ui.webview/` while
+  // The built page is served at `unipkg://localhost/uni.tauri/` while
   // its files live in `<package>/dist/`. The base therefore includes the
   // plugin path segment so the browser requests
-  // `/uni.ui.webview/dist/assets/...`; the dev server keeps serving `/`.
-  base: command === 'build' ? 'uni.ui.webview/dist/' : '/',
+  // `/uni.tauri/dist/assets/...`; the dev server keeps serving `/`.
+  base: command === 'build' ? 'uni.tauri/dist/' : '/',
   plugins: [vue()],
   resolve: {
     alias: {

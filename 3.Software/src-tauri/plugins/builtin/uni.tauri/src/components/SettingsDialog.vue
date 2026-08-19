@@ -19,6 +19,7 @@ const draft = reactive({
   language: 'zh' as Locale,
   theme: 'dark' as ThemeMode,
   debugConsole: false,
+  showSidecarPanel: false,
   batchBurn: false,
   saveVoltage: false,
   powerAutoDetect: false,
@@ -33,6 +34,7 @@ function loadDraft() {
   draft.language = settings.language
   draft.theme = settings.theme
   draft.debugConsole = settings.debugConsole
+  draft.showSidecarPanel = settings.showSidecarPanel
   draft.batchBurn = settings.batchBurn
   draft.saveVoltage = settings.saveVoltage
   draft.powerAutoDetect = settings.powerAutoDetect
@@ -55,6 +57,7 @@ function applyDraft() {
   settings.language = draft.language
   settings.theme = draft.theme
   settings.debugConsole = draft.debugConsole
+  settings.showSidecarPanel = draft.showSidecarPanel
   settings.batchBurn = draft.batchBurn
   settings.saveVoltage = draft.saveVoltage
   settings.powerAutoDetect = draft.powerAutoDetect
@@ -192,6 +195,11 @@ function cancelVccControl() {
               <span class="toggle-text">{{ t('settings.debugConsole') }}</span>
             </label>
             <div class="settings-hint">{{ t('settings.debugConsoleHint') }}</div>
+            <label class="toggle-row" style="margin-top: 10px">
+              <input v-model="draft.showSidecarPanel" type="checkbox" class="toggle-check" />
+              <span class="toggle-text">{{ t('settings.showSidecarPanel') }}</span>
+            </label>
+            <div class="settings-hint">{{ t('settings.showSidecarPanelHint') }}</div>
           </div>
 
           <div class="settings-section">

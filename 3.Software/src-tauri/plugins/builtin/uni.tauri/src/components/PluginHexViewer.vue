@@ -3,9 +3,10 @@ import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { useProgStore } from '@/stores/prog'
 import { locale } from '@/i18n'
 
-// L1 UI contribution slot. `uni.hexview` is a required plugin, so the core
-// refuses to boot when it is missing; this host only needs to load the plugin
-// page and speak the postMessage contract documented in plugins/README.md.
+// L1 UI contribution slot. `uni.tauri.hexview` is a required plugin, so the
+// core refuses to boot when it is missing; this host only needs to load the
+// plugin page and speak the postMessage contract documented in
+// plugins/README.md.
 
 const store = useProgStore()
 
@@ -14,8 +15,8 @@ const store = useProgStore()
 // macOS/Linux use the plain `unipkg://localhost/<path>` URL. The unipkg
 // protocol handler receives the original URI in both cases.
 const HEXVIEW_URL = navigator.userAgent.includes('Windows')
-  ? 'http://unipkg.localhost/uni.hexview/'
-  : 'unipkg://localhost/uni.hexview/'
+  ? 'http://unipkg.localhost/uni.tauri.hexview/'
+  : 'unipkg://localhost/uni.tauri.hexview/'
 const READY_TIMEOUT_MS = 8_000
 
 const frameKey = ref(0)
@@ -175,11 +176,11 @@ onUnmounted(() => {
       ref="frameRef"
       class="plugin-frame"
       :src="HEXVIEW_URL"
-      title="uni.hexview"
+      title="uni.tauri.hexview"
       @load="onFrameLoad"
     />
     <div v-if="loadFailed" class="plugin-error">
-      <p>HexViewer 插件未能加载（uni.hexview）</p>
+      <p>HexViewer 插件未能加载（uni.tauri.hexview）</p>
       <button class="btn btn-ghost btn-sm" @click="retry">重试</button>
     </div>
   </div>

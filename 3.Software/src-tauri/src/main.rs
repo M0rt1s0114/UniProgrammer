@@ -839,6 +839,7 @@ struct PluginListEntry {
     name: String,
     version: String,
     kind: String,
+    layer: String,
     enabled: bool,
     error: Option<String>,
 }
@@ -860,6 +861,7 @@ fn plugin_list(state: State<'_, Mutex<PluginManager>>) -> Result<Vec<PluginListE
                 name: p.manifest.name.clone(),
                 version: p.manifest.version.to_string(),
                 kind: p.manifest.kind.as_str().to_string(),
+                layer: p.manifest.layer.as_str().to_string(),
                 enabled: p.enabled,
                 error,
             }

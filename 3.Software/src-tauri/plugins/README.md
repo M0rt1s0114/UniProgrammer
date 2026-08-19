@@ -14,12 +14,19 @@ plugins/
 `manifest.toml`），同时扫描 `plugins/builtin/` 下一层文件夹。同名插件以
 `plugins/` 下的用户安装副本优先。
 
-`plugins/builtin/` 存放 L1 必需插件（`uni.ui.webview`、`uni.hal`、
-`uni.chipdb`、`uni.hexview`、`uni.proto`）。这些清单由主程序在启动时检查，
-缺失或无效会导致启动失败；**请勿删除或改名该目录**。
+## 命名规则
 
-新插件默认不启用；请在 设置 → 插件 中启用并确认其能力声明。
-必需插件始终启用，不能禁用。
+插件 ID 采用 `uni.<层次/宿主>.<组件>`：
+
+- `uni.tauri` — Tauri UI 壳（L1 必需）；
+- `uni.tauri.hexview` — 依附于 Tauri 壳的 HexViewer（L1 必需）；
+  未来 Slint 壳对应 `uni.slint` / `uni.slint.hexview`；
+- `uni.hal` / `uni.proto` / `uni.chipdb` — L1 基础层；
+- `uni.hal.ch34x` — 挂在 HAL 层上的 CH341A / CH347T / CH347F 适配器（L2）。
+
+`plugins/builtin/` 存放 L1 必需插件（`uni.tauri`、`uni.hal`、
+`uni.chipdb`、`uni.tauri.hexview`、`uni.proto`）。这些清单由主程序在启动
+时检查，缺失或无效会导致启动失败；**请勿删除或改名该目录**。
 
 ## L2 冷启动插件
 
@@ -27,11 +34,14 @@ plugins/
 用户的启用状态保存在 `plugin-state.toml`（位于 `plugins/` 同级目录），
 启动时随插件目录一起加载。
 
-`plugins/builtin/uni.adapter.ch34x/` 是随程序发布的内置 L2 示例：
+`plugins/builtin/uni.hal.ch34x/` 是随程序发布的内置 L2 示例：
 manifest 指向 sidecar 进程 `uni_ch34x_sidecar`，由 uni-hal 在启动时拉起、
-探测并注册到“Sidecar 插件”面板。内置插件默认启用，也可以在插件管理器
-中显式禁用。构建流程会把编译出的 sidecar 二进制复制进该插件目录，
+探测并注册。内置插件默认启用，也可以在插件管理器中显式禁用。
+构建流程会把编译出的 sidecar 二进制复制进该插件目录，
 保证 `plugins/` 资源树自包含。
+
+Sidecar 调试/验证面板默认在插件管理器中隐藏；需要时到 设置 →
+“显示 Sidecar 插件面板（实验性）” 打开。
 
 ## UI 插件与 `unipkg://` 协议
 
@@ -41,24 +51,20 @@ manifest 指向 sidecar 进程 `uni_ch34x_sidecar`，由 uni-hal 在启动时拉
 - 根路径 `unipkg://localhost/<插件名>/` → `[package].entry` 指向的页面
   （内置插件约定为 `dist/index.html`）；
 - 其它路径直接映射到插件目录下同名文件，例如
-  `unipkg://localhost/uni.hexview/dist/assets/app.js`
+  `unipkg://localhost/uni.tauri.hexview/dist/assets/app.js`
   → `<插件目录>/dist/assets/app.js`。
 
-主窗口本身加载 `unipkg://localhost/uni.ui.webview/`，因此 **整个 UI 壳是
-一个普通 L1 插件**，用另一份 `uni.ui.webview` 包覆盖内置目录即可替换
+主窗口本身加载 `unipkg://localhost/uni.tauri/`，因此 **整个 UI 壳是
+一个普通 L1 插件**，用另一份 `uni.tauri` 包覆盖内置目录即可替换
 （重启生效）。
 
 > Windows/WebView2 的 iframe 里不能直接用自定义 scheme URL；wry 要求写成
 > `http://unipkg.localhost/<插件名>/...`（请求到达 Rust 端前会被还原为
 > `unipkg://localhost/<插件名>/...`，同时该 origin 被 Tauri 视为本地页面，
 > IPC 命令才会放行）。macOS/Linux 仍使用 `unipkg://localhost/...` 原形。
-> UI 插件自身的构建产物也应当以 `dist/` 为 base，页面入口在根路径时
-> 资产才会命中 `<插件目录>/dist/...`。
+> UI 插件自身的构建产物也应当以 `<插件名>/dist/` 为 base。
 
-内置 UI 插件在开发模式（`cargo tauri dev`）下由 `npm run dev` 提供热更新：
-`uni.ui.webview` 使用 1420 端口，`uni.hexview` 使用 1421 端口。
-
-## `uni.hexview` 贡献点契约（v1）
+## `uni.tauri.hexview` 贡献点契约（v1）
 
 UI 壳把 HexViewer 包放入 `<iframe>` 加载，插件页面内不能使用 Tauri IPC，
 只能通过 `window.postMessage` 与壳通信。消息方向约定：
@@ -81,4 +87,5 @@ UI 壳把 HexViewer 包放入 `<iframe>` 加载，插件页面内不能使用 Ta
 | `uniprog:hex:replace` | `data: Uint8Array` | 整块替换（填充 / 撤销等批量操作） |
 | `uniprog:hex:log`     | `level`, `message` | 转发到主日志面板                  |
 
-替换 `uni.hexview` 时只需保持入口页可达并实现上述消息；界面与实现完全自由。
+替换 `uni.tauri.hexview` 时只需保持入口页可达并实现上述消息；界面与实现
+完全自由。

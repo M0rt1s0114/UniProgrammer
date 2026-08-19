@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { useProgStore } from '@/stores/prog'
+import { useSettingsStore } from '@/stores/settings'
 import { useSpiNor } from '@/services/spiNor'
 import {
   disablePlugin,
@@ -23,6 +24,7 @@ import { onProgress } from '@/services/ipc'
 import { t } from '@/i18n'
 
 const store = useProgStore()
+const settings = useSettingsStore()
 const spiNor = useSpiNor()
 const open = defineModel<boolean>('open', { default: false })
 
@@ -277,8 +279,10 @@ watch(
     if (isOpen) {
       void loadPlugins()
       void loadBuiltinModules()
-      // Sidecar 面板打开时自动刷新，插入/拔出编程器后无需手动点按钮。
-      void refreshSidecarAdapters()
+      // Sidecar 面板打开时自动刷新；默认隐藏，在设置中开启。
+      if (settings.showSidecarPanel) {
+        void refreshSidecarAdapters()
+      }
     }
   },
 )
@@ -305,6 +309,9 @@ watch(
                 </div>
                 <div class="plugin-meta">
                   {{ plugin.kind }}
+                  <span class="plugin-badge plugin-badge-off">
+                    {{ t(`pluginManager.layer.${plugin.layer}`) }}
+                  </span>
                   <span
                     class="plugin-badge"
                     :class="plugin.enabled ? 'plugin-badge-on' : 'plugin-badge-off'"
@@ -315,12 +322,14 @@ watch(
                 <div v-if="plugin.error" class="plugin-error">{{ plugin.error }}</div>
               </div>
               <button
+                v-if="plugin.layer !== 'required'"
                 class="btn btn-secondary btn-sm"
                 :disabled="store.isRunning || pluginActionName !== ''"
                 @click="setPluginEnabled(plugin, !plugin.enabled)"
               >
                 {{ plugin.enabled ? t('pluginManager.disable') : t('pluginManager.enable') }}
               </button>
+              <span v-else class="plugin-required-hint">{{ t('pluginManager.requiredHint') }}</span>
             </div>
           </section>
 
@@ -333,7 +342,7 @@ watch(
             </div>
           </details>
 
-          <section class="plugin-section">
+          <section v-if="settings.showSidecarPanel" class="plugin-section">
             <div class="plugin-section-label">{{ t('sidecar.title') }}</div>
 
             <button
@@ -537,6 +546,11 @@ watch(
   font-size: 11px;
   color: var(--color-danger);
   font-family: var(--font-sans);
+}
+.plugin-required-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
 }
 .plugin-hint {
   font-size: 11px;

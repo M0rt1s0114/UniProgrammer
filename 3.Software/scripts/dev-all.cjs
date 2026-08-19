@@ -1,8 +1,8 @@
 /* global require, process, __dirname, console */
 /* eslint-disable @typescript-eslint/no-require-imports */
 // Runs the Vite dev servers for every built-in UI plugin in one command:
-//   - uni.ui.webview -> http://localhost:1420 (main window in `tauri dev`)
-//   - uni.hexview     -> http://localhost:1421 (loaded through the unipkg://
+//   - uni.tauri         -> http://localhost:1420 (main window in `tauri dev`)
+//   - uni.tauri.hexview -> http://localhost:1421 (loaded through the unipkg://
 //     protocol, which redirects to this server in debug builds)
 const { spawn, spawnSync } = require('node:child_process')
 const path = require('node:path')
@@ -36,8 +36,8 @@ if (copySidecars.status !== 0) {
 }
 
 const targets = [
-  { name: 'uni.ui.webview', config: 'uni.ui.webview/vite.config.js' },
-  { name: 'uni.hexview', config: 'uni.hexview/vite.config.js' },
+  { name: 'uni.tauri', config: 'uni.tauri/vite.config.js' },
+  { name: 'uni.tauri.hexview', config: 'uni.tauri.hexview/vite.config.js' },
 ]
 
 const children = targets.map((target) => {

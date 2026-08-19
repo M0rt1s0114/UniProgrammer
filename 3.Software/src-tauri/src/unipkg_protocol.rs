@@ -3,8 +3,8 @@
 //! UI plugins are plain static web packages. `unipkg://<plugin-name>/<path>`
 //! serves files from the resolved plugin directory (installed plugins first,
 //! then `plugins/builtin/`), which makes L1 UI packages — including the main
-//! window shell (`uni.ui.webview`) and embedded contribution pages such as
-//! `uni.hexview` — replaceable without touching the L0 executable.
+//! window shell (`uni.tauri`) and embedded contribution pages such as
+//! `uni.tauri.hexview` — replaceable without touching the L0 executable.
 //!
 //! In debug builds the two built-in UI plugins are redirected to their Vite
 //! dev servers (started by `npm run dev`) so hot reload keeps working.
@@ -211,8 +211,8 @@ fn html_escape(text: &str) -> String {
 #[cfg(debug_assertions)]
 fn dev_server_port(plugin_name: &str) -> Option<u16> {
     match plugin_name {
-        "uni.ui.webview" => Some(1420),
-        "uni.hexview" => Some(1421),
+        "uni.tauri" => Some(1420),
+        "uni.tauri.hexview" => Some(1421),
         _ => None,
     }
 }
@@ -257,7 +257,10 @@ mod tests {
     #[test]
     fn resolves_ui_plugin_entry_and_assets() {
         let root = test_root("entry");
-        let plugin_dir = root.join("plugins").join("builtin").join("uni.hexview");
+        let plugin_dir = root
+            .join("plugins")
+            .join("builtin")
+            .join("uni.tauri.hexview");
         let dist = plugin_dir.join("dist");
         let assets = dist.join("assets");
         fs::create_dir_all(&assets).unwrap();
@@ -265,14 +268,14 @@ mod tests {
         fs::write(assets.join("app.js"), "console.log(1)").unwrap();
         fs::write(
             plugin_dir.join("unipkg.toml"),
-            "[package]\nname = \"uni.hexview\"\nversion = \"1.0.0\"\nplugin_api = 1\n\
+            "[package]\nname = \"uni.tauri.hexview\"\nversion = \"1.0.0\"\nplugin_api = 1\n\
              kind = \"ui\"\nlayer = \"required\"\nentry = \"dist/index.html\"\n",
         )
         .unwrap();
 
         let manager = PluginManager::load(&root);
         let protocol = UnipkgProtocol::from_manager(&manager);
-        let asset = protocol.plugins.get("uni.hexview").unwrap();
+        let asset = protocol.plugins.get("uni.tauri.hexview").unwrap();
         assert_eq!(asset.entry, "dist/index.html");
         assert!(asset.package_dir.join("dist/index.html").is_file());
 

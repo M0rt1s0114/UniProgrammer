@@ -95,6 +95,10 @@ const zh: MessageRecord = {
   'pluginManager.disable': '禁用',
   'pluginManager.close': '关闭',
   'pluginManager.runningDisabled': '操作进行中，禁止修改插件',
+  'pluginManager.requiredHint': '必需插件，不可禁用',
+  'pluginManager.layer.required': 'L1 必需',
+  'pluginManager.layer.cold': 'L2 冷启动',
+  'pluginManager.layer.hot': 'L3 热加载',
 
   // Programmer auto detection
   'programmer.autoMode': '自动识别',
@@ -201,6 +205,8 @@ const zh: MessageRecord = {
   'settings.debugConsole': '调试控制台（重启生效）',
   'settings.debugConsoleHint':
     '开启后下次启动显示控制台窗口，输出后端识别芯片、读/写/擦除等详细日志',
+  'settings.showSidecarPanel': '显示 Sidecar 插件面板（实验性）',
+  'settings.showSidecarPanelHint': '在插件管理器中显示 Sidecar 调试/验证面板；普通使用无需开启',
   'about.placeholder': '关于内容待定',
   'about.subtitle': 'UniProgrammer',
   'about.betaNotice': '本项目处于测试状态，请谨慎使用',
@@ -368,6 +374,10 @@ const en: MessageRecord = {
   'pluginManager.disable': 'Disable',
   'pluginManager.close': 'Close',
   'pluginManager.runningDisabled': 'Operation in progress; plugin changes disabled',
+  'pluginManager.requiredHint': 'Required plugin, cannot be disabled',
+  'pluginManager.layer.required': 'L1 Required',
+  'pluginManager.layer.cold': 'L2 Cold',
+  'pluginManager.layer.hot': 'L3 Hot',
 
   // Programmer auto detection
   'programmer.autoMode': 'Auto Detect',
@@ -473,6 +483,9 @@ const en: MessageRecord = {
   'settings.debugConsole': 'Debug Console (takes effect on restart)',
   'settings.debugConsoleHint':
     'When enabled, the next start opens a console with detailed backend logs for chip detection, read/write/erase and more',
+  'settings.showSidecarPanel': 'Show Sidecar Plugins Panel (experimental)',
+  'settings.showSidecarPanelHint':
+    'Shows the sidecar debug/verification panel in the plugin manager; not needed for normal use',
   'about.placeholder': 'About content to be determined',
   'about.subtitle': 'UniProgrammer',
   'about.betaNotice': 'This project is in testing status, use with caution',

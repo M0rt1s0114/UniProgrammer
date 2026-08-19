@@ -91,6 +91,7 @@ export interface PluginInfo {
   name: string
   version: string
   kind: string
+  layer: 'required' | 'cold' | 'hot'
   enabled: boolean
   error: string | null
 }

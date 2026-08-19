@@ -20,7 +20,7 @@ const exeSuffix = process.platform === 'win32' ? '.exe' : ''
 const copies = [
   {
     name: 'uni_ch34x_sidecar',
-    packageName: 'uni.adapter.ch34x',
+    packageName: 'uni.hal.ch34x',
   },
 ]
 
@@ -47,7 +47,7 @@ for (const { name, packageName } of copies) {
 // lets the sidecar load the DLL without relying on the main executable's dir.
 const dllSource = path.join(srcTauri, 'CH34X.DLL')
 if (fs.existsSync(dllSource)) {
-  const dllDestination = path.join(pluginsDir, 'uni.adapter.ch34x', 'CH34X.DLL')
+  const dllDestination = path.join(pluginsDir, 'uni.hal.ch34x', 'CH34X.DLL')
   try {
     fs.copyFileSync(dllSource, dllDestination)
     console.log(`[copy-sidecars] CH34X.DLL -> ${dllDestination}`)

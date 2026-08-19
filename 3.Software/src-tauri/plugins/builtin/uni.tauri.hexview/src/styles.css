@@ -1,4 +1,4 @@
-/* Self-contained theme for the uni.hexview plugin.
+/* Self-contained theme for the uni.tauri.hexview plugin.
    The UI shell communicates the color scheme via `data-theme`; this copy of
    the design tokens keeps the plugin replaceable without reading shell CSS. */
 

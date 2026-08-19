@@ -64,6 +64,7 @@ pub struct AppState {
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BadBlockScanResult {
     total_blocks: u32,
     bad_blocks: Vec<u32>,
@@ -85,6 +86,7 @@ pub struct BbmLutResult {
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct At45PageModeResult {
     raw: u8,
     binary_page: bool,
@@ -229,6 +231,7 @@ pub fn nor_bp_bits(sr1: u8, sr2: u8) -> u8 {
 }
 
 #[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct NorWriteProtectStatus {
     sr1: u8,
     sr2: u8,
@@ -912,5 +915,37 @@ mod tests {
     fn nor_bp_bits_ignores_sr2_ff() {
         assert_eq!(nor_bp_bits(0x1C, 0xFF), 0x1C);
         assert_eq!(nor_bp_bits(0x00, 0xFF), 0);
+    }
+
+    #[test]
+    fn ipc_payloads_use_camel_case_keys() {
+        let wp = serde_json::to_value(NorWriteProtectStatus {
+            sr1: 0x1C,
+            sr2: 0x40,
+            sr3: 0xFF,
+            bp_bits: 0x3C,
+            write_protected: true,
+        })
+        .unwrap();
+        assert_eq!(wp["bpBits"], 0x3C);
+        assert_eq!(wp["writeProtected"], true);
+
+        let scan = serde_json::to_value(BadBlockScanResult {
+            total_blocks: 4,
+            bad_blocks: vec![1, 3],
+            bad_count: 2,
+        })
+        .unwrap();
+        assert_eq!(scan["totalBlocks"], 4);
+        assert_eq!(scan["badBlocks"], serde_json::json!([1, 3]));
+        assert_eq!(scan["badCount"], 2);
+
+        let at45 = serde_json::to_value(At45PageModeResult {
+            raw: 0x01,
+            binary_page: true,
+        })
+        .unwrap();
+        assert_eq!(at45["raw"], 1);
+        assert_eq!(at45["binaryPage"], true);
     }
 }

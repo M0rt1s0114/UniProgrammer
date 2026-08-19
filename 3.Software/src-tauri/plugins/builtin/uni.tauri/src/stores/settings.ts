@@ -11,6 +11,7 @@ export const DEFAULT_SETTINGS = {
   language: 'zh' as Locale,
   theme: 'dark' as ThemeMode,
   debugConsole: false,
+  showSidecarPanel: false,
   batchBurn: false,
   saveVoltage: false,
   powerAutoDetect: false,
@@ -117,6 +118,8 @@ function parseSettingsFile(text: string): PartialSettings {
   if (theme === 'dark' || theme === 'light' || theme === 'system') parsed.theme = theme
   const debugConsole = parseBool(general['debugconsole'])
   if (debugConsole !== undefined) parsed.debugConsole = debugConsole
+  const showSidecarPanel = parseBool(general['showsidecarpanel'])
+  if (showSidecarPanel !== undefined) parsed.showSidecarPanel = showSidecarPanel
 
   for (const [key, field] of [
     ['batchburn', 'batchBurn'],
@@ -298,6 +301,7 @@ interface SerializedSettings {
   language: string
   theme: string
   debugConsole: boolean
+  showSidecarPanel: boolean
   batchBurn: boolean
   saveVoltage: boolean
   powerAutoDetect: boolean
@@ -335,6 +339,7 @@ function serializeSettings(state: SerializedSettings): string {
   lines.push(`language=${state.language}`)
   lines.push(`theme=${state.theme}`)
   lines.push(`debugConsole=${state.debugConsole}`)
+  lines.push(`showSidecarPanel=${state.showSidecarPanel}`)
   lines.push('')
   lines.push('[auto]')
   lines.push(`batchBurn=${state.batchBurn}`)
@@ -385,6 +390,7 @@ export const useSettingsStore = defineStore('settings', () => {
   const language = ref<Locale>(DEFAULT_SETTINGS.language)
   const theme = ref<ThemeMode>(DEFAULT_SETTINGS.theme)
   const debugConsole = ref(DEFAULT_SETTINGS.debugConsole)
+  const showSidecarPanel = ref(DEFAULT_SETTINGS.showSidecarPanel)
   const batchBurn = ref(DEFAULT_SETTINGS.batchBurn)
   const saveVoltage = ref(DEFAULT_SETTINGS.saveVoltage)
   const powerAutoDetect = ref(DEFAULT_SETTINGS.powerAutoDetect)
@@ -450,6 +456,9 @@ export const useSettingsStore = defineStore('settings', () => {
     if (partial.debugConsole !== undefined) {
       debugConsole.value = partial.debugConsole
     }
+    if (partial.showSidecarPanel !== undefined) {
+      showSidecarPanel.value = partial.showSidecarPanel
+    }
     if (partial.batchBurn !== undefined) batchBurn.value = partial.batchBurn
     if (partial.saveVoltage !== undefined) saveVoltage.value = partial.saveVoltage
     if (partial.powerAutoDetect !== undefined) powerAutoDetect.value = partial.powerAutoDetect
@@ -504,6 +513,7 @@ export const useSettingsStore = defineStore('settings', () => {
           language: language.value,
           theme: theme.value,
           debugConsole: debugConsole.value,
+          showSidecarPanel: showSidecarPanel.value,
           batchBurn: batchBurn.value,
           saveVoltage: saveVoltage.value,
           powerAutoDetect: powerAutoDetect.value,
@@ -606,6 +616,7 @@ export const useSettingsStore = defineStore('settings', () => {
       language,
       theme,
       debugConsole,
+      showSidecarPanel,
       batchBurn,
       saveVoltage,
       powerAutoDetect,
@@ -650,6 +661,7 @@ export const useSettingsStore = defineStore('settings', () => {
     language,
     theme,
     debugConsole,
+    showSidecarPanel,
     batchBurn,
     saveVoltage,
     powerAutoDetect,
