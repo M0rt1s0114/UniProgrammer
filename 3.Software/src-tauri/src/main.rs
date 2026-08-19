@@ -22,9 +22,11 @@ use core::{
     chip_info_to_detect, get_lib, spi_read_jedec, AppState, At45PageModeResult, BadBlockScanResult,
     BbmLutResult, ChipDetectInfo, ChipDetectResult, NorWriteProtectStatus, RawBytesResult,
 };
+use hal_router::{HalRouter, SidecarSelection};
 use operations::BlankCheckResult;
 use plugin::{BuiltinModule, PluginManager};
 use serde::Serialize;
+use sidecar_nor::SidecarNor;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::{Emitter, Manager, State, WindowEvent};
@@ -74,6 +76,18 @@ struct FirmwareLoadResult {
     length: usize,
     bytes: Vec<u8>,
     format: String,
+}
+
+#[derive(Serialize)]
+struct SidecarAdapterEntry {
+    name: String,
+    devices: Vec<uni_hal::SidecarDevice>,
+}
+
+#[derive(Serialize)]
+struct SidecarProbeResult {
+    adapters: Vec<SidecarAdapterEntry>,
+    errors: Vec<(String, String)>,
 }
 
 fn exe_dir() -> PathBuf {
@@ -715,8 +729,111 @@ fn plugin_disable(state: State<'_, Mutex<PluginManager>>, name: String) -> Resul
     Ok(format!("plugin disabled: {name}"))
 }
 
+#[tauri::command]
+fn sidecar_adapters(
+    state: State<'_, Mutex<HalRouter>>,
+) -> Result<Vec<SidecarAdapterEntry>, String> {
+    let router = state.lock().map_err(|e| e.to_string())?;
+    let probe_result = SidecarProbeResult {
+        adapters: router
+            .adapters
+            .iter()
+            .map(|adapter| SidecarAdapterEntry {
+                name: adapter.name.clone(),
+                devices: adapter.devices.clone(),
+            })
+            .collect(),
+        errors: router.errors.clone(),
+    };
+    Ok(probe_result.adapters)
+}
+
+#[tauri::command]
+fn sidecar_open(
+    state: State<'_, Mutex<HalRouter>>,
+    adapter: String,
+    device: String,
+) -> Result<String, String> {
+    let mut router = state.lock().map_err(|e| e.to_string())?;
+    let selection = SidecarSelection {
+        adapter,
+        device_id: device,
+    };
+    router.open(&selection.adapter, &selection.device_id)
+}
+
+#[tauri::command]
+fn sidecar_close(
+    state: State<'_, Mutex<HalRouter>>,
+    adapter: String,
+    device: String,
+) -> Result<String, String> {
+    let mut router = state.lock().map_err(|e| e.to_string())?;
+    let selection = SidecarSelection {
+        adapter,
+        device_id: device,
+    };
+    router.close(&selection.adapter, &selection.device_id)?;
+    Ok(format!(
+        "closed {} / {}",
+        selection.adapter, selection.device_id
+    ))
+}
+
+#[tauri::command]
+fn sidecar_read_id(
+    state: State<'_, Mutex<HalRouter>>,
+    adapter: String,
+    device: String,
+) -> Result<String, String> {
+    let mut router = state.lock().map_err(|e| e.to_string())?;
+    let mut nor = SidecarNor::open(&mut router, &adapter, &device)?;
+    let id = nor.read_id()?;
+    nor.close()?;
+    Ok(format!(
+        "JEDEC ID: {:02X} {:02X} {:02X}",
+        id[0], id[1], id[2]
+    ))
+}
+
+/// Debug/advanced command: run a raw full-duplex SPI transaction against a
+/// sidecar adapter device. The session is opened when needed and then kept
+/// open for subsequent calls.
+#[tauri::command]
+fn sidecar_spi_transact(
+    state: State<'_, Mutex<HalRouter>>,
+    adapter: String,
+    device: String,
+    write: Vec<u8>,
+    read_len: usize,
+) -> Result<String, String> {
+    let mut router = state.lock().map_err(|e| e.to_string())?;
+    router.open(&adapter, &device)?;
+    let data = router.spi_transact(&adapter, &device, &write, read_len)?;
+    Ok(data
+        .iter()
+        .map(|byte| format!("{byte:02X}"))
+        .collect::<Vec<_>>()
+        .join(" "))
+}
+
+#[tauri::command]
+fn sidecar_errors(state: State<'_, Mutex<HalRouter>>) -> Result<Vec<(String, String)>, String> {
+    let router = state.lock().map_err(|e| e.to_string())?;
+    Ok(router.errors.clone())
+}
+
+#[tauri::command]
+fn sidecar_shutdown(state: State<'_, Mutex<HalRouter>>) -> Result<(), String> {
+    let mut router = state.lock().map_err(|e| e.to_string())?;
+    router.shutdown();
+    Ok(())
+}
+
 fn main() {
     let exe = exe_dir();
+    let mut plugin_manager = PluginManager::load(&exe);
+    let hal_router = HalRouter::start(&mut plugin_manager, &exe);
     tauri::Builder::default()
         .manage(Mutex::new(AppState {
             ch34x: None,
@@ -728,7 +845,8 @@ fn main() {
             cached_serprog: Vec::new(),
             operation_running: false,
         }))
-        .manage(Mutex::new(PluginManager::load(&exe)))
+        .manage(Mutex::new(plugin_manager))
+        .manage(Mutex::new(hal_router))
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
                 let busy = window
@@ -786,6 +904,13 @@ fn main() {
             plugin_builtin_modules,
             plugin_enable,
             plugin_disable,
+            sidecar_adapters,
+            sidecar_open,
+            sidecar_close,
+            sidecar_read_id,
+            sidecar_spi_transact,
+            sidecar_errors,
+            sidecar_shutdown,
         ])
         .run(tauri::generate_context!())
         .expect("启动失败");
