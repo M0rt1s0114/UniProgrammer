@@ -59,6 +59,51 @@ impl FromStr for PluginKind {
     }
 }
 
+/// Plugin layer semantics, serialized in snake_case in manifests and IPC
+/// payloads.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum PluginLayer {
+    /// Core plugin required by the application; always enabled.
+    Required,
+    /// Optional plugin loaded on a cold start path.
+    #[default]
+    Cold,
+    /// Optional plugin loaded on a hot/live path.
+    Hot,
+}
+
+impl PluginLayer {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            PluginLayer::Required => "required",
+            PluginLayer::Cold => "cold",
+            PluginLayer::Hot => "hot",
+        }
+    }
+}
+
+impl std::fmt::Display for PluginLayer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for PluginLayer {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "required" => Ok(PluginLayer::Required),
+            "cold" => Ok(PluginLayer::Cold),
+            "hot" => Ok(PluginLayer::Hot),
+            other => Err(format!(
+                "unknown plugin layer '{other}' (expected required, cold or hot)"
+            )),
+        }
+    }
+}
+
 /// A named dependency with a semver requirement.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Dependency {
@@ -309,6 +354,7 @@ pub struct PluginManifest {
     pub version: semver::Version,
     pub plugin_api: u32,
     pub kind: PluginKind,
+    pub layer: PluginLayer,
     pub entry: String,
     pub dependencies: Vec<Dependency>,
     pub permissions: PluginPermissions,
@@ -339,6 +385,7 @@ impl PluginManifest {
                 "version",
                 "plugin_api",
                 "kind",
+                "layer",
                 "entry",
                 "os",
                 "arch",
@@ -359,6 +406,10 @@ impl PluginManifest {
         let kind =
             string_field(package, "kind")?.ok_or_else(|| "missing package.kind".to_string())?;
         let kind = PluginKind::from_str(&kind)?;
+        let layer = match string_field(package, "layer")? {
+            Some(layer) => PluginLayer::from_str(&layer)?,
+            None => default_layer(kind),
+        };
         let entry =
             string_field(package, "entry")?.ok_or_else(|| "missing package.entry".to_string())?;
         let os = string_array_field(package, "os")?;
@@ -383,6 +434,7 @@ impl PluginManifest {
             version,
             plugin_api,
             kind,
+            layer,
             entry,
             dependencies,
             permissions,
@@ -402,6 +454,20 @@ pub struct LoadedPlugin {
     pub enabled: bool,
 }
 
+/// Return the manifest files that exist in `dir`, in preferred load order:
+/// `unipkg.toml` first, then the legacy `manifest.toml`.
+///
+/// When both files exist both paths are returned (`unipkg.toml` first) and
+/// callers should use the first one. When only one exists it is returned
+/// alone; when neither exists the vector is empty.
+pub fn manifest_candidates(dir: &Path) -> Vec<PathBuf> {
+    ["unipkg.toml", "manifest.toml"]
+        .iter()
+        .map(|name| dir.join(name))
+        .filter(|path| path.is_file())
+        .collect()
+}
+
 /// In-memory plugin registry.
 #[derive(Debug, Default)]
 pub struct PluginManager {
@@ -411,9 +477,10 @@ pub struct PluginManager {
 }
 
 impl PluginManager {
-    /// Scan `<root>/plugins/*/manifest.toml` (non-recursive). Directories
-    /// without a manifest are ignored; invalid manifests are recorded in
-    /// `errors` and skipped.
+    /// Scan `<root>/plugins/*` (non-recursive) for `unipkg.toml` or the
+    /// legacy `manifest.toml`; `unipkg.toml` is preferred when both exist.
+    /// Directories without a manifest are ignored; invalid manifests are
+    /// recorded in `errors` and skipped.
     pub fn load(root: &Path) -> Self {
         let plugins_dir = root.join("plugins");
         let mut plugins = Vec::new();
@@ -430,10 +497,10 @@ impl PluginManager {
             if !plugin_dir.is_dir() {
                 continue;
             }
-            let manifest_path = plugin_dir.join("manifest.toml");
-            if !manifest_path.is_file() {
-                continue;
-            }
+            let manifest_path = match manifest_candidates(&plugin_dir).into_iter().next() {
+                Some(path) => path,
+                None => continue,
+            };
 
             let manifest_path_text = manifest_path.display().to_string();
             let text = match fs::read_to_string(&manifest_path) {
@@ -843,6 +910,14 @@ fn parse_vcc(
     }))
 }
 
+fn default_layer(kind: PluginKind) -> PluginLayer {
+    match kind {
+        PluginKind::Ui | PluginKind::ChipDb => PluginLayer::Required,
+        PluginKind::Adapter => PluginLayer::Cold,
+        PluginKind::Protocol => PluginLayer::Hot,
+    }
+}
+
 fn string_field(
     table: &toml::map::Map<String, toml::Value>,
     key: &str,
@@ -958,6 +1033,7 @@ entry = "plugin.exe"
                 version: semver::Version::parse(version).expect("valid test version"),
                 plugin_api: PLUGIN_API_VERSION,
                 kind: PluginKind::Adapter,
+                layer: PluginLayer::Cold,
                 entry: "plugin.exe".to_string(),
                 dependencies,
                 permissions: PluginPermissions::default(),
@@ -1026,6 +1102,7 @@ foo = "bar"
         assert_eq!(manifest.version, semver::Version::new(1, 2, 3));
         assert_eq!(manifest.plugin_api, 1);
         assert_eq!(manifest.kind, PluginKind::Adapter);
+        assert_eq!(manifest.layer, PluginLayer::Cold);
         assert_eq!(manifest.entry, "plugin.exe");
         assert_eq!(manifest.os, vec!["windows", "linux"]);
         assert_eq!(manifest.arch, vec!["x86_64"]);
@@ -1189,6 +1266,127 @@ enabled = true
         assert!(manager.errors[0].1.contains("duplicate plugin name"));
 
         let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn unipkg_toml_is_preferred_over_manifest_toml() {
+        let root = test_root("unipkg-pref");
+        let plugin_dir = root.join("plugins").join("demo");
+        fs::create_dir_all(&plugin_dir).expect("create test plugin dir");
+        fs::write(
+            plugin_dir.join("unipkg.toml"),
+            r#"
+[package]
+name = "vnd.example.unipkg"
+version = "0.1.0"
+plugin_api = 1
+kind = "adapter"
+entry = "plugin.exe"
+"#,
+        )
+        .expect("write unipkg manifest");
+        fs::write(
+            plugin_dir.join("manifest.toml"),
+            r#"
+[package]
+name = "vnd.example.legacy"
+version = "0.1.0"
+plugin_api = 1
+kind = "adapter"
+entry = "plugin.exe"
+"#,
+        )
+        .expect("write legacy manifest");
+
+        let candidates = manifest_candidates(&plugin_dir);
+        assert_eq!(
+            candidates,
+            vec![
+                plugin_dir.join("unipkg.toml"),
+                plugin_dir.join("manifest.toml")
+            ]
+        );
+
+        let manager = PluginManager::load(&root);
+        assert_eq!(manager.errors, Vec::<(String, String)>::new());
+        assert_eq!(manager.plugins.len(), 1);
+        assert_eq!(manager.plugins[0].manifest.name, "vnd.example.unipkg");
+        assert_eq!(manager.plugins[0].path, plugin_dir);
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn layer_parses_and_defaults_by_kind() {
+        let manifest = PluginManifest::parse(
+            r#"
+[package]
+name = "vnd.example.explicit"
+version = "0.1.0"
+plugin_api = 1
+kind = "adapter"
+layer = "hot"
+entry = "plugin.exe"
+"#,
+        )
+        .expect("explicit layer should parse");
+        assert_eq!(manifest.layer, PluginLayer::Hot);
+
+        let ui = PluginManifest::parse(
+            r#"
+[package]
+name = "vnd.example.ui"
+version = "0.1.0"
+plugin_api = 1
+kind = "ui"
+entry = "plugin.exe"
+"#,
+        )
+        .expect("ui manifest should parse");
+        assert_eq!(ui.layer, PluginLayer::Required);
+
+        let chipdb = PluginManifest::parse(
+            r#"
+[package]
+name = "vnd.example.chipdb"
+version = "0.1.0"
+plugin_api = 1
+kind = "chipdb"
+entry = "plugin.exe"
+"#,
+        )
+        .expect("chipdb manifest should parse");
+        assert_eq!(chipdb.layer, PluginLayer::Required);
+
+        let adapter = PluginManifest::parse(MINIMAL).expect("adapter manifest should parse");
+        assert_eq!(adapter.layer, PluginLayer::Cold);
+
+        let protocol = PluginManifest::parse(
+            r#"
+[package]
+name = "vnd.example.protocol"
+version = "0.1.0"
+plugin_api = 1
+kind = "protocol"
+entry = "plugin.exe"
+"#,
+        )
+        .expect("protocol manifest should parse");
+        assert_eq!(protocol.layer, PluginLayer::Hot);
+
+        let err = PluginManifest::parse(
+            r#"
+[package]
+name = "vnd.example.bad-layer"
+version = "0.1.0"
+plugin_api = 1
+kind = "adapter"
+layer = "warm"
+entry = "plugin.exe"
+"#,
+        )
+        .expect_err("invalid layer must fail");
+        assert!(err.contains("unknown plugin layer 'warm'"), "{err}");
     }
 
     #[test]

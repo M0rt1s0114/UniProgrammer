@@ -10,6 +10,7 @@ pub mod hal_router;
 pub mod nor_ops;
 mod operations;
 mod plugin;
+pub mod plugin_install;
 mod protocols;
 pub mod script_plugin;
 mod serprog;
