@@ -35,6 +35,10 @@ mod autodetect;
 #[allow(dead_code)] // pulled in by core; only the sidecar path is exercised
 mod serprog;
 
+#[path = "../src/spi_bus.rs"]
+#[allow(dead_code)] // required by `sidecar_nor`'s normal path; only the sidecar path is exercised
+mod spi_bus;
+
 #[path = "../src/sfdp.rs"]
 #[allow(dead_code)] // pulled in by core; only the sidecar path is exercised
 mod sfdp;

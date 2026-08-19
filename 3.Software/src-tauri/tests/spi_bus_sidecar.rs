@@ -1,6 +1,6 @@
-//! Integration test for `sidecar_nor`: loads the mock sidecar adapter plugin
-//! from a temporary plugin directory, starts the HAL router and drives a full
-//! SPI NOR read / erase / program / verify cycle over the real child-process
+//! Integration test for `spi_bus::SidecarSpiBus`: loads the mock sidecar
+//! adapter plugin from a temporary plugin directory, starts the HAL router
+//! and drives single-shot SPI bus transactions over the real child-process
 //! protocol.
 
 #[path = "../src/uni_hal.rs"]
@@ -14,10 +14,6 @@ mod plugin;
 #[path = "../src/hal_router.rs"]
 #[allow(dead_code)] // reusing the full module exposes more public API than this test needs
 mod hal_router;
-
-#[path = "../src/sidecar_nor.rs"]
-#[allow(dead_code)] // reusing the full module exposes more public API than this test needs
-mod sidecar_nor;
 
 #[path = "../src/ch34x.rs"]
 #[allow(dead_code)] // required by `spi_bus`'s crate paths; only the sidecar bus is exercised
@@ -33,7 +29,7 @@ mod spi_bus;
 
 use hal_router::HalRouter;
 use plugin::PluginManager;
-use sidecar_nor::SidecarNor;
+use spi_bus::{SidecarSpiBus, SpiBus};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -53,7 +49,7 @@ impl TempDir {
             .expect("clock must be after the Unix epoch")
             .as_nanos();
         let path = std::env::temp_dir().join(format!(
-            "sidecar_nor_roundtrip_test_{}_{}_{}",
+            "spi_bus_sidecar_test_{}_{}_{}",
             std::process::id(),
             nanos,
             TMP_COUNTER.fetch_add(1, Ordering::SeqCst)
@@ -87,7 +83,7 @@ max_freq_khz = 60000
 "#;
 
 #[test]
-fn sidecar_nor_spi_nor_roundtrip_over_sidecar_path() {
+fn sidecar_spi_bus_transacts_over_sidecar_path() {
     let tmp = TempDir::new();
     let root = tmp.path();
 
@@ -114,28 +110,25 @@ fn sidecar_nor_spi_nor_roundtrip_over_sidecar_path() {
         router.errors
     );
 
-    let mut nor =
-        SidecarNor::open(&mut router, "vnd.test.mock", "mock-0").expect("open SPI NOR sidecar");
+    let mut bus = SidecarSpiBus {
+        router: &mut router,
+        adapter: "vnd.test.mock".to_string(),
+        device_id: "mock-0".to_string(),
+    };
 
-    assert_eq!(nor.read_id().expect("read JEDEC ID"), [0xEF, 0x40, 0x18]);
+    assert_eq!(bus.max_write(), 4096);
+    assert_eq!(bus.max_read(), 65536);
 
-    nor.erase_chip().expect("erase chip");
+    let jedec = bus.transact(&[0x9F], 3).expect("read JEDEC ID");
+    assert_eq!(jedec, vec![0xEF, 0x40, 0x18]);
 
-    let page_a = vec![0xA5u8; 256];
-    nor.program_page(0, &page_a)
-        .expect("program page at addr 0");
-    nor.verify(0, &page_a).expect("verify page at addr 0");
+    bus.transact(&[0x06], 0).expect("write enable");
+    bus.transact(&[0xC7], 0).expect("erase chip");
 
-    let page_b = vec![0xA5u8; 100];
-    nor.program_page(4096, &page_b)
-        .expect("program page at addr 4096");
-    nor.verify(4096, &page_b).expect("verify page at addr 4096");
+    let erased = bus
+        .transact(&[0x03, 0, 0, 0], 3)
+        .expect("read first three bytes after chip erase");
+    assert_eq!(erased, vec![0xFF, 0xFF, 0xFF]);
 
-    // Reprogramming with 0x0F over 0xA5 must AND into the flash model.
-    nor.program_page(0, &[0x0F]).expect("reprogram first byte");
-    let read_back = nor.read(0, 1).expect("read back first byte");
-    assert_eq!(read_back, vec![0x05]);
-
-    nor.close().expect("close SPI NOR sidecar");
     router.shutdown();
 }
