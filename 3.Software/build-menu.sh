@@ -31,4 +31,4 @@ echo ">>> cargo build --release ${features[*]}"
 
 echo
 echo '完成。可执行文件：'
-echo '  src-tauri/target/release/chip-validator'
+echo '  src-tauri/target/release/uniprog'

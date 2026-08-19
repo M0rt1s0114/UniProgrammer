@@ -316,25 +316,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801"
 
 [[package]]
-name = "chip-validator"
-version = "0.4.0-alpha.2"
-dependencies = [
- "base64 0.22.1",
- "open",
- "quick-xml 0.31.0",
- "rquickjs",
- "rusb",
- "semver",
- "serde",
- "serde_json",
- "serialport",
- "tauri",
- "tauri-build",
- "toml 0.8.23",
- "windows 0.58.0",
-]
-
-[[package]]
 name = "chrono"
 version = "0.4.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3771,6 +3752,25 @@ name = "unicode-segmentation"
 version = "1.13.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c6f5d3c3b1bf09027a88a6bc961fc00497d651009560b5463668dc81b0fa87a8"
+
+[[package]]
+name = "uniprog"
+version = "0.4.0-alpha.2"
+dependencies = [
+ "base64 0.22.1",
+ "open",
+ "quick-xml 0.31.0",
+ "rquickjs",
+ "rusb",
+ "semver",
+ "serde",
+ "serde_json",
+ "serialport",
+ "tauri",
+ "tauri-build",
+ "toml 0.8.23",
+ "windows 0.58.0",
+]
 
 [[package]]
 name = "url"

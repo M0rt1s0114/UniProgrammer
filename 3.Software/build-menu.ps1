@@ -38,5 +38,5 @@ try {
 
 Write-Host ''
 Write-Host '完成。可执行文件：'
-Write-Host '  src-tauri\target\release\chip-validator.exe'
+Write-Host '  src-tauri\target\release\uniprog.exe'
 Write-Host '  （同目录需要 CH34X.DLL 与 chiplib.bin）'

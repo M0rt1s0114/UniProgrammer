@@ -2,17 +2,17 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 // Workaround for Tauri CLI selecting the wrong binary when the Rust package
 // has additional bin targets (the sidecar mock). `tauri build` overwrites
-// target/release/chip-validator.exe with the mock binary on this machine,
+// target/release/uniprog.exe with the mock binary on this machine,
 // so this hook restores the real main binary right before bundling.
 //
 // The real main binary built by Cargo lives at:
-//   target/release/deps/chip_validator[.exe]
+//   target/release/deps/uniprog[.exe]
 
 const fs = require('fs')
 const path = require('path')
 
-const exeName = process.platform === 'win32' ? 'chip_validator.exe' : 'chip_validator'
-const mainName = process.platform === 'win32' ? 'chip-validator.exe' : 'chip-validator'
+const exeName = process.platform === 'win32' ? 'uniprog.exe' : 'uniprog'
+const mainName = process.platform === 'win32' ? 'uniprog.exe' : 'uniprog'
 
 const roots = [
   path.resolve(process.cwd()),

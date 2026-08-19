@@ -1,6 +1,6 @@
 {
   "productName": "UniProgrammer",
-  "mainBinaryName": "chip-validator",
+  "mainBinaryName": "uniprog",
   "version": "0.4.0-alpha.2",
   "identifier": "com.uniprogrammer.app",
   "build": {

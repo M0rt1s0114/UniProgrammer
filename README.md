@@ -69,7 +69,7 @@ Alpha builds are attached to GitHub Releases starting at `v0.4.0-alpha.2`.
   The official `CH34X.DLL` is not distributed with the source tree for
   licensing reasons; the Windows DLL backend is built locally with the
   vendor DLL installed next to the project.
-- Linux: `chip-validator` built on Ubuntu 24.04 with WebKitGTK.
+- Linux: `uniprog` built on Ubuntu 24.04 with WebKitGTK.
 
 ### Build from source
 
