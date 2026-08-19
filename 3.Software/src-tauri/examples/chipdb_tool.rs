@@ -15,11 +15,9 @@
 //! missing attributes. The `xml2bin` form rebuilds chiplib.bin from the
 //! (possibly obfuscated) XML source without writing any plaintext to disk.
 
-#[path = "../src/chiplib.rs"]
-#[allow(dead_code)]
-mod chiplib;
-
 use std::fs;
+
+use uni_chipdb as chiplib;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();

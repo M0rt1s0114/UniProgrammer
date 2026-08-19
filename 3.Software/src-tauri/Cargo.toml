@@ -4,6 +4,10 @@ version = "0.4.0-alpha.2"
 edition = "2021"
 license = "GPL-3.0-or-later"
 
+[workspace]
+members = [".", "crates/uni-chipdb"]
+default-members = [".", "crates/uni-chipdb"]
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
@@ -21,6 +25,7 @@ base64 = "0.22"
 rquickjs = "0.12.2"
 zip = "2.4"
 ureq = "2.12"
+uni-chipdb = { path = "crates/uni-chipdb" }
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.58", features = ["Win32_Foundation", "Win32_System_Com", "Win32_System_LibraryLoader", "Win32_UI_Shell", "Win32_UI_Shell_Common"] }

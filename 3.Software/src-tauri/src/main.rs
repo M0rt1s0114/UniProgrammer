@@ -2,7 +2,6 @@
 
 mod autodetect;
 mod ch34x;
-mod chiplib;
 mod core;
 mod dialogs;
 mod firmware;
@@ -33,6 +32,7 @@ use sidecar_nor::SidecarNor;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use tauri::{Emitter, Manager, State, WindowEvent};
+use uni_chipdb as chiplib;
 
 #[derive(Clone, Serialize)]
 struct ReadProgressEvent {

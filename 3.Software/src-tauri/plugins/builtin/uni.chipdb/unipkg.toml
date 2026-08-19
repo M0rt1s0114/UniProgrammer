@@ -6,7 +6,7 @@ version = "1.0.0"
 plugin_api = 1
 kind = "chipdb"
 layer = "required"
-entry = "builtin"
+entry = "uni_chipdb_sidecar"
 provider = "builtin"
 
 [dependencies]

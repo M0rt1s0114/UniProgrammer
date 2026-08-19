@@ -27,10 +27,6 @@ mod nor_ops;
 #[allow(dead_code)] // pulled in by operations; only the sidecar path is exercised
 mod ch34x;
 
-#[path = "../src/chiplib.rs"]
-#[allow(dead_code)] // pulled in by operations; only the sidecar path is exercised
-mod chiplib;
-
 #[path = "../src/autodetect.rs"]
 #[allow(dead_code)] // pulled in by core; only the sidecar path is exercised
 mod autodetect;
@@ -65,6 +61,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
+use uni_chipdb as chiplib;
 
 static TMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 

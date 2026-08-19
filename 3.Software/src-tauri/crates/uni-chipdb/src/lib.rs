@@ -502,7 +502,7 @@ impl Chiplib {
         })
     }
 
-    fn load_xml(path: &str) -> Result<Self, String> {
+    pub fn load_xml(path: &str) -> Result<Self, String> {
         let raw = fs::read(path).map_err(|e| e.to_string())?;
         // 兼容旧版明文 XML；混淆后的 XML 先解码再解析，解码结果不落盘。
         let file_bytes = if raw.starts_with(b"<") {
@@ -931,6 +931,20 @@ fn protocol_name_to_id(name: &str) -> u16 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
+
+    /// Root directory that contains `chiplib.bin` and `chiplib.xml`.
+    ///
+    /// Cargo runs unit tests with the package root (`crates/uni-chipdb`) as
+    /// the current directory, so the default is two levels up. Set
+    /// `UNIPROG_ROOT` to point elsewhere when running a compiled test binary
+    /// directly from a different directory.
+    fn uniprog_root() -> PathBuf {
+        if let Some(dir) = std::env::var_os("UNIPROG_ROOT") {
+            return PathBuf::from(dir);
+        }
+        PathBuf::from("../../")
+    }
 
     #[test]
     fn obfuscation_round_trip() {
@@ -943,7 +957,9 @@ mod tests {
 
     #[test]
     fn xml_fallback_contains_new_chip() {
-        let lib = Chiplib::load_xml("../chiplib.xml").expect("load chiplib.xml");
+        let xml_path = uniprog_root().join("chiplib.xml");
+        let xml_path = xml_path.to_str().expect("path must be UTF-8");
+        let lib = Chiplib::load_xml(xml_path).expect("load chiplib.xml");
         assert_eq!(lib.entry_count(), 1429);
         let d40 = lib.find_by_id("5E3213").expect("ZB25D40B in XML fallback");
         assert_eq!(d40.vendor, "Zbit");
@@ -981,7 +997,9 @@ mod tests {
 
     #[test]
     fn load_enriched_bin() {
-        let lib = Chiplib::load_bin("chiplib.bin").expect("load chiplib.bin");
+        let bin_path = uniprog_root().join("chiplib.bin");
+        let bin_path = bin_path.to_str().expect("path must be UTF-8");
+        let lib = Chiplib::load_bin(bin_path).expect("load chiplib.bin");
         assert_eq!(lib.entries.len(), 1429);
 
         let nor = lib.find_by_id("EF4018").expect("W25Q128 JEDEC");

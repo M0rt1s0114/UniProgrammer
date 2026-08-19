@@ -3918,6 +3918,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "uni-chipdb"
+version = "1.0.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "unic-char-property"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3986,6 +3994,7 @@ dependencies = [
  "tauri",
  "tauri-build",
  "toml 0.8.23",
+ "uni-chipdb",
  "ureq",
  "windows 0.58.0",
  "zip",
