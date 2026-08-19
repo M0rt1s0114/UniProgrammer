@@ -277,6 +277,8 @@ watch(
     if (isOpen) {
       void loadPlugins()
       void loadBuiltinModules()
+      // Sidecar 面板打开时自动刷新，插入/拔出编程器后无需手动点按钮。
+      void refreshSidecarAdapters()
     }
   },
 )

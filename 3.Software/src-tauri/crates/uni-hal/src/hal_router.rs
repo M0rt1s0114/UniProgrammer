@@ -102,6 +102,12 @@ impl HalRouter {
             if loaded.manifest.kind != PluginKind::Adapter || !loaded.enabled {
                 continue;
             }
+            // `entry = "builtin"` marks compile-time built-in L1 modules such
+            // as uni.hal: they live inside the main binary and are not
+            // sidecar processes, so the router must not try to spawn them.
+            if loaded.manifest.entry == "builtin" {
+                continue;
+            }
 
             let entry_path = match resolve_adapter_entry(loaded, app_root) {
                 Some(path) => path,
