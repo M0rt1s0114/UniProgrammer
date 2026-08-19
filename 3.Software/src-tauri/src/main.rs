@@ -6,6 +6,7 @@ mod chiplib;
 mod core;
 mod dialogs;
 mod firmware;
+pub mod hal_router;
 mod operations;
 mod plugin;
 mod protocols;
