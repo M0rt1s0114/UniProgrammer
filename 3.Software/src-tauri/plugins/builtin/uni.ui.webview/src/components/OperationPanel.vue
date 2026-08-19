@@ -194,6 +194,12 @@ function setProgrammerMode(mode: 'auto' | 'manual') {
   }
 }
 
+// “自动模式”一个开关同时控制“持续扫描”和“扫到后自动连接”，
+// 两者状态保持一致，避免出现只发现设备但不连接的情况。
+function onAutoModeToggle() {
+  settings.programmerAutoConnect = settings.programmerAutoPoll
+}
+
 watch(
   () => settings.programmerAutoPoll,
   (enabled) => {
@@ -323,7 +329,12 @@ onMounted(async () => {
             {{ store.programmerScanning ? t('programmer.scanning') : t('programmer.startDetect') }}
           </button>
           <label class="auto-poll-toggle">
-            <input v-model="settings.programmerAutoPoll" type="checkbox" class="toggle-check" />
+            <input
+              v-model="settings.programmerAutoPoll"
+              type="checkbox"
+              class="toggle-check"
+              @change="onAutoModeToggle"
+            />
             <span class="toggle-text">{{ t('programmer.autoPoll') }}</span>
           </label>
         </div>

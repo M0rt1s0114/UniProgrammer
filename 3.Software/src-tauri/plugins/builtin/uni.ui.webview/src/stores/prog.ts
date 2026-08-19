@@ -483,8 +483,12 @@ export const useProgStore = defineStore('prog', () => {
     programmerCandidates.value = list
     lastScanError = ''
 
-    // 扫到任何编程器后立刻停止轮询，把设备让给用户使用。
-    if (list.length > 0) {
+    // 自动模式需要“扫到 → 自动连接成功”后才停止轮询；
+    // 连接失败时继续轮询，给 30 秒重试机制再次触发的机会。
+    // 非自动连接场景则扫到设备就停，把设备让给用户。
+    const autoConnecting =
+      settings.programmerAutoConnect && status.value !== 'success' && status.value !== 'running'
+    if (list.length > 0 && !autoConnecting) {
       stopProgrammerPolling()
     }
 

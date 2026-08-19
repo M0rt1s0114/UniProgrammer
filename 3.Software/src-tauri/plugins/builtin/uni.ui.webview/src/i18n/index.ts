@@ -101,12 +101,11 @@ const zh: MessageRecord = {
   'programmer.manualMode': '手动选择',
   'programmer.startDetect': '开始识别',
   'programmer.scanning': '识别中...',
-  'programmer.autoPoll': '连接后自动识别',
-  'programmer.autoPollHint':
-    '点击“开始识别”检测设备；勾选“连接后自动识别”后持续轮询，找到设备即停止',
+  'programmer.autoPoll': '自动模式',
+  'programmer.autoPollHint': '自动模式：持续扫描并自动连接检测到的编程器，连接成功后自动停止',
 
   // Auto operation
-  'auto.settings': '自动流程设置',
+  'auto.settings': '自动流程',
   'auto.stepRead': '读取',
   'auto.stepErase': '擦除',
   'auto.stepBlankCheck': '查空',
@@ -372,12 +371,12 @@ const en: MessageRecord = {
   'programmer.manualMode': 'Manual',
   'programmer.startDetect': 'Start Scan',
   'programmer.scanning': 'Scanning...',
-  'programmer.autoPoll': 'Auto detect after connection',
+  'programmer.autoPoll': 'Auto Mode',
   'programmer.autoPollHint':
-    'Press Start Scan to detect devices; enable auto detect to keep polling and stop once found',
+    'Auto mode: keep scanning, connect detected programmers automatically and stop once connected',
 
   // Auto operation
-  'auto.settings': 'Auto Flow Settings',
+  'auto.settings': 'Auto Flow',
   'auto.stepRead': 'Read',
   'auto.stepErase': 'Erase',
   'auto.stepBlankCheck': 'Blank Check',
