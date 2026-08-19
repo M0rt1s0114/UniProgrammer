@@ -1,7 +1,7 @@
 {
   "productName": "UniProgrammer",
   "mainBinaryName": "uniprog",
-  "version": "0.4.0-alpha.6",
+  "version": "0.4.0-alpha.7",
   "identifier": "com.uniprogrammer.app",
   "build": {
     "frontendDist": "unipkg://localhost/uni.ui.webview/",
