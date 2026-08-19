@@ -5,8 +5,10 @@ edition = "2021"
 license = "GPL-3.0-or-later"
 
 [dependencies]
+base64 = "0.22"
 rusb = "0.9"
 serialport = "4.2"
+serde_json = "1"
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.58", features = ["Win32_Foundation", "Win32_System_Com", "Win32_System_LibraryLoader", "Win32_UI_Shell", "Win32_UI_Shell_Common"] }

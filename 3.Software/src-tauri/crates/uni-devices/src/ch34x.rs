@@ -1254,6 +1254,9 @@ mod dll_hal {
     }
 }
 
+#[cfg(hal_backend_dll)]
+pub use dll_hal::DllHal;
+
 // ═════════════════════════════════ Public device wrapper ═════════════════════
 
 /// Enumerate CH34X devices through the official DLL (Windows default HAL).

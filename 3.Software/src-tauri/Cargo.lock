@@ -3929,7 +3929,9 @@ dependencies = [
 name = "uni-devices"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "rusb",
+ "serde_json",
  "serialport",
  "windows 0.58.0",
 ]
