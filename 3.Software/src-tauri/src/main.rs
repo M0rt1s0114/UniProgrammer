@@ -332,10 +332,12 @@ fn set_at45_page_mode(
 #[tauri::command]
 async fn chip_erase(
     state: State<'_, Mutex<AppState>>,
+    router_state: State<'_, Mutex<HalRouter>>,
     app: tauri::AppHandle,
     bad_block_mode: Option<String>,
 ) -> Result<String, String> {
     let mut s = state.lock().map_err(|e| e.to_string())?;
+    let mut router = router_state.lock().map_err(|e| e.to_string())?;
     operations::chip_erase(
         &mut s,
         bad_block_mode.as_deref(),
@@ -356,6 +358,7 @@ async fn chip_erase(
             app.emit("bad_block_progress", BadBlockProgressEvent { done, total })
                 .ok();
         },
+        Some(&mut router),
     )
 }
 
@@ -364,12 +367,14 @@ async fn chip_erase(
 #[tauri::command]
 async fn blank_check(
     state: State<'_, Mutex<AppState>>,
+    router_state: State<'_, Mutex<HalRouter>>,
     app: tauri::AppHandle,
     size: u64,
     start_addr: u64,
     bad_block_mode: Option<String>,
 ) -> Result<BlankCheckResult, String> {
     let mut s = state.lock().map_err(|e| e.to_string())?;
+    let mut router = router_state.lock().map_err(|e| e.to_string())?;
     operations::blank_check(
         &mut s,
         size,
@@ -386,6 +391,7 @@ async fn blank_check(
             app.emit("bad_block_progress", BadBlockProgressEvent { done, total })
                 .ok();
         },
+        Some(&mut router),
     )
 }
 
@@ -394,12 +400,14 @@ async fn blank_check(
 #[tauri::command]
 async fn read_chip(
     state: State<'_, Mutex<AppState>>,
+    router_state: State<'_, Mutex<HalRouter>>,
     app: tauri::AppHandle,
     size: u64,
     start_addr: u64,
     bad_block_mode: Option<String>,
 ) -> Result<tauri::ipc::Response, String> {
     let mut s = state.lock().map_err(|e| e.to_string())?;
+    let mut router = router_state.lock().map_err(|e| e.to_string())?;
     let data = operations::read_chip(
         &mut s,
         size,
@@ -413,6 +421,7 @@ async fn read_chip(
             app.emit("bad_block_progress", BadBlockProgressEvent { done, total })
                 .ok();
         },
+        Some(&mut router),
     )?;
     Ok(tauri::ipc::Response::new(data))
 }
@@ -441,6 +450,7 @@ fn request_header(request: &tauri::ipc::Request<'_>, name: &str) -> Option<Strin
 #[tauri::command]
 async fn write_chip(
     state: State<'_, Mutex<AppState>>,
+    router_state: State<'_, Mutex<HalRouter>>,
     app: tauri::AppHandle,
     request: tauri::ipc::Request<'_>,
 ) -> Result<String, String> {
@@ -452,6 +462,7 @@ async fn write_chip(
         request_header(&request, "x-force-segmented").and_then(|value| value.parse().ok());
     let bad_block_mode: Option<String> = request_header(&request, "x-bad-block-mode");
     let mut s = state.lock().map_err(|e| e.to_string())?;
+    let mut router = router_state.lock().map_err(|e| e.to_string())?;
     operations::write_chip(
         &mut s,
         data,
@@ -466,12 +477,14 @@ async fn write_chip(
             app.emit("bad_block_progress", BadBlockProgressEvent { done, total })
                 .ok();
         },
+        Some(&mut router),
     )
 }
 
 #[tauri::command]
 async fn verify_chip(
     state: State<'_, Mutex<AppState>>,
+    router_state: State<'_, Mutex<HalRouter>>,
     app: tauri::AppHandle,
     request: tauri::ipc::Request<'_>,
 ) -> Result<String, String> {
@@ -481,6 +494,7 @@ async fn verify_chip(
         .unwrap_or(0);
     let bad_block_mode: Option<String> = request_header(&request, "x-bad-block-mode");
     let mut s = state.lock().map_err(|e| e.to_string())?;
+    let mut router = router_state.lock().map_err(|e| e.to_string())?;
     operations::verify_chip(
         &mut s,
         data,
@@ -494,6 +508,7 @@ async fn verify_chip(
             app.emit("bad_block_progress", BadBlockProgressEvent { done, total })
                 .ok();
         },
+        Some(&mut router),
     )
 }
 
@@ -765,6 +780,40 @@ fn sidecar_open(
 }
 
 #[tauri::command]
+fn sidecar_select(
+    state: State<'_, Mutex<AppState>>,
+    router_state: State<'_, Mutex<HalRouter>>,
+    adapter: String,
+    device: String,
+) -> Result<String, String> {
+    let session_id = {
+        let mut router = router_state.lock().map_err(|e| e.to_string())?;
+        router.open(&adapter, &device)?
+    };
+    let mut s = state.lock().map_err(|e| e.to_string())?;
+    s.sidecar_adapter = Some(adapter);
+    s.sidecar_device = Some(device);
+    Ok(session_id)
+}
+
+#[tauri::command]
+fn sidecar_unselect(
+    state: State<'_, Mutex<AppState>>,
+    router_state: State<'_, Mutex<HalRouter>>,
+) -> Result<(), String> {
+    let previous = {
+        let mut s = state.lock().map_err(|e| e.to_string())?;
+        (s.sidecar_adapter.take(), s.sidecar_device.take())
+    };
+    if let (Some(adapter), Some(device)) = previous {
+        if let Ok(mut router) = router_state.lock() {
+            let _ = router.close(&adapter, &device);
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
 fn sidecar_close(
     state: State<'_, Mutex<HalRouter>>,
     adapter: String,
@@ -943,6 +992,8 @@ fn main() {
             lib: None,
             connected_device: None,
             detected: None,
+            sidecar_adapter: None,
+            sidecar_device: None,
             last_serial_ports: Vec::new(),
             cached_serprog: Vec::new(),
             operation_running: false,
@@ -1008,6 +1059,8 @@ fn main() {
             plugin_disable,
             sidecar_adapters,
             sidecar_open,
+            sidecar_select,
+            sidecar_unselect,
             sidecar_close,
             sidecar_read_id,
             sidecar_spi_transact,

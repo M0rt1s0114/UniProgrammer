@@ -34,12 +34,27 @@ pub struct BlankCheckResult {
     pub first_non_blank: Option<u64>,
 }
 
+fn sidecar_selection(state: &AppState) -> Option<SidecarSelection> {
+    match (&state.sidecar_adapter, &state.sidecar_device) {
+        (Some(adapter), Some(device_id)) => Some(SidecarSelection {
+            adapter: adapter.clone(),
+            device_id: device_id.clone(),
+        }),
+        _ => None,
+    }
+}
+
 pub fn chip_erase(
     state: &mut AppState,
     bad_block_mode: Option<&str>,
     erase_progress: &mut dyn FnMut(EraseProgress),
     bad_block_progress: &mut dyn FnMut(u32, u32),
+    router: Option<&mut HalRouter>,
 ) -> Result<String, String> {
+    if let (Some(selection), Some(router)) = (sidecar_selection(state), router) {
+        return sidecar_erase_chip(router, &selection);
+    }
+
     if state.ch34x.is_some() {
         let detected = state.detected.clone();
         let info = match detected.as_ref() {
@@ -345,7 +360,21 @@ pub fn blank_check(
     bad_block_mode: Option<&str>,
     progress: &mut dyn FnMut(u64, u64),
     bad_block_progress: &mut dyn FnMut(u32, u32),
+    router: Option<&mut HalRouter>,
 ) -> Result<BlankCheckResult, String> {
+    if let (Some(selection), Some(router)) = (sidecar_selection(state), router) {
+        let data = sidecar_read_chip(router, &selection, size, progress)?;
+        let first_non_blank = first_non_blank_byte(&data, start_addr);
+        return Ok(BlankCheckResult {
+            blank: first_non_blank.is_none(),
+            checked: match first_non_blank {
+                Some(pos) => pos - start_addr,
+                None => data.len() as u64,
+            },
+            first_non_blank,
+        });
+    }
+
     let total = size.saturating_sub(start_addr);
     if total == 0 {
         return Ok(BlankCheckResult {
@@ -554,7 +583,12 @@ pub fn read_chip(
     bad_block_mode: Option<&str>,
     progress: &mut dyn FnMut(u64, u64),
     bad_block_progress: &mut dyn FnMut(u32, u32),
+    router: Option<&mut HalRouter>,
 ) -> Result<Vec<u8>, String> {
+    if let (Some(selection), Some(router)) = (sidecar_selection(state), router) {
+        return sidecar_read_chip(router, &selection, size, progress);
+    }
+
     if state.ch34x.is_none() {
         if let Some(ser) = state.serprog.as_mut() {
             // serprog path: two-phase write-then-read, unchanged.
@@ -724,6 +758,7 @@ pub fn read_chip(
     Ok(out)
 }
 
+#[allow(clippy::too_many_arguments)] // signature required by the sidecar-routing milestone
 pub fn write_chip(
     state: &mut AppState,
     data: &[u8],
@@ -732,7 +767,12 @@ pub fn write_chip(
     bad_block_mode: Option<&str>,
     progress: &mut dyn FnMut(u64, u64),
     bad_block_progress: &mut dyn FnMut(u32, u32),
+    router: Option<&mut HalRouter>,
 ) -> Result<String, String> {
+    if let (Some(selection), Some(router)) = (sidecar_selection(state), router) {
+        return sidecar_write_chip(router, &selection, data, start_addr, progress);
+    }
+
     let total = data.len();
 
     if state.ch34x.is_none() {
@@ -935,7 +975,12 @@ pub fn verify_chip(
     bad_block_mode: Option<&str>,
     progress: &mut dyn FnMut(u64, u64),
     bad_block_progress: &mut dyn FnMut(u32, u32),
+    router: Option<&mut HalRouter>,
 ) -> Result<String, String> {
+    if let (Some(selection), Some(router)) = (sidecar_selection(state), router) {
+        return sidecar_verify_chip(router, &selection, data, start_addr, progress);
+    }
+
     let total = data.len() as u64;
 
     if state.ch34x.is_none() {

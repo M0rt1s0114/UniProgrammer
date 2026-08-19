@@ -47,6 +47,10 @@ pub struct AppState {
     pub lib: Option<chiplib::Chiplib>,
     pub connected_device: Option<String>,
     pub detected: Option<chiplib::ChipInfo>,
+    /// Selected sidecar adapter plugin used by the normal operation commands.
+    pub sidecar_adapter: Option<String>,
+    /// Selected sidecar device id used by the normal operation commands.
+    pub sidecar_device: Option<String>,
     /// Last serial-port snapshot. Serial probing only runs again when this
     /// list changes, so the hotplug poll never chats with every COM port.
     pub last_serial_ports: Vec<String>,
