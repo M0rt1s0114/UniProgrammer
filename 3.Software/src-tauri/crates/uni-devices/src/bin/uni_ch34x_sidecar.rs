@@ -1,12 +1,12 @@
-//! CH34X sidecar adapter process for the v1 sidecar protocol.
-//!
-//! It speaks framed JSON-RPC on stdin/stdout with the same 4-byte
-//! little-endian length + UTF-8 JSON framing as the serprog sidecar.
-//! Debug logs go to stderr only; stdout is reserved for protocol frames.
-//!
-//! The process is meant to be spawned later as a cold-start plugin by the
-//! uni-hal sidecar transport, so it only depends on the `uni-devices` crate
-//! and never on the app crate.
+// CH34X sidecar adapter process for the v1 sidecar protocol.
+//
+// It speaks framed JSON-RPC on stdin/stdout with the same 4-byte
+// little-endian length + UTF-8 JSON framing as the serprog sidecar.
+// Debug logs go to stderr only; stdout is reserved for protocol frames.
+//
+// The process is meant to be spawned later as a cold-start plugin by the
+// uni-hal sidecar transport, so it only depends on the `uni-devices` crate
+// and never on the app crate.
 
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use serde_json::{json, Value};
