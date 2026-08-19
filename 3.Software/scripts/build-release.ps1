@@ -41,7 +41,7 @@ try {
   Push-Location $root
   try {
     if ($Profile -eq 'libusb') {
-      npx tauri build --features hal-libusb
+      npx tauri build --features hal-libusb --config src-tauri/tauri.libusb.conf.json
     } else {
       npx tauri build
     }
