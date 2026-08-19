@@ -6,7 +6,7 @@ fn main() {
     // tauri-build 会因资源路径不存在而失败。
     let has_dll = std::path::Path::new("CH34X.DLL").exists();
     if !has_dll {
-        let override_config = r#"{"bundle":{"resources":["chiplib.bin"]}}"#;
+        let override_config = r#"{"bundle":{"resources":["chiplib.bin","plugins"]}}"#;
         env::set_var("TAURI_CONFIG", override_config);
         println!("cargo:rustc-env=TAURI_CONFIG={}", override_config);
     }
