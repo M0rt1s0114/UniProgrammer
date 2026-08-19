@@ -1,5 +1,6 @@
 # 编译期内置插件：UI WebView 宿主。
 # 当前随主程序一起编译，后续 L1 拆分时再改为独立插件包。
+# dist 由 3.Software 根目录的 npm build 生成
 [package]
 name = "uni.ui.webview"
 version = "1.0.0"

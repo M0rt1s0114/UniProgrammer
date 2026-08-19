@@ -1,18 +1,19 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
-import { dirname, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
-
-const __dirname = dirname(fileURLToPath(import.meta.url))
+import { fileURLToPath, URL } from 'node:url'
 
 export default defineConfig({
+  root: fileURLToPath(new URL('.', import.meta.url)),
   plugins: [vue()],
   resolve: {
     alias: {
-      '@': resolve(__dirname, 'src'), // 将 @ 映射到 src 目录
+      '@': fileURLToPath(new URL('./src', import.meta.url)), // 将 @ 映射到 src 目录
     },
   },
   clearScreen: false,
+  build: {
+    outDir: fileURLToPath(new URL('./dist', import.meta.url)),
+  },
   server: {
     port: 1420,
     strictPort: true,
