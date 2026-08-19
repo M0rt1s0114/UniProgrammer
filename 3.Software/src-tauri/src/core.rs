@@ -212,12 +212,22 @@ pub fn spi_read_status(dev: &Ch34xDevice) -> Result<u8, String> {
 /// actually answered (all-0xFF usually means the register does not exist).
 pub const NOR_BP_MASK_SR1: u8 = 0x04 | 0x08 | 0x10;
 
+/// BP bits encoded as SR1 BP0..BP2 plus 0x20 for BP4 (SR2 bit 6) when SR2 is
+/// valid (an all-0xFF SR2 read means the register does not exist).
+pub fn nor_bp_bits(sr1: u8, sr2: u8) -> u8 {
+    let mut bits = sr1 & NOR_BP_MASK_SR1;
+    if sr2 != 0xFF && (sr2 & 0x40) != 0 {
+        bits |= 0x20;
+    }
+    bits
+}
+
 #[derive(Clone, Serialize)]
 pub struct NorWriteProtectStatus {
     sr1: u8,
     sr2: u8,
     sr3: u8,
-    /// BP0..BP2 (SR1 bits 2-4) plus common BP4 (SR2 bit 6) when SR2 is valid.
+    /// SR1 BP0..BP2 plus 0x20 for BP4 (SR2 bit 6) when SR2 is valid.
     bp_bits: u8,
     write_protected: bool,
 }
@@ -227,10 +237,7 @@ pub fn nor_wp_snapshot(dev: &Ch34xDevice) -> Result<NorWriteProtectStatus, Strin
     let sr1 = spi_read_status_register(dev, 0x05)?;
     let sr2 = spi_read_status_register(dev, 0x35).unwrap_or(0xFF);
     let sr3 = spi_read_status_register(dev, 0x15).unwrap_or(0xFF);
-    let mut bp_bits = sr1 & NOR_BP_MASK_SR1;
-    if sr2 != 0xFF && (sr2 & 0x40) != 0 {
-        bp_bits |= 0x20;
-    }
+    let bp_bits = nor_bp_bits(sr1, sr2);
     Ok(NorWriteProtectStatus {
         sr1,
         sr2,
@@ -240,9 +247,10 @@ pub fn nor_wp_snapshot(dev: &Ch34xDevice) -> Result<NorWriteProtectStatus, Strin
     })
 }
 
-/// Clear block-protect bits in SR1. Kept separate from `spi_unprotect` so the
-/// erase path can keep its IMSProg-compatible behavior while the explicit
-/// "disable write protect" command reports what it changed.
+/// Clear SR1 BP0..BP2 and, when SR2 is valid and BP4 is set, clear SR2 BP4.
+/// Kept separate from `spi_unprotect` so the erase path can keep its
+/// IMSProg-compatible behavior while the explicit "disable write protect"
+/// command reports what it changed.
 pub fn nor_clear_block_protect(dev: &Ch34xDevice) -> Result<NorWriteProtectStatus, String> {
     let before = nor_wp_snapshot(dev)?;
     if before.bp_bits == 0 {
@@ -260,6 +268,15 @@ pub fn nor_clear_block_protect(dev: &Ch34xDevice) -> Result<NorWriteProtectStatu
     dev.spi_tx(&[0x01, sr1_new])?;
     dev.cs_high()?;
     spi_wait_ready(dev, 2000)?;
+    if before.sr2 != 0xFF && (before.sr2 & 0x40) != 0 {
+        spi_wait_ready(dev, 2000)?;
+        spi_write_enable(dev)?;
+        let sr2_new = before.sr2 & !0x40;
+        dev.cs_low()?;
+        dev.spi_tx(&[0x31, sr2_new])?;
+        dev.cs_high()?;
+        spi_wait_ready(dev, 2000)?;
+    }
     nor_wp_snapshot(dev)
 }
 
@@ -350,10 +367,7 @@ pub fn serprog_nor_wp_snapshot(
     let sr1 = ser.spi_command(&[0x05], 1)?[0];
     let sr2 = ser.spi_command(&[0x35], 1).map(|v| v[0]).unwrap_or(0xFF);
     let sr3 = ser.spi_command(&[0x15], 1).map(|v| v[0]).unwrap_or(0xFF);
-    let mut bp_bits = sr1 & NOR_BP_MASK_SR1;
-    if sr2 != 0xFF && (sr2 & 0x40) != 0 {
-        bp_bits |= 0x20;
-    }
+    let bp_bits = nor_bp_bits(sr1, sr2);
     Ok(NorWriteProtectStatus {
         sr1,
         sr2,
@@ -399,7 +413,7 @@ pub fn nor_wp_status(state: &mut AppState) -> Result<NorWriteProtectStatus, Stri
     }
 }
 
-/// Disable SPI NOR block-protect bits and report the SR1 transition.
+/// Disable SPI NOR block-protect bits and report the SR1/SR2 transition.
 pub fn nor_wp_disable(state: &mut AppState) -> Result<String, String> {
     let info = state
         .detected
@@ -414,13 +428,25 @@ pub fn nor_wp_disable(state: &mut AppState) -> Result<String, String> {
         let dev = open_ch34x_mode(state, DeviceMode::Spi)?;
         let before = nor_wp_snapshot(&dev)?;
         let after = nor_clear_block_protect(&dev)?;
-        Ok(format!(
-            "NOR 写保护已处理：SR1 0x{:02X} -> 0x{:02X}（保护位 {} -> {}）",
-            before.sr1,
-            after.sr1,
-            if before.write_protected { "开" } else { "关" },
-            if after.write_protected { "开" } else { "关" }
-        ))
+        if before.sr2 != after.sr2 {
+            Ok(format!(
+                "NOR 写保护已处理：SR1 0x{:02X} -> 0x{:02X}，SR2 0x{:02X} -> 0x{:02X}（保护位 {} -> {}）",
+                before.sr1,
+                after.sr1,
+                before.sr2,
+                after.sr2,
+                if before.write_protected { "开" } else { "关" },
+                if after.write_protected { "开" } else { "关" }
+            ))
+        } else {
+            Ok(format!(
+                "NOR 写保护已处理：SR1 0x{:02X} -> 0x{:02X}（保护位 {} -> {}）",
+                before.sr1,
+                after.sr1,
+                if before.write_protected { "开" } else { "关" },
+                if after.write_protected { "开" } else { "关" }
+            ))
+        }
     } else if let Some(ser) = state.serprog.as_mut() {
         let before = serprog_nor_wp_snapshot(ser)?;
         if !before.write_protected {
@@ -434,10 +460,15 @@ pub fn nor_wp_disable(state: &mut AppState) -> Result<String, String> {
         ser.spi_command(&[0x06], 0)?; // WREN (modern parts)
         ser.spi_command(&[0x01, sr1_new], 0)?; // WRSR
         serprog_wait_ready(ser, 2000)?;
+        if before.sr2 != 0xFF && (before.sr2 & 0x40) != 0 {
+            ser.spi_command(&[0x06], 0)?; // WREN again
+            ser.spi_command(&[0x31, before.sr2 & !0x40], 0)?; // WRSR2
+            serprog_wait_ready(ser, 2000)?;
+        }
         let after = serprog_nor_wp_snapshot(ser)?;
         Ok(format!(
-            "NOR 写保护已解除：SR1 0x{:02X} -> 0x{:02X}",
-            before.sr1, after.sr1
+            "NOR 写保护已解除：SR1 0x{:02X} -> 0x{:02X}，SR2 0x{:02X} -> 0x{:02X}",
+            before.sr1, after.sr1, before.sr2, after.sr2
         ))
     } else {
         Err("没有可用的编程器".into())
@@ -842,4 +873,38 @@ pub fn set_at45_page_mode(
         raw,
         binary_page: (raw & 0x01) != 0,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn nor_bp_bits_no_protection_returns_zero() {
+        assert_eq!(nor_bp_bits(0x00, 0x00), 0);
+        assert_eq!(nor_bp_bits(0xE3, 0x00), 0);
+    }
+
+    #[test]
+    fn nor_bp_bits_masks_sr1_bp0_bp2() {
+        assert_eq!(nor_bp_bits(0x04, 0x00), 0x04);
+        assert_eq!(nor_bp_bits(0x08, 0x00), 0x08);
+        assert_eq!(nor_bp_bits(0x10, 0x00), 0x10);
+        assert_eq!(nor_bp_bits(0x1C, 0x00), NOR_BP_MASK_SR1);
+        assert_eq!(nor_bp_bits(0xFF, 0x00), NOR_BP_MASK_SR1);
+    }
+
+    #[test]
+    fn nor_bp_bits_adds_bp4_when_sr2_valid() {
+        let sr1_bp = 0x04;
+        assert_eq!(nor_bp_bits(sr1_bp, 0x40), 0x20 | sr1_bp);
+        assert_eq!(nor_bp_bits(0x1C, 0x40), 0x20 | 0x1C);
+        assert_eq!(nor_bp_bits(sr1_bp, 0x42), 0x20 | sr1_bp);
+    }
+
+    #[test]
+    fn nor_bp_bits_ignores_sr2_ff() {
+        assert_eq!(nor_bp_bits(0x1C, 0xFF), 0x1C);
+        assert_eq!(nor_bp_bits(0x00, 0xFF), 0);
+    }
 }
