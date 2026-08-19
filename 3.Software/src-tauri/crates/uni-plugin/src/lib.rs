@@ -475,6 +475,9 @@ pub struct LoadedPlugin {
     pub manifest: PluginManifest,
     pub path: PathBuf,
     pub enabled: bool,
+    /// True when the plugin was loaded from `plugins/builtin/` and is part of
+    /// the trusted built-in set shipped with the app.
+    pub builtin: bool,
 }
 
 /// Return the manifest files that exist in `dir`, in preferred load order:
@@ -489,6 +492,69 @@ pub fn manifest_candidates(dir: &Path) -> Vec<PathBuf> {
         .map(|name| dir.join(name))
         .filter(|path| path.is_file())
         .collect()
+}
+
+/// Persisted enable/disable state for non-required plugins.
+///
+/// L2 cold plugins are loaded at startup, so the user's choice must survive a
+/// restart. The file lives next to the `plugins/` scan root:
+/// `<root>/plugin-state.toml`.
+pub fn plugin_state_path(root: &Path) -> PathBuf {
+    root.join("plugin-state.toml")
+}
+
+/// Read `<root>/plugin-state.toml` as a `plugin name -> enabled` map.
+///
+/// A missing or unreadable file yields an empty map (everything keeps its
+/// default); malformed entries are skipped best-effort.
+pub fn load_plugin_state(root: &Path) -> HashMap<String, bool> {
+    let path = plugin_state_path(root);
+    let text = match fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(_) => return HashMap::new(),
+    };
+    let Ok(value) = text.parse::<toml::Value>() else {
+        eprintln!(
+            "[uni-plugin] ignoring malformed plugin state file {}",
+            path.display()
+        );
+        return HashMap::new();
+    };
+
+    let mut state = HashMap::new();
+    if let Some(table) = value.get("plugins").and_then(toml::Value::as_table) {
+        for (name, enabled) in table {
+            if let Some(enabled) = enabled.as_bool() {
+                state.insert(name.clone(), enabled);
+            } else {
+                eprintln!(
+                    "[uni-plugin] ignoring non-boolean enabled value for plugin '{name}' in {}",
+                    path.display()
+                );
+            }
+        }
+    }
+    state
+}
+
+/// Persist the enabled flag of every non-required plugin.
+pub fn save_plugin_state(root: &Path, manager: &PluginManager) -> Result<(), String> {
+    let mut plugins = toml::map::Map::new();
+    for plugin in &manager.plugins {
+        if plugin.manifest.layer != PluginLayer::Required {
+            plugins.insert(
+                plugin.manifest.name.clone(),
+                toml::Value::Boolean(plugin.enabled),
+            );
+        }
+    }
+
+    let mut root_table = toml::map::Map::new();
+    root_table.insert("plugins".to_string(), toml::Value::Table(plugins));
+    let text = toml::to_string_pretty(&toml::Value::Table(root_table))
+        .map_err(|e| format!("failed to encode plugin state: {e}"))?;
+    fs::write(plugin_state_path(root), text)
+        .map_err(|e| format!("failed to write plugin state: {e}"))
 }
 
 /// In-memory plugin registry.
@@ -511,12 +577,15 @@ impl PluginManager {
         let mut plugins = Vec::new();
         let mut errors = Vec::new();
         let mut first_path_by_name: HashMap<String, String> = HashMap::new();
+        let enabled_state = load_plugin_state(root);
 
         if fs::read_dir(&plugins_dir).is_err() {
             return PluginManager { plugins, errors };
         }
 
-        for scan_dir in [plugins_dir.clone(), plugins_dir.join("builtin")] {
+        let builtin_dir = plugins_dir.join("builtin");
+        for scan_dir in [plugins_dir.clone(), builtin_dir.clone()] {
+            let is_builtin_scan = scan_dir == builtin_dir;
             let entries = match fs::read_dir(&scan_dir) {
                 Ok(entries) => entries,
                 Err(_) => continue,
@@ -552,11 +621,26 @@ impl PluginManager {
                                 ),
                             ));
                         } else {
+                            let enabled = if manifest.layer == PluginLayer::Required {
+                                true
+                            } else if is_builtin_scan {
+                                // Built-in plugins are part of the shipped
+                                // product and start enabled; the persisted
+                                // state may opt them out explicitly.
+                                enabled_state.get(&manifest.name).copied().unwrap_or(true)
+                            } else {
+                                // Third-party cold/hot plugins stay disabled
+                                // until the user enables them in the plugin
+                                // manager.
+                                enabled_state.get(&manifest.name).copied().unwrap_or(false)
+                            };
+
                             first_path_by_name.insert(manifest.name.clone(), manifest_path_text);
                             plugins.push(LoadedPlugin {
                                 manifest,
                                 path: plugin_dir,
-                                enabled: false,
+                                enabled,
+                                builtin: is_builtin_scan,
                             });
                         }
                     }
@@ -1169,6 +1253,7 @@ provider = "builtin"
             },
             path: PathBuf::from(name),
             enabled: false,
+            builtin: false,
         }
     }
 
@@ -1678,6 +1763,82 @@ entry = "plugin.exe"
             manager.plugins[0].manifest.provider.as_deref(),
             Some("builtin")
         );
+        assert!(manager.plugins[0].builtin);
+        assert!(manager.plugins[0].enabled);
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn builtin_cold_plugins_start_enabled_but_can_be_disabled_in_state() {
+        let root = test_root("builtin-cold");
+        let manifest = r#"
+[package]
+name = "uni.adapter.ch34x"
+version = "1.0.0"
+plugin_api = 1
+kind = "adapter"
+layer = "cold"
+entry = "uni_ch34x_sidecar"
+provider = "builtin"
+
+[capabilities.spi]
+enabled = true
+pins = { cs = "CS0", sck = "SCK", mosi = "MOSI", miso = "MISO" }
+max_frame = 4092
+max_freq_khz = 60000
+"#;
+        write_builtin_manifest(&root, "uni.adapter.ch34x", manifest);
+
+        let manager = PluginManager::load(&root);
+        assert_eq!(manager.plugins.len(), 1);
+        assert!(manager.plugins[0].builtin);
+        assert!(manager.plugins[0].enabled);
+
+        save_plugin_state(&root, &manager).expect("state should save");
+        let state = load_plugin_state(&root);
+        assert_eq!(state.get("uni.adapter.ch34x"), Some(&true));
+
+        let mut disabled = manager;
+        disabled
+            .disable("uni.adapter.ch34x")
+            .expect("cold plugin can be disabled");
+        save_plugin_state(&root, &disabled).expect("disabled state should save");
+        let reloaded = PluginManager::load(&root);
+        assert!(!reloaded.plugins[0].enabled);
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn third_party_cold_plugins_stay_disabled_until_state_enables_them() {
+        let root = test_root("cold-state");
+        let manifest = r#"
+[package]
+name = "vnd.example.programmer"
+version = "0.2.0"
+plugin_api = 1
+kind = "adapter"
+layer = "cold"
+entry = "plugin.exe"
+
+[capabilities.spi]
+enabled = true
+pins = { cs = "CS0", sck = "SCK", mosi = "MOSI", miso = "MISO" }
+max_frame = 4092
+max_freq_khz = 60000
+"#;
+        write_manifest(&root, "vnd.example.programmer", manifest);
+        let mut manager = PluginManager::load(&root);
+        assert!(!manager.plugins[0].enabled);
+
+        manager
+            .enable("vnd.example.programmer")
+            .expect("third-party cold plugin should enable");
+        save_plugin_state(&root, &manager).expect("state should save");
+
+        let reloaded = PluginManager::load(&root);
+        assert!(reloaded.plugins[0].enabled);
 
         let _ = fs::remove_dir_all(&root);
     }

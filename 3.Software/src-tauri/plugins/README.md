@@ -21,6 +21,18 @@ plugins/
 新插件默认不启用；请在 设置 → 插件 中启用并确认其能力声明。
 必需插件始终启用，不能禁用。
 
+## L2 冷启动插件
+
+`layer = "cold"` 的编程器适配器在启用/禁用后**必须重启程序**才会生效。
+用户的启用状态保存在 `plugin-state.toml`（位于 `plugins/` 同级目录），
+启动时随插件目录一起加载。
+
+`plugins/builtin/uni.adapter.ch34x/` 是随程序发布的内置 L2 示例：
+manifest 指向 sidecar 进程 `uni_ch34x_sidecar`，由 uni-hal 在启动时拉起、
+探测并注册到“Sidecar 插件”面板。内置插件默认启用，也可以在插件管理器
+中显式禁用。构建流程会把编译出的 sidecar 二进制复制进该插件目录，
+保证 `plugins/` 资源树自包含。
+
 ## UI 插件与 `unipkg://` 协议
 
 `kind = "ui"` 的插件是一个自包含的静态 Web 包。主程序注册了

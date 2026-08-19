@@ -805,14 +805,36 @@ fn plugin_builtin_modules() -> Result<Vec<BuiltinModule>, String> {
 fn plugin_enable(state: State<'_, Mutex<PluginManager>>, name: String) -> Result<String, String> {
     let mut manager = state.lock().map_err(|e| e.to_string())?;
     manager.enable(&name)?;
-    Ok(format!("plugin enabled: {name}"))
+    plugin::save_plugin_state(&exe_dir(), &manager)?;
+    let cold = manager
+        .plugins
+        .iter()
+        .find(|p| p.manifest.name == name)
+        .map(|p| p.manifest.layer == plugin::PluginLayer::Cold)
+        .unwrap_or(false);
+    if cold {
+        Ok(format!("plugin enabled: {name}（冷启动插件：重启后生效）"))
+    } else {
+        Ok(format!("plugin enabled: {name}"))
+    }
 }
 
 #[tauri::command]
 fn plugin_disable(state: State<'_, Mutex<PluginManager>>, name: String) -> Result<String, String> {
     let mut manager = state.lock().map_err(|e| e.to_string())?;
     manager.disable(&name)?;
-    Ok(format!("plugin disabled: {name}"))
+    plugin::save_plugin_state(&exe_dir(), &manager)?;
+    let cold = manager
+        .plugins
+        .iter()
+        .find(|p| p.manifest.name == name)
+        .map(|p| p.manifest.layer == plugin::PluginLayer::Cold)
+        .unwrap_or(false);
+    if cold {
+        Ok(format!("plugin disabled: {name}（冷启动插件：重启后生效）"))
+    } else {
+        Ok(format!("plugin disabled: {name}"))
+    }
 }
 
 #[tauri::command]

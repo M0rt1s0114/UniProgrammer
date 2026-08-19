@@ -8,7 +8,7 @@
 use crate::uni_hal::{self, SidecarClient, SidecarDevice};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
-use uni_plugin::{PluginKind, PluginManager};
+use uni_plugin::{LoadedPlugin, PluginKind, PluginManager};
 
 /// A successfully spawned and probed sidecar adapter plugin.
 pub struct LoadedAdapter {
@@ -40,6 +40,54 @@ pub struct HalRouter {
     pub errors: Vec<(String, String)>,
 }
 
+/// Resolve the executable for an adapter plugin.
+///
+/// The package-local path is authoritative. Built-in plugin packages may keep
+/// only a manifest in the source tree and rely on the binary being copied into
+/// the package before bundling; in a debug checkout the same binary is found
+/// under `target/debug/` so `npm run dev` works without manual copying.
+fn resolve_adapter_entry(loaded: &LoadedPlugin, app_root: &Path) -> Option<PathBuf> {
+    let entry = PathBuf::from(&loaded.manifest.entry);
+    let file_name = entry.file_name().map(Path::new);
+
+    let mut candidates = vec![loaded.path.join(&entry)];
+    if cfg!(windows) {
+        candidates.push(loaded.path.join(entry.clone().with_extension("exe")));
+    }
+
+    if loaded.builtin {
+        if let Some(file_name) = file_name {
+            let mut bundle_candidates = vec![
+                app_root.join("sidecars").join(file_name),
+                app_root.join("target").join("debug").join(file_name),
+                app_root.join("target").join("release").join(file_name),
+            ];
+            if cfg!(windows) {
+                bundle_candidates.push(
+                    app_root
+                        .join("sidecars")
+                        .join(format!("{}.exe", file_name.to_string_lossy())),
+                );
+                bundle_candidates.push(
+                    app_root
+                        .join("target")
+                        .join("debug")
+                        .join(format!("{}.exe", file_name.to_string_lossy())),
+                );
+                bundle_candidates.push(
+                    app_root
+                        .join("target")
+                        .join("release")
+                        .join(format!("{}.exe", file_name.to_string_lossy())),
+                );
+            }
+            candidates.extend(bundle_candidates);
+        }
+    }
+
+    candidates.into_iter().find(|candidate| candidate.is_file())
+}
+
 impl HalRouter {
     /// Spawn every enabled adapter plugin and probe its devices.
     ///
@@ -47,7 +95,6 @@ impl HalRouter {
     /// probe failure) are recorded in [`HalRouter::errors`] and skipped; they
     /// never abort the whole startup.
     pub fn start(manager: &mut PluginManager, app_root: &Path) -> Self {
-        let _ = app_root;
         let mut adapters = Vec::new();
         let mut errors = Vec::new();
 
@@ -56,14 +103,20 @@ impl HalRouter {
                 continue;
             }
 
-            let entry_path = loaded.path.join(&loaded.manifest.entry);
-            if !entry_path.exists() {
-                errors.push((
-                    loaded.manifest.name.clone(),
-                    format!("adapter entry does not exist: {}", entry_path.display()),
-                ));
-                continue;
-            }
+            let entry_path = match resolve_adapter_entry(loaded, app_root) {
+                Some(path) => path,
+                None => {
+                    errors.push((
+                        loaded.manifest.name.clone(),
+                        format!(
+                            "adapter entry does not exist: {} (package dir: {})",
+                            loaded.manifest.entry,
+                            loaded.path.display()
+                        ),
+                    ));
+                    continue;
+                }
+            };
             if !entry_path.is_file() {
                 errors.push((
                     loaded.manifest.name.clone(),
@@ -219,5 +272,101 @@ impl HalRouter {
 
         self.adapters.clear();
         self.sessions.clear();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    fn test_root(tag: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "uniprog-hal-router-{tag}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn manifest(name: &str, entry: &str) -> String {
+        format!(
+            r#"
+[package]
+name = "{name}"
+version = "1.0.0"
+plugin_api = 1
+kind = "adapter"
+layer = "cold"
+entry = "{entry}"
+provider = "builtin"
+
+[dependencies]
+
+[permissions]
+
+[capabilities]
+"#
+        )
+    }
+
+    #[test]
+    fn resolves_package_local_entry_with_exe_suffix_on_windows() {
+        let root = test_root("package-entry");
+        let plugin_dir = root
+            .join("plugins")
+            .join("builtin")
+            .join("uni.adapter.test");
+        fs::create_dir_all(&plugin_dir).unwrap();
+        let exe_name = if cfg!(windows) { "tool.exe" } else { "tool" };
+        fs::write(plugin_dir.join(exe_name), b"x").unwrap();
+        fs::write(
+            plugin_dir.join("unipkg.toml"),
+            manifest("uni.adapter.test", "tool"),
+        )
+        .unwrap();
+
+        let manager = PluginManager::load(&root);
+        let loaded = &manager.plugins[0];
+        let resolved = resolve_adapter_entry(loaded, &root).expect("entry should resolve");
+        assert_eq!(resolved, plugin_dir.join(exe_name));
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn builtin_entry_falls_back_to_app_sidecars_directory() {
+        let root = test_root("sidecars-fallback");
+        let plugin_dir = root
+            .join("plugins")
+            .join("builtin")
+            .join("uni.adapter.test");
+        fs::create_dir_all(&plugin_dir).unwrap();
+        fs::write(
+            plugin_dir.join("unipkg.toml"),
+            manifest("uni.adapter.test", "missing-tool"),
+        )
+        .unwrap();
+
+        let sidecars = root.join("sidecars");
+        fs::create_dir_all(&sidecars).unwrap();
+        let exe_name = if cfg!(windows) {
+            "missing-tool.exe"
+        } else {
+            "missing-tool"
+        };
+        fs::write(sidecars.join(exe_name), b"x").unwrap();
+
+        let manager = PluginManager::load(&root);
+        let loaded = &manager.plugins[0];
+        let resolved = resolve_adapter_entry(loaded, &root).expect("fallback should resolve");
+        assert_eq!(resolved, sidecars.join(exe_name));
+
+        let _ = fs::remove_dir_all(&root);
     }
 }

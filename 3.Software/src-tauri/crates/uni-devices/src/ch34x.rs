@@ -799,7 +799,7 @@ mod dll_hal {
     use std::cell::RefCell;
     use std::ffi::CString;
     use std::os::windows::ffi::OsStrExt;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
 
     use windows::core::{PCSTR, PCWSTR};
     use windows::Win32::Foundation::{FreeLibrary, HMODULE};
@@ -882,8 +882,14 @@ mod dll_hal {
                 }
             }
             if let Ok(exe) = std::env::current_exe() {
-                if let Some(dir) = exe.parent() {
-                    paths.push(dir.to_path_buf());
+                // Search the executable directory and up to four ancestors so
+                // a sidecar placed under plugins/builtin/<name>/ still finds
+                // the DLL shipped next to the main executable.
+                let mut ancestor = exe.parent().map(Path::to_path_buf);
+                for _ in 0..4 {
+                    let Some(dir) = ancestor else { break };
+                    paths.push(dir.clone());
+                    ancestor = dir.parent().map(Path::to_path_buf);
                 }
             }
             for base in &paths {
