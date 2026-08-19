@@ -78,7 +78,7 @@ type(scope): summary
 feat(hal): add Windows DLL backend
 fix(serprog): correct S_BUSTYPE and O_SPIOP opcodes
 refactor(chiplib): replace XML fallback with typed loader
-chore(release): 0.4.0-alpha.8
+chore(release): 0.4.0-alpha.9
 ```
 
 破坏性变更使用 `!` 或 `BREAKING CHANGE:` 脚注：
@@ -175,7 +175,7 @@ cargo test
 ## 版本管理
 
 - 语义化版本 2.0.0
-- Git tag 使用 `v` 前缀：`v0.4.0-alpha.8`
+- Git tag 使用 `v` 前缀：`v0.4.0-alpha.9`
 - 预发布版本：`-alpha.N`、`-beta.N`、`-rc.N`
 - 推送 `v*` tag 会触发 release workflow
 
