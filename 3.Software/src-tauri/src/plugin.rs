@@ -172,6 +172,116 @@ impl CapabilitySet {
     }
 }
 
+/// A compiled-in module of the `uni-base` registry.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct BuiltinModule {
+    pub name: String,
+    pub version: String,
+    pub interface_version: u32,
+    pub capabilities: CapabilitySet,
+    pub description: String,
+}
+
+/// Compiled-in `uni-base` modules.
+///
+/// This registry is descriptive for now: it lets dependency resolution
+/// recognize the capabilities built into the current program, without running
+/// them as separate plugin processes.
+pub fn builtin_modules() -> Vec<BuiltinModule> {
+    fn module(name: &str, capabilities: CapabilitySet, description: &str) -> BuiltinModule {
+        BuiltinModule {
+            name: name.to_string(),
+            version: "1.0.0".to_string(),
+            interface_version: PLUGIN_API_VERSION,
+            capabilities,
+            description: description.to_string(),
+        }
+    }
+
+    fn spi_capability() -> CapabilitySet {
+        CapabilitySet {
+            spi: Some(SpiCapability {
+                pins: None,
+                max_frame: 4092,
+                max_freq_khz: 60_000,
+            }),
+            ..CapabilitySet::default()
+        }
+    }
+
+    vec![
+        module(
+            "uni.core",
+            CapabilitySet::default(),
+            "应用状态、操作流水线与插件管理器核心",
+        ),
+        module(
+            "uni.hal",
+            CapabilitySet::default(),
+            "硬件抽象层路由与能力协商",
+        ),
+        module(
+            "uni.chipdb",
+            CapabilitySet::default(),
+            "芯片数据库查询、导入与统计",
+        ),
+        module(
+            "uni.hexview",
+            CapabilitySet::default(),
+            "十六进制视图与数据可视化",
+        ),
+        module(
+            "uni.proto.spi-nor",
+            CapabilitySet::default(),
+            "SPI NOR Flash 协议",
+        ),
+        module(
+            "uni.proto.spi-nand",
+            CapabilitySet::default(),
+            "SPI NAND Flash 协议",
+        ),
+        module(
+            "uni.proto.spi-eeprom",
+            CapabilitySet::default(),
+            "SPI EEPROM 协议",
+        ),
+        module(
+            "uni.proto.data45",
+            CapabilitySet::default(),
+            "DataFlash AT45 协议",
+        ),
+        module("uni.proto.i2c", CapabilitySet::default(), "I2C 芯片协议"),
+        module(
+            "uni.proto.microwire",
+            CapabilitySet::default(),
+            "MicroWire 芯片协议",
+        ),
+        module("uni.hal.ch341", spi_capability(), "CH341A 编程器适配器"),
+        module("uni.hal.ch347", spi_capability(), "CH347T/F 编程器适配器"),
+        module("uni.hal.serprog", spi_capability(), "serprog 编程器适配器"),
+    ]
+}
+
+/// Look up a built-in module version by exact name.
+pub fn builtin_version(name: &str) -> Option<&'static str> {
+    match name {
+        "uni.core"
+        | "uni.hal"
+        | "uni.chipdb"
+        | "uni.hexview"
+        | "uni.proto.spi-nor"
+        | "uni.proto.spi-nand"
+        | "uni.proto.spi-eeprom"
+        | "uni.proto.data45"
+        | "uni.proto.i2c"
+        | "uni.proto.microwire"
+        | "uni.hal.ch341"
+        | "uni.hal.ch347"
+        | "uni.hal.serprog" => Some("1.0.0"),
+        _ => None,
+    }
+}
+
 /// Pick the stricter (smaller) positive limit. A zero side means "not
 /// reported"; in that case the other side is kept.
 fn intersect_limit(eff: usize, decl: usize) -> usize {
@@ -362,12 +472,16 @@ impl PluginManager {
 
     /// Validate and resolve the dependency graph for `name`.
     ///
-    /// `uni-base` is built-in and treated as available at
-    /// [`UNI_BASE_API_VERSION`]. Other dependencies must reference loaded
-    /// plugins and satisfy the semver requirement (`^`, `~`, exact, ...).
+    /// Dependency names are first looked up in the built-in `uni-base`
+    /// registry (see [`builtin_modules`]) and then among loaded plugins.
+    /// `uni-base` itself remains a virtual meta dependency: it is checked
+    /// against [`UNI_BASE_API_VERSION`] and expands implicitly to the whole
+    /// builtin registry, so no individual builtin entries are appended to the
+    /// returned list for a `uni-base` dependency.
     ///
-    /// Returns the resolved plugin names in dependency-first order, including
-    /// `name` itself. A dependency cycle is reported as a readable path.
+    /// Returns the resolved loaded-plugin names in dependency-first order,
+    /// including `name` itself. A dependency cycle is reported as a readable
+    /// path.
     pub fn resolve_dependencies(&self, name: &str) -> Result<Vec<String>, String> {
         let mut resolved = Vec::new();
         let mut visiting = Vec::new();
@@ -391,6 +505,15 @@ impl PluginManager {
 
             visiting.push(name.to_string());
 
+            // Builtin modules are compiled into the current program and have no
+            // manifest dependencies of their own, so they resolve directly.
+            if builtin_version(name).is_some() {
+                visiting.pop();
+                visited.insert(name.to_string());
+                resolved.push(name.to_string());
+                return Ok(());
+            }
+
             let plugin = manager
                 .plugins
                 .iter()
@@ -412,6 +535,15 @@ impl PluginManager {
                         return Err(format!(
                             "plugin '{name}' requires uni-base '{}' but built-in version is {UNI_BASE_API_VERSION}",
                             dep.requirement
+                        ));
+                    }
+                } else if let Some(version) = builtin_version(&dep.name) {
+                    let available = semver::Version::parse(version)
+                        .expect("builtin module versions must be valid semver");
+                    if !requirement.matches(&available) {
+                        return Err(format!(
+                            "依赖 {} 需要 {}，当前内置版本为 {}",
+                            dep.name, dep.requirement, version
                         ));
                     }
                 } else {
@@ -1118,6 +1250,62 @@ enabled = true
             .resolve_dependencies("dep-version")
             .expect_err("unsatisfied plugin version must fail");
         assert!(err.contains("requires only-uni-base '~0.9'"), "{err}");
+    }
+
+    #[test]
+    fn every_builtin_module_resolves_and_reports_its_version() {
+        let manager = PluginManager {
+            plugins: Vec::new(),
+            errors: Vec::new(),
+        };
+
+        let modules = builtin_modules();
+        assert_eq!(modules.len(), 13);
+        for module in &modules {
+            let resolved = manager
+                .resolve_dependencies(&module.name)
+                .unwrap_or_else(|e| panic!("builtin {} should resolve: {e}", module.name));
+            assert_eq!(resolved, vec![module.name.clone()]);
+            assert_eq!(builtin_version(&module.name), Some(module.version.as_str()));
+        }
+    }
+
+    #[test]
+    fn builtin_dependency_versions_are_checked() {
+        let manager = PluginManager {
+            plugins: vec![
+                loaded_plugin(
+                    "uses-hal-v1",
+                    "1.0.0",
+                    vec![Dependency {
+                        name: "uni.hal".to_string(),
+                        requirement: "^1".to_string(),
+                    }],
+                ),
+                loaded_plugin(
+                    "uses-hal-v2",
+                    "1.0.0",
+                    vec![Dependency {
+                        name: "uni.hal".to_string(),
+                        requirement: "^2".to_string(),
+                    }],
+                ),
+            ],
+            errors: Vec::new(),
+        };
+
+        let resolved = manager
+            .resolve_dependencies("uses-hal-v1")
+            .expect("uni.hal ^1 must resolve");
+        assert_eq!(resolved, vec!["uses-hal-v1"]);
+
+        let err = manager
+            .resolve_dependencies("uses-hal-v2")
+            .expect_err("uni.hal ^2 must fail");
+        assert!(
+            err.contains("依赖 uni.hal 需要 ^2，当前内置版本为 1.0.0"),
+            "unexpected error: {err}"
+        );
     }
 
     #[test]

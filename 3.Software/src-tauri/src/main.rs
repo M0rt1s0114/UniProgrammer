@@ -21,7 +21,7 @@ use core::{
     BbmLutResult, ChipDetectInfo, ChipDetectResult, NorWriteProtectStatus, RawBytesResult,
 };
 use operations::BlankCheckResult;
-use plugin::PluginManager;
+use plugin::{BuiltinModule, PluginManager};
 use serde::Serialize;
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -695,6 +695,11 @@ fn plugin_list(state: State<'_, Mutex<PluginManager>>) -> Result<Vec<PluginListE
 }
 
 #[tauri::command]
+fn plugin_builtin_modules() -> Result<Vec<BuiltinModule>, String> {
+    Ok(plugin::builtin_modules())
+}
+
+#[tauri::command]
 fn plugin_enable(state: State<'_, Mutex<PluginManager>>, name: String) -> Result<String, String> {
     let mut manager = state.lock().map_err(|e| e.to_string())?;
     manager.enable(&name)?;
@@ -776,6 +781,7 @@ fn main() {
             load_settings,
             save_settings,
             plugin_list,
+            plugin_builtin_modules,
             plugin_enable,
             plugin_disable,
         ])
