@@ -246,8 +246,54 @@ async fn scan_programmers(
 }
 
 #[tauri::command]
-async fn detect_chip(state: State<'_, Mutex<AppState>>) -> Result<ChipDetectResult, String> {
+async fn detect_chip(
+    state: State<'_, Mutex<AppState>>,
+    router_state: State<'_, Mutex<HalRouter>>,
+) -> Result<ChipDetectResult, String> {
     let mut s = state.lock().map_err(|e| e.to_string())?;
+
+    if s.sidecar_adapter.is_some() && s.sidecar_device.is_some() {
+        let selection = SidecarSelection {
+            adapter: s.sidecar_adapter.clone().unwrap(),
+            device_id: s.sidecar_device.clone().unwrap(),
+        };
+        let id = {
+            let mut router = router_state.lock().map_err(|e| e.to_string())?;
+            let mut nor = SidecarNor::open(&mut router, &selection.adapter, &selection.device_id)?;
+            let id = nor.read_id()?;
+            nor.close()?;
+            id
+        };
+        let id_str = format!("{:02X}{:02X}{:02X}", id[0], id[1], id[2]);
+
+        if let Some(info) = get_lib(&s)?.find_by_id(&id_str) {
+            let detect_info = chip_info_to_detect(&info);
+            let detected = info.clone();
+            let text = format!(
+                "✅ 芯片匹配成功！\n厂商: {}\n型号: {}\n容量: {}\n页大小: {} 字节\n协议: {}\nJEDEC: {}\n（设备: Sidecar {}/{}）",
+                info.vendor,
+                info.model,
+                core::format_human_size(info.size),
+                info.page,
+                info.protocol,
+                id_str,
+                selection.adapter,
+                selection.device_id
+            );
+            s.detected = Some(detected);
+            return Ok(ChipDetectResult {
+                text,
+                info: Some(detect_info),
+            });
+        }
+
+        s.detected = None;
+        return Ok(ChipDetectResult {
+            text: format!("❌ Sidecar 芯片 ID {} 未在芯片库中找到", id_str),
+            info: None,
+        });
+    }
+
     core::detect_chip(&mut s)
 }
 
@@ -786,11 +832,9 @@ fn sidecar_select(
     adapter: String,
     device: String,
 ) -> Result<String, String> {
-    let session_id = {
-        let mut router = router_state.lock().map_err(|e| e.to_string())?;
-        router.open(&adapter, &device)?
-    };
     let mut s = state.lock().map_err(|e| e.to_string())?;
+    let mut router = router_state.lock().map_err(|e| e.to_string())?;
+    let session_id = router.open(&adapter, &device)?;
     s.sidecar_adapter = Some(adapter);
     s.sidecar_device = Some(device);
     Ok(session_id)
@@ -801,10 +845,8 @@ fn sidecar_unselect(
     state: State<'_, Mutex<AppState>>,
     router_state: State<'_, Mutex<HalRouter>>,
 ) -> Result<(), String> {
-    let previous = {
-        let mut s = state.lock().map_err(|e| e.to_string())?;
-        (s.sidecar_adapter.take(), s.sidecar_device.take())
-    };
+    let mut s = state.lock().map_err(|e| e.to_string())?;
+    let previous = (s.sidecar_adapter.take(), s.sidecar_device.take());
     if let (Some(adapter), Some(device)) = previous {
         if let Ok(mut router) = router_state.lock() {
             let _ = router.close(&adapter, &device);

@@ -8,6 +8,8 @@ import {
   listSidecarAdapters,
   readSidecarChip,
   readSidecarId,
+  selectSidecarAdapter,
+  unselectSidecarAdapter,
   verifySidecarChip,
   writeSidecarChip,
   type SidecarAdapterEntry,
@@ -72,6 +74,45 @@ async function sidecarReadId() {
     store.addLog(msg, 'success')
   } catch (error) {
     store.addLog(`读取 Sidecar 芯片 ID 失败: ${String(error)}`, 'error')
+  } finally {
+    sidecarBusy.value = false
+  }
+}
+
+async function sidecarSelect() {
+  const selection = parseSidecarSelection(sidecarSelected.value)
+  if (!selection) {
+    store.addLog('未选择 Sidecar 设备', 'warn')
+    return
+  }
+  sidecarBusy.value = true
+  try {
+    const msg = await selectSidecarAdapter(selection.adapter, selection.device)
+    store.status = 'success'
+    store.connectedDevice = `Sidecar · ${selection.adapter} / ${selection.device}`
+    store.addLog(msg, 'success')
+    await spiNor.detectChip()
+  } catch (error) {
+    store.addLog(`选定 Sidecar 编程器失败: ${String(error)}`, 'error')
+  } finally {
+    sidecarBusy.value = false
+  }
+}
+
+async function sidecarUnselect() {
+  sidecarBusy.value = true
+  try {
+    await unselectSidecarAdapter()
+    store.addLog('已取消选择 Sidecar 编程器', 'success')
+    if (store.connectedDevice.startsWith('Sidecar ·')) {
+      store.status = 'error'
+      store.connectedDevice = ''
+      store.chipDetected = false
+      store.detectedChipSize = 0
+      store.chipDetails = null
+    }
+  } catch (error) {
+    store.addLog(`取消选择 Sidecar 编程器失败: ${String(error)}`, 'error')
   } finally {
     sidecarBusy.value = false
   }
@@ -728,6 +769,25 @@ onMounted(async () => {
           </option>
         </template>
       </select>
+
+      <div style="display: flex; gap: 6px; margin-top: 6px">
+        <button
+          class="btn btn-secondary btn-sm"
+          style="flex: 1"
+          :disabled="sidecarBusy || !sidecarSelected"
+          @click="sidecarSelect"
+        >
+          {{ t('sidecar.select') }}
+        </button>
+        <button
+          class="btn btn-secondary btn-sm"
+          style="flex: 1"
+          :disabled="sidecarBusy"
+          @click="sidecarUnselect"
+        >
+          {{ t('sidecar.unselect') }}
+        </button>
+      </div>
 
       <button
         class="btn btn-secondary w-full"

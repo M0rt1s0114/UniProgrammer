@@ -24,6 +24,14 @@ export function openSidecarSession(adapter: string, device: string): Promise<str
   return call<string>('sidecar_open', { adapter, device })
 }
 
+export function selectSidecarAdapter(adapter: string, device: string): Promise<string> {
+  return call<string>('sidecar_select', { adapter, device })
+}
+
+export function unselectSidecarAdapter(): Promise<void> {
+  return call<void>('sidecar_unselect')
+}
+
 export function closeSidecarSession(adapter: string, device: string): Promise<string> {
   return call<string>('sidecar_close', { adapter, device })
 }
