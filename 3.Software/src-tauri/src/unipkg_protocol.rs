@@ -276,8 +276,10 @@ mod tests {
         let root = test_root("serve");
         let plugin_dir = root.join("plugins").join("builtin").join("vnd.test.ui");
         let dist = plugin_dir.join("dist");
-        fs::create_dir_all(&dist).unwrap();
+        let assets = dist.join("assets");
+        fs::create_dir_all(&assets).unwrap();
         fs::write(dist.join("index.html"), "<html>ok</html>").unwrap();
+        fs::write(assets.join("app.js"), "console.log('plugin asset')").unwrap();
         fs::write(
             plugin_dir.join("unipkg.toml"),
             "[package]\nname = \"vnd.test.ui\"\nversion = \"1.0.0\"\nplugin_api = 1\n\
@@ -292,6 +294,14 @@ mod tests {
         let entry = protocol.respond(&entry_uri);
         assert_eq!(entry.status(), StatusCode::OK);
         assert_eq!(entry.body(), b"<html>ok</html>");
+
+        // Vite emits `./assets/...` references from `dist/index.html`; the
+        // protocol must serve them from `<package>/dist/assets/...`.
+        let asset_uri: tauri::http::Uri =
+            "unipkg://vnd.test.ui/dist/assets/app.js".parse().unwrap();
+        let asset = protocol.respond(&asset_uri);
+        assert_eq!(asset.status(), StatusCode::OK);
+        assert_eq!(asset.body(), b"console.log('plugin asset')");
 
         let missing_uri: tauri::http::Uri = "unipkg://vnd.test.ui/missing.js".parse().unwrap();
         assert_eq!(

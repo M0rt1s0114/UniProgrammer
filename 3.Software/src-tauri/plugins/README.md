@@ -41,10 +41,16 @@ manifest 指向 sidecar 进程 `uni_ch34x_sidecar`，由 uni-hal 在启动时拉
 - 根路径 `unipkg://<插件名>/` → `[package].entry` 指向的页面
   （内置插件约定为 `dist/index.html`）；
 - 其它路径直接映射到插件目录下同名文件，例如
-  `unipkg://uni.hexview/assets/app.js` → `<插件目录>/assets/app.js`。
+  `unipkg://uni.hexview/dist/assets/app.js` → `<插件目录>/dist/assets/app.js`。
 
 主窗口本身加载 `unipkg://uni.ui.webview/`，因此 **整个 UI 壳是一个普通
 L1 插件**，用另一份 `uni.ui.webview` 包覆盖内置目录即可替换（重启生效）。
+
+> Windows/WebView2 的 iframe 里不能直接用自定义 scheme URL；wry 要求写成
+> `http://unipkg.<插件名>/...`（请求到达 Rust 端前会被还原为
+> `unipkg://<插件名>/...`）。macOS/Linux 仍使用 `unipkg://` 原形。
+> UI 插件自身的构建产物也应当以 `dist/` 为 base，页面入口在根路径时
+> 资产才会命中 `<插件目录>/dist/...`。
 
 内置 UI 插件在开发模式（`cargo tauri dev`）下由 `npm run dev` 提供热更新：
 `uni.ui.webview` 使用 1420 端口，`uni.hexview` 使用 1421 端口。

@@ -8,7 +8,14 @@ import { locale } from '@/i18n'
 // page and speak the postMessage contract documented in plugins/README.md.
 
 const store = useProgStore()
-const HEXVIEW_URL = 'unipkg://uni.hexview/'
+
+// On Windows, WebView2 only loads registered custom protocols in subframes
+// through wry's `http://<scheme>.<host>/...` workaround URL; macOS/Linux use
+// the plain `unipkg://` URL. The unipkg protocol handler receives the original
+// URI in both cases.
+const HEXVIEW_URL = navigator.userAgent.includes('Windows')
+  ? 'http://unipkg.uni.hexview/'
+  : 'unipkg://uni.hexview/'
 const READY_TIMEOUT_MS = 8_000
 
 const frameKey = ref(0)
