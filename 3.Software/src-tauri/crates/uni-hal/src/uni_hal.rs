@@ -198,14 +198,29 @@ pub struct ChildTransport {
 impl ChildTransport {
     /// Spawn `program` with `args` as a sidecar process.
     ///
-    /// The child is started with piped stdin/stdout and inherited stderr.
-    /// No shell is involved.
+    /// The child is started with piped stdin/stdout. Stderr is inherited when
+    /// the parent has attached a debug console (`UNIPROG_DEBUG_CONSOLE=1`);
+    /// otherwise it is discarded and, on Windows, the child is created with
+    /// `CREATE_NO_WINDOW` so no console flashes at startup.
     pub fn spawn_child(program: &str, args: &[String]) -> Result<Self, String> {
         let mut command = Command::new(program);
         command.args(args);
         command.stdin(Stdio::piped());
         command.stdout(Stdio::piped());
-        command.stderr(Stdio::inherit());
+
+        let debug_console = std::env::var_os("UNIPROG_DEBUG_CONSOLE").is_some();
+        if debug_console {
+            command.stderr(Stdio::inherit());
+        } else {
+            command.stderr(Stdio::null());
+        }
+
+        #[cfg(windows)]
+        if !debug_console {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+            command.creation_flags(CREATE_NO_WINDOW);
+        }
 
         let mut child = command
             .spawn()

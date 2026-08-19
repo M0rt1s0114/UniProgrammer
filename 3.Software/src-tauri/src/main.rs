@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod autodetect;
+mod console;
 mod core;
 mod dialogs;
 mod operations;
@@ -98,6 +99,12 @@ fn exe_dir() -> PathBuf {
     }
 }
 
+/// 调试控制台日志。正常发布版没有控制台时该输出被丢弃；用户开启
+/// “调试控制台”后，启动早期会 AllocConsole，随后的后端操作日志都会显示。
+fn backend_log(message: &str) {
+    eprintln!("[uniprog] {message}");
+}
+
 /// Write a readable Chinese boot-error report next to the executable and stop
 /// the process when the required L1 plugin set is not healthy.
 fn write_boot_error(base: &Path, boot: &BootCheck) {
@@ -135,10 +142,15 @@ fn load_chip_lib(state: State<'_, Mutex<AppState>>) -> Result<String, String> {
     if s.lib.is_some() {
         return Ok("芯片库已加载".to_string());
     }
+    backend_log("load_chip_lib: 开始加载芯片库");
     let base = exe_dir();
     let xml_path = base.join("chiplib.xml");
     let bin_path = base.join("chiplib.bin");
     let lib = chiplib::Chiplib::load_auto(xml_path.to_str().unwrap(), bin_path.to_str().unwrap())?;
+    backend_log(&format!(
+        "load_chip_lib: 加载成功，共 {} 条芯片记录",
+        lib.entry_count()
+    ));
     s.lib = Some(lib);
     Ok("芯片库加载成功".to_string())
 }
@@ -156,6 +168,9 @@ async fn initialize(
     usb_address: Option<u8>,
 ) -> Result<String, String> {
     let mut s = state.lock().map_err(|e| e.to_string())?;
+    backend_log(&format!(
+        "initialize: kind={kind} io_level_mv={io_level_mv} spi_mode={spi_mode} freq_khz={freq_khz} device_index={device_index:?} usb={usb_bus:?}:{usb_address:?}"
+    ));
 
     let chip_kind = match kind.as_str() {
         "ch341" => ChipKind::Ch341A,
@@ -200,6 +215,9 @@ async fn initialize(
     };
     let name = base_name.to_string();
     s.connected_device = Some(name.clone());
+    backend_log(&format!(
+        "initialize: 设备打开并完成 SPI 自检，已连接 {name}"
+    ));
     // TODO: VCC/IO 电平切换尚未与硬件绑定，先不输出目标电压日志；
     // 后续实现电压控制后再恢复为：
     // Ok(format!("已连接: {}（目标 VCC/IO 电平 {:.1}V）", name, io_level_v))
@@ -212,6 +230,7 @@ async fn connect_serprog(
     port: String,
 ) -> Result<String, String> {
     let mut s = state.lock().map_err(|e| e.to_string())?;
+    backend_log(&format!("connect_serprog: port={port}"));
     let dev = serprog::Serprog::open(&port)?;
     let info = format!("serprog ({})", port);
     // 切换后端时清掉旧 CH34X，避免后续操作仍优先走 CH34X
@@ -219,6 +238,7 @@ async fn connect_serprog(
     s.detected = None;
     s.connected_device = Some(info.clone());
     s.serprog = Some(dev);
+    backend_log(&format!("connect_serprog: 已连接 {info}"));
     Ok(format!("已连接: {}", info))
 }
 
@@ -274,6 +294,7 @@ async fn detect_chip(
     router_state: State<'_, Mutex<HalRouter>>,
 ) -> Result<ChipDetectResult, String> {
     let mut s = state.lock().map_err(|e| e.to_string())?;
+    backend_log("detect_chip: 开始识别芯片");
 
     if s.sidecar_adapter.is_some() && s.sidecar_device.is_some() {
         let selection = SidecarSelection {
@@ -288,6 +309,10 @@ async fn detect_chip(
             id
         };
         let id_str = format!("{:02X}{:02X}{:02X}", id[0], id[1], id[2]);
+        backend_log(&format!(
+            "detect_chip: Sidecar {}/{} 返回 JEDEC ID {id_str}",
+            selection.adapter, selection.device_id
+        ));
 
         if let Some(info) = get_lib(&s)?.find_by_id(&id_str) {
             let detect_info = chip_info_to_detect(&info);
@@ -304,6 +329,10 @@ async fn detect_chip(
                 selection.device_id
             );
             s.detected = Some(detected);
+            backend_log(&format!(
+                "detect_chip: 匹配成功 {} / {} (JEDEC {id_str})",
+                info.vendor, info.model
+            ));
             return Ok(ChipDetectResult {
                 text,
                 info: Some(detect_info),
@@ -317,7 +346,12 @@ async fn detect_chip(
         });
     }
 
-    core::detect_chip(&mut s)
+    let result = core::detect_chip(&mut s)?;
+    backend_log(&format!(
+        "detect_chip: {}",
+        result.text.lines().next().unwrap_or("完成")
+    ));
+    Ok(result)
 }
 
 #[tauri::command]
@@ -407,7 +441,10 @@ async fn chip_erase(
 ) -> Result<String, String> {
     let mut s = state.lock().map_err(|e| e.to_string())?;
     let mut router = router_state.lock().map_err(|e| e.to_string())?;
-    operations::chip_erase(
+    backend_log(&format!(
+        "chip_erase: 开始擦除 bad_block_mode={bad_block_mode:?}"
+    ));
+    let result = operations::chip_erase(
         &mut s,
         bad_block_mode.as_deref(),
         &mut |p| {
@@ -428,7 +465,11 @@ async fn chip_erase(
                 .ok();
         },
         Some(&mut router),
-    )
+    );
+    if let Ok(message) = &result {
+        backend_log(&format!("chip_erase: {message}"));
+    }
+    result
 }
 
 /// Stream a blank check: read the requested range in chunks and stop at the
@@ -444,7 +485,10 @@ async fn blank_check(
 ) -> Result<BlankCheckResult, String> {
     let mut s = state.lock().map_err(|e| e.to_string())?;
     let mut router = router_state.lock().map_err(|e| e.to_string())?;
-    operations::blank_check(
+    backend_log(&format!(
+        "blank_check: size={size} start_addr=0x{start_addr:X} bad_block_mode={bad_block_mode:?}"
+    ));
+    let result = operations::blank_check(
         &mut s,
         size,
         start_addr,
@@ -461,7 +505,14 @@ async fn blank_check(
                 .ok();
         },
         Some(&mut router),
-    )
+    );
+    if let Ok(result) = &result {
+        backend_log(&format!(
+            "blank_check: blank={} first_non_blank={:?}",
+            result.blank, result.first_non_blank
+        ));
+    }
+    result
 }
 
 /// NOR read, IMSProg style: manual CS, 0x03 read, optional 4-byte address mode
@@ -477,6 +528,9 @@ async fn read_chip(
 ) -> Result<tauri::ipc::Response, String> {
     let mut s = state.lock().map_err(|e| e.to_string())?;
     let mut router = router_state.lock().map_err(|e| e.to_string())?;
+    backend_log(&format!(
+        "read_chip: size={size} start_addr=0x{start_addr:X} bad_block_mode={bad_block_mode:?}"
+    ));
     let data = operations::read_chip(
         &mut s,
         size,
@@ -492,6 +546,7 @@ async fn read_chip(
         },
         Some(&mut router),
     )?;
+    backend_log(&format!("read_chip: 读取完成 {} 字节", data.len()));
     Ok(tauri::ipc::Response::new(data))
 }
 
@@ -532,7 +587,11 @@ async fn write_chip(
     let bad_block_mode: Option<String> = request_header(&request, "x-bad-block-mode");
     let mut s = state.lock().map_err(|e| e.to_string())?;
     let mut router = router_state.lock().map_err(|e| e.to_string())?;
-    operations::write_chip(
+    backend_log(&format!(
+        "write_chip: {} 字节 start_addr=0x{start_addr:X} force_segmented={force_segmented:?} bad_block_mode={bad_block_mode:?}",
+        data.len()
+    ));
+    let result = operations::write_chip(
         &mut s,
         data,
         start_addr,
@@ -547,7 +606,11 @@ async fn write_chip(
                 .ok();
         },
         Some(&mut router),
-    )
+    );
+    if let Ok(message) = &result {
+        backend_log(&format!("write_chip: {message}"));
+    }
+    result
 }
 
 #[tauri::command]
@@ -564,7 +627,11 @@ async fn verify_chip(
     let bad_block_mode: Option<String> = request_header(&request, "x-bad-block-mode");
     let mut s = state.lock().map_err(|e| e.to_string())?;
     let mut router = router_state.lock().map_err(|e| e.to_string())?;
-    operations::verify_chip(
+    backend_log(&format!(
+        "verify_chip: {} 字节 start_addr=0x{start_addr:X} bad_block_mode={bad_block_mode:?}",
+        data.len()
+    ));
+    let result = operations::verify_chip(
         &mut s,
         data,
         start_addr,
@@ -578,7 +645,11 @@ async fn verify_chip(
                 .ok();
         },
         Some(&mut router),
-    )
+    );
+    if let Ok(message) = &result {
+        backend_log(&format!("verify_chip: {message}"));
+    }
+    result
 }
 
 #[tauri::command]
@@ -1069,13 +1140,28 @@ fn sidecar_verify(
 }
 
 fn main() {
+    if settings::startup_debug_console() {
+        // 必须在任何 eprintln!/侧车进程启动之前完成，这样后端日志和
+        // CH34X 侧车的 stderr 都会进入同一个控制台窗口。
+        console::attach();
+        std::env::set_var("UNIPROG_DEBUG_CONSOLE", "1");
+        backend_log("调试控制台已启用");
+    }
+
     let exe = exe_dir();
+    backend_log(&format!("UniProgrammer 启动，根目录: {}", exe.display()));
     let mut plugin_manager = PluginManager::load(&exe);
     let boot = plugin_manager.boot_check();
     if !boot.missing.is_empty() || !boot.invalid.is_empty() {
+        backend_log("启动失败：L1 必需插件缺失或无效");
         write_boot_error(&exe, &boot);
         std::process::exit(1);
     }
+    backend_log(&format!(
+        "插件扫描完成：{} 个插件，{} 个错误",
+        plugin_manager.plugins.len(),
+        plugin_manager.errors.len()
+    ));
     let hal_router = HalRouter::start(&mut plugin_manager, &exe);
     let plugin_assets = unipkg_protocol::UnipkgProtocol::from_manager(&plugin_manager);
     let builder = tauri::Builder::default()

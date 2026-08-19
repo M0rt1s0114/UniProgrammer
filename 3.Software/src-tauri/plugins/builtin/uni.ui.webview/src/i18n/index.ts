@@ -198,6 +198,9 @@ const zh: MessageRecord = {
   'settings.themeDark': '深色',
   'settings.themeLight': '浅色',
   'settings.themeSystem': '跟随系统',
+  'settings.debugConsole': '调试控制台（重启生效）',
+  'settings.debugConsoleHint':
+    '开启后下次启动显示控制台窗口，输出后端识别芯片、读/写/擦除等详细日志',
   'about.placeholder': '关于内容待定',
   'about.subtitle': 'UniProgrammer',
   'about.betaNotice': '本项目处于测试状态，请谨慎使用',
@@ -467,6 +470,9 @@ const en: MessageRecord = {
   'settings.themeDark': 'Dark',
   'settings.themeLight': 'Light',
   'settings.themeSystem': 'Follow System',
+  'settings.debugConsole': 'Debug Console (takes effect on restart)',
+  'settings.debugConsoleHint':
+    'When enabled, the next start opens a console with detailed backend logs for chip detection, read/write/erase and more',
   'about.placeholder': 'About content to be determined',
   'about.subtitle': 'UniProgrammer',
   'about.betaNotice': 'This project is in testing status, use with caution',

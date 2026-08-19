@@ -18,6 +18,7 @@ const pluginManagerOpen = ref(false)
 const draft = reactive({
   language: 'zh' as Locale,
   theme: 'dark' as ThemeMode,
+  debugConsole: false,
   batchBurn: false,
   saveVoltage: false,
   powerAutoDetect: false,
@@ -31,6 +32,7 @@ const draft = reactive({
 function loadDraft() {
   draft.language = settings.language
   draft.theme = settings.theme
+  draft.debugConsole = settings.debugConsole
   draft.batchBurn = settings.batchBurn
   draft.saveVoltage = settings.saveVoltage
   draft.powerAutoDetect = settings.powerAutoDetect
@@ -52,6 +54,7 @@ watch(
 function applyDraft() {
   settings.language = draft.language
   settings.theme = draft.theme
+  settings.debugConsole = draft.debugConsole
   settings.batchBurn = draft.batchBurn
   settings.saveVoltage = draft.saveVoltage
   settings.powerAutoDetect = draft.powerAutoDetect
@@ -181,6 +184,14 @@ function cancelVccControl() {
                 <span class="toggle-text">{{ t('settings.themeSystem') }}</span>
               </label>
             </div>
+          </div>
+
+          <div class="settings-section">
+            <label class="toggle-row">
+              <input v-model="draft.debugConsole" type="checkbox" class="toggle-check" />
+              <span class="toggle-text">{{ t('settings.debugConsole') }}</span>
+            </label>
+            <div class="settings-hint">{{ t('settings.debugConsoleHint') }}</div>
           </div>
 
           <div class="settings-section">

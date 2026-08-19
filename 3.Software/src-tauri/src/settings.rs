@@ -113,3 +113,40 @@ pub fn save(content: &str) -> Result<String, String> {
         .map_err(|err| format!("写入设置文件失败 {}: {}", path.display(), err))?;
     Ok(path.display().to_string())
 }
+
+/// 启动早期读取 `[general] debugConsole`，决定是否显示调试控制台。
+/// 设置文件缺失或解析失败时按 false 处理（正式版不弹窗）。
+pub fn startup_debug_console() -> bool {
+    let path = settings_file();
+    let Ok(content) = fs::read_to_string(path) else {
+        return false;
+    };
+
+    let mut in_general = false;
+    for raw_line in content.lines() {
+        let line = raw_line.trim();
+        if line.eq_ignore_ascii_case("[general]") {
+            in_general = true;
+            continue;
+        }
+        if line.starts_with('[') {
+            in_general = false;
+            continue;
+        }
+        if !in_general {
+            continue;
+        }
+        let Some((key, value)) = line.split_once('=') else {
+            continue;
+        };
+        if key.trim().eq_ignore_ascii_case("debugConsole")
+            && matches!(
+                value.trim().to_ascii_lowercase().as_str(),
+                "true" | "1" | "yes" | "on"
+            )
+        {
+            return true;
+        }
+    }
+    false
+}
