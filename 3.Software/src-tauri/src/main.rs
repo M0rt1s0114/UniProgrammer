@@ -9,6 +9,7 @@ mod firmware;
 mod operations;
 mod plugin;
 mod protocols;
+pub mod script_plugin;
 mod serprog;
 mod settings;
 mod sfdp;
