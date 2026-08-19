@@ -3,7 +3,16 @@ import { computed, ref, onMounted, watch } from 'vue'
 import { useProgStore, formatBytes } from '@/stores/prog'
 import { useSettingsStore } from '@/stores/settings'
 import { useSpiNor } from '@/services/spiNor'
-import { listSidecarAdapters, readSidecarId, type SidecarAdapterEntry } from '@/services/plugins'
+import {
+  eraseSidecarChip,
+  listSidecarAdapters,
+  readSidecarChip,
+  readSidecarId,
+  verifySidecarChip,
+  writeSidecarChip,
+  type SidecarAdapterEntry,
+} from '@/services/plugins'
+import { onProgress } from '@/services/ipc'
 import { t } from '@/i18n'
 import UiSelect, { type UiOption } from '@/components/UiSelect.vue'
 
@@ -29,6 +38,8 @@ const SIDECAR_SEP = '\u0000'
 const sidecarAdapters = ref<SidecarAdapterEntry[]>([])
 const sidecarSelected = ref('')
 const sidecarBusy = ref(false)
+const sidecarReadSize = ref(1048576)
+const sidecarOp = ref('')
 
 function parseSidecarSelection(value: string): { adapter: string; device: string } | null {
   const sep = value.indexOf(SIDECAR_SEP)
@@ -63,6 +74,127 @@ async function sidecarReadId() {
     store.addLog(`读取 Sidecar 芯片 ID 失败: ${String(error)}`, 'error')
   } finally {
     sidecarBusy.value = false
+  }
+}
+
+function selectedSidecarTarget(): { adapter: string; device: string } | null {
+  const selection = parseSidecarSelection(sidecarSelected.value)
+  if (!selection) {
+    store.addLog('未选择 Sidecar 设备', 'warn')
+    return null
+  }
+  return selection
+}
+
+async function sidecarErase() {
+  const selection = selectedSidecarTarget()
+  if (!selection) return
+  sidecarBusy.value = true
+  sidecarOp.value = t('sidecar.erase')
+  try {
+    const msg = await eraseSidecarChip(selection.adapter, selection.device)
+    store.addLog(msg, 'success')
+  } catch (error) {
+    store.addLog(`擦除 Sidecar 芯片失败: ${String(error)}`, 'error')
+  } finally {
+    sidecarBusy.value = false
+    sidecarOp.value = ''
+  }
+}
+
+async function sidecarRead() {
+  const selection = selectedSidecarTarget()
+  if (!selection) return
+  sidecarBusy.value = true
+  sidecarOp.value = t('sidecar.read')
+  let unlisten: (() => void) | null = null
+  store.progress = 0
+  store.progressMessage = `${t('sidecar.read')}...`
+  try {
+    unlisten = await onProgress<{ done: number; total: number }>('read_progress', (payload) => {
+      store.progress = payload.total > 0 ? Math.round((payload.done / payload.total) * 100) : 0
+      store.progressMessage = `${t('sidecar.read')}... ${store.progress}%`
+    })
+    const buf = await readSidecarChip(selection.adapter, selection.device, sidecarReadSize.value)
+    store.hexData = new Uint8Array(buf)
+    store.detectedChipSize = buf.byteLength
+    store.progress = 100
+    store.progressMessage = '读取完成'
+    store.addLog(`读取完成，共 ${buf.byteLength} 字节`, 'success')
+  } catch (error) {
+    store.addLog(`读取 Sidecar 芯片失败: ${String(error)}`, 'error')
+    store.progress = 0
+    store.progressMessage = ''
+  } finally {
+    if (unlisten) unlisten()
+    sidecarBusy.value = false
+    sidecarOp.value = ''
+  }
+}
+
+async function sidecarWrite() {
+  const selection = selectedSidecarTarget()
+  if (!selection) return
+  const payload = store.hexData
+  if (!payload || payload.length === 0) {
+    store.addLog('未加载数据，无法写入 Sidecar 芯片', 'warn')
+    return
+  }
+  sidecarBusy.value = true
+  sidecarOp.value = t('sidecar.write')
+  let unlisten: (() => void) | null = null
+  store.progress = 0
+  store.progressMessage = `${t('sidecar.write')}...`
+  try {
+    unlisten = await onProgress<{ done: number; total: number }>('write_progress', (payload) => {
+      store.progress = payload.total > 0 ? Math.round((payload.done / payload.total) * 100) : 0
+      store.progressMessage = `${t('sidecar.write')}... ${store.progress}%`
+    })
+    const msg = await writeSidecarChip(selection.adapter, selection.device, payload)
+    store.progress = 100
+    store.progressMessage = '写入完成'
+    store.addLog(msg, 'success')
+  } catch (error) {
+    store.addLog(`写入 Sidecar 芯片失败: ${String(error)}`, 'error')
+    store.progress = 0
+    store.progressMessage = ''
+  } finally {
+    if (unlisten) unlisten()
+    sidecarBusy.value = false
+    sidecarOp.value = ''
+  }
+}
+
+async function sidecarVerify() {
+  const selection = selectedSidecarTarget()
+  if (!selection) return
+  const payload = store.hexData
+  if (!payload || payload.length === 0) {
+    store.addLog('未加载数据，无法校验 Sidecar 芯片', 'warn')
+    return
+  }
+  sidecarBusy.value = true
+  sidecarOp.value = t('sidecar.verify')
+  let unlisten: (() => void) | null = null
+  store.progress = 0
+  store.progressMessage = `${t('sidecar.verify')}...`
+  try {
+    unlisten = await onProgress<{ done: number; total: number }>('verify_progress', (payload) => {
+      store.progress = payload.total > 0 ? Math.round((payload.done / payload.total) * 100) : 0
+      store.progressMessage = `${t('sidecar.verify')}... ${store.progress}%`
+    })
+    const msg = await verifySidecarChip(selection.adapter, selection.device, payload)
+    store.progress = 100
+    store.progressMessage = '校验完成'
+    store.addLog(msg, 'success')
+  } catch (error) {
+    store.addLog(`校验 Sidecar 芯片失败: ${String(error)}`, 'error')
+    store.progress = 0
+    store.progressMessage = ''
+  } finally {
+    if (unlisten) unlisten()
+    sidecarBusy.value = false
+    sidecarOp.value = ''
   }
 }
 
@@ -605,6 +737,56 @@ onMounted(async () => {
       >
         {{ t('sidecar.readId') }}
       </button>
+
+      <div class="field" style="margin-top: 6px">
+        <label class="field-label">{{ t('sidecar.readSize') }}</label>
+        <input
+          v-model.number="sidecarReadSize"
+          type="number"
+          min="1"
+          max="0x1000000"
+          class="input"
+        />
+      </div>
+
+      <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px">
+        <button
+          class="btn btn-secondary btn-sm"
+          style="flex: 1"
+          :disabled="sidecarBusy || !sidecarSelected"
+          @click="sidecarErase"
+        >
+          {{ t('sidecar.erase') }}
+        </button>
+        <button
+          class="btn btn-secondary btn-sm"
+          style="flex: 1"
+          :disabled="sidecarBusy || !sidecarSelected"
+          @click="sidecarRead"
+        >
+          {{ t('sidecar.read') }}
+        </button>
+        <button
+          class="btn btn-secondary btn-sm"
+          style="flex: 1"
+          :disabled="sidecarBusy || !sidecarSelected"
+          @click="sidecarWrite"
+        >
+          {{ t('sidecar.write') }}
+        </button>
+        <button
+          class="btn btn-secondary btn-sm"
+          style="flex: 1"
+          :disabled="sidecarBusy || !sidecarSelected"
+          @click="sidecarVerify"
+        >
+          {{ t('sidecar.verify') }}
+        </button>
+      </div>
+
+      <div v-if="sidecarOp" class="field-hint" style="margin-top: 4px">
+        {{ sidecarOp }}
+      </div>
     </section>
 
     <div v-if="store.selectedType === 'SPI_NAND'" class="divider" />

@@ -78,6 +78,11 @@ const zh: MessageRecord = {
   'sidecar.title': 'Sidecar 插件（实验性）',
   'sidecar.refresh': '刷新适配器',
   'sidecar.readId': '读取芯片 ID',
+  'sidecar.readSize': '读取大小（字节）',
+  'sidecar.erase': '擦除',
+  'sidecar.read': '读取',
+  'sidecar.write': '写入',
+  'sidecar.verify': '校验',
 
   // Programmer auto detection
   'programmer.autoMode': '自动识别',
@@ -352,6 +357,11 @@ const en: MessageRecord = {
   'sidecar.title': 'Sidecar Plugins (Experimental)',
   'sidecar.refresh': 'Refresh Adapters',
   'sidecar.readId': 'Read Chip ID',
+  'sidecar.readSize': 'Read Size (bytes)',
+  'sidecar.erase': 'Erase',
+  'sidecar.read': 'Read',
+  'sidecar.write': 'Write',
+  'sidecar.verify': 'Verify',
 
   // Programmer auto detection
   'programmer.autoMode': 'Auto Detect',
