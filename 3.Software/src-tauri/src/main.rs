@@ -830,6 +830,106 @@ fn sidecar_shutdown(state: State<'_, Mutex<HalRouter>>) -> Result<(), String> {
     Ok(())
 }
 
+/// 通过 sidecar 插件适配器执行整片擦除。
+#[tauri::command]
+fn sidecar_erase(
+    adapter: String,
+    device: String,
+    state: State<'_, Mutex<HalRouter>>,
+) -> Result<String, String> {
+    let mut router = state.lock().map_err(|e| e.to_string())?;
+    let selection = SidecarSelection {
+        adapter,
+        device_id: device,
+    };
+    operations::sidecar_erase_chip(&mut router, &selection)
+}
+
+/// 通过 sidecar 插件适配器读取 NOR 数据，并通过 read_progress 事件上报进度。
+#[tauri::command]
+fn sidecar_read(
+    adapter: String,
+    device: String,
+    size: u64,
+    start_addr: Option<u64>,
+    state: State<'_, Mutex<HalRouter>>,
+    app: tauri::AppHandle,
+) -> Result<tauri::ipc::Response, String> {
+    // sidecar_read_chip 暂不支持起始地址，保留该参数供后续扩展。
+    let _ = start_addr;
+    let mut router = state.lock().map_err(|e| e.to_string())?;
+    let selection = SidecarSelection {
+        adapter,
+        device_id: device,
+    };
+    let data = operations::sidecar_read_chip(&mut router, &selection, size, &mut |done, total| {
+        let _ = app.emit("read_progress", ReadProgressEvent { done, total });
+    })?;
+    Ok(tauri::ipc::Response::new(data))
+}
+
+/// 通过 sidecar 插件适配器写入 NOR 数据，并通过 write_progress 事件上报进度。
+#[tauri::command]
+fn sidecar_write(
+    request: tauri::ipc::Request<'_>,
+    state: State<'_, Mutex<HalRouter>>,
+    app: tauri::AppHandle,
+) -> Result<String, String> {
+    let adapter =
+        request_header(&request, "x-adapter").ok_or_else(|| "缺少 x-adapter 请求头".to_string())?;
+    let device =
+        request_header(&request, "x-device").ok_or_else(|| "缺少 x-device 请求头".to_string())?;
+    let start_addr: u64 = request_header(&request, "x-start-addr")
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(0);
+    let data = raw_request_bytes(&request)?;
+    let mut router = state.lock().map_err(|e| e.to_string())?;
+    let selection = SidecarSelection {
+        adapter,
+        device_id: device,
+    };
+    operations::sidecar_write_chip(
+        &mut router,
+        &selection,
+        data,
+        start_addr,
+        &mut |done, total| {
+            let _ = app.emit("write_progress", WriteProgressEvent { done, total });
+        },
+    )
+}
+
+/// 通过 sidecar 插件适配器校验 NOR 数据，并通过 verify_progress 事件上报进度。
+#[tauri::command]
+fn sidecar_verify(
+    request: tauri::ipc::Request<'_>,
+    state: State<'_, Mutex<HalRouter>>,
+    app: tauri::AppHandle,
+) -> Result<String, String> {
+    let adapter =
+        request_header(&request, "x-adapter").ok_or_else(|| "缺少 x-adapter 请求头".to_string())?;
+    let device =
+        request_header(&request, "x-device").ok_or_else(|| "缺少 x-device 请求头".to_string())?;
+    let start_addr: u64 = request_header(&request, "x-start-addr")
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(0);
+    let data = raw_request_bytes(&request)?;
+    let mut router = state.lock().map_err(|e| e.to_string())?;
+    let selection = SidecarSelection {
+        adapter,
+        device_id: device,
+    };
+    operations::sidecar_verify_chip(
+        &mut router,
+        &selection,
+        data,
+        start_addr,
+        &mut |done, total| {
+            let _ = app.emit("verify_progress", VerifyProgressEvent { done, total });
+        },
+    )
+}
+
 fn main() {
     let exe = exe_dir();
     let mut plugin_manager = PluginManager::load(&exe);
@@ -911,6 +1011,10 @@ fn main() {
             sidecar_spi_transact,
             sidecar_errors,
             sidecar_shutdown,
+            sidecar_erase,
+            sidecar_read,
+            sidecar_write,
+            sidecar_verify,
         ])
         .run(tauri::generate_context!())
         .expect("启动失败");
