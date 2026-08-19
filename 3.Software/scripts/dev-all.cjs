@@ -12,19 +12,35 @@ const viteCli = path.join(root, 'node_modules', 'vite', 'bin', 'vite.js')
 const pluginsDir = path.join(root, 'src-tauri', 'plugins', 'builtin')
 
 // Build and stage the built-in sidecar plugins first. HalRouter looks for the
-// executable in the package directory when `npm run dev` is used.
+// executables in their package directories when `npm run dev` is used.
 const cargoManifest = path.join(root, 'src-tauri', 'Cargo.toml')
-const cargoBuild = spawnSync(
-  'cargo',
-  ['build', '--manifest-path', cargoManifest, '--bin', 'uni_ch34x_sidecar'],
-  { cwd: root, stdio: 'inherit' },
-)
-if (cargoBuild.error) {
-  console.error('[dev-all] failed to launch cargo:', cargoBuild.error)
-  process.exit(1)
-}
-if (cargoBuild.status !== 0) {
-  process.exit(cargoBuild.status ?? 1)
+const sidecarTargets = [
+  { feature: 'hal-dll', bin: 'uni_ch34x_sidecar_dll' },
+  { feature: 'hal-libusb', bin: 'uni_ch34x_sidecar_libusb' },
+]
+for (const { feature, bin } of sidecarTargets) {
+  const result = spawnSync(
+    'cargo',
+    [
+      'build',
+      '--manifest-path',
+      cargoManifest,
+      '-p',
+      'uni-devices',
+      '--features',
+      feature,
+      '--bin',
+      bin,
+    ],
+    { cwd: root, stdio: 'inherit' },
+  )
+  if (result.error) {
+    console.error(`[dev-all] failed to launch cargo for ${bin}:`, result.error)
+    process.exit(1)
+  }
+  if (result.status !== 0) {
+    process.exit(result.status ?? 1)
+  }
 }
 const copySidecars = spawnSync(
   process.execPath,

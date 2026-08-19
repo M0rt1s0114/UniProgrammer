@@ -17,3 +17,15 @@ windows = { version = "0.58", features = ["Win32_Foundation", "Win32_System_Com"
 default = []
 hal-dll = []
 hal-libusb = []
+
+# 同一个 sidecar 源码，按后端分别编译成两个可执行文件，
+# 供 uni.hal.ch34x_dll / uni.hal.ch34x_libusb 两个插件包使用。
+[[bin]]
+name = "uni_ch34x_sidecar_dll"
+path = "src/bin/uni_ch34x_sidecar.rs"
+required-features = ["hal-dll"]
+
+[[bin]]
+name = "uni_ch34x_sidecar_libusb"
+path = "src/bin/uni_ch34x_sidecar.rs"
+required-features = ["hal-libusb"]

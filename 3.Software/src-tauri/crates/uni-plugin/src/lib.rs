@@ -326,11 +326,10 @@ pub fn builtin_modules() -> Vec<BuiltinModule> {
             "MicroWire 芯片协议",
         ),
         module(
-            "uni.hal.ch34x",
+            "uni.hal.serprog",
             spi_capability(),
-            "CH341A / CH347T / CH347F 编程器适配器",
+            "serprog 编程器适配器（编译进主程序的直连路径）",
         ),
-        module("uni.hal.serprog", spi_capability(), "serprog 编程器适配器"),
     ]
 }
 
@@ -348,7 +347,6 @@ pub fn builtin_version(name: &str) -> Option<&'static str> {
         | "uni.proto.data45"
         | "uni.proto.i2c"
         | "uni.proto.microwire"
-        | "uni.hal.ch34x"
         | "uni.hal.serprog" => Some("1.0.0"),
         _ => None,
     }
@@ -1678,7 +1676,7 @@ entry = "plugin.exe"
         };
 
         let modules = builtin_modules();
-        assert_eq!(modules.len(), 13);
+        assert_eq!(modules.len(), 12);
         for module in &modules {
             let resolved = manager
                 .resolve_dependencies(&module.name)
@@ -1782,12 +1780,12 @@ entry = "plugin.exe"
         let root = test_root("builtin-cold");
         let manifest = r#"
 [package]
-name = "uni.hal.ch34x"
+name = "uni.hal.ch34x_dll"
 version = "1.0.0"
 plugin_api = 1
 kind = "adapter"
 layer = "cold"
-entry = "uni_ch34x_sidecar"
+entry = "uni_ch34x_sidecar_dll"
 provider = "builtin"
 
 [capabilities.spi]
@@ -1796,7 +1794,7 @@ pins = { cs = "CS0", sck = "SCK", mosi = "MOSI", miso = "MISO" }
 max_frame = 4092
 max_freq_khz = 60000
 "#;
-        write_builtin_manifest(&root, "uni.hal.ch34x", manifest);
+        write_builtin_manifest(&root, "uni.hal.ch34x_dll", manifest);
 
         let manager = PluginManager::load(&root);
         assert_eq!(manager.plugins.len(), 1);
@@ -1805,11 +1803,11 @@ max_freq_khz = 60000
 
         save_plugin_state(&root, &manager).expect("state should save");
         let state = load_plugin_state(&root);
-        assert_eq!(state.get("uni.hal.ch34x"), Some(&true));
+        assert_eq!(state.get("uni.hal.ch34x_dll"), Some(&true));
 
         let mut disabled = manager;
         disabled
-            .disable("uni.hal.ch34x")
+            .disable("uni.hal.ch34x_dll")
             .expect("cold plugin can be disabled");
         save_plugin_state(&root, &disabled).expect("disabled state should save");
         let reloaded = PluginManager::load(&root);

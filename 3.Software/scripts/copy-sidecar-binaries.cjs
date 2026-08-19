@@ -19,8 +19,12 @@ const exeSuffix = process.platform === 'win32' ? '.exe' : ''
 
 const copies = [
   {
-    name: 'uni_ch34x_sidecar',
-    packageName: 'uni.hal.ch34x',
+    name: 'uni_ch34x_sidecar_dll',
+    packageName: 'uni.hal.ch34x_dll',
+  },
+  {
+    name: 'uni_ch34x_sidecar_libusb',
+    packageName: 'uni.hal.ch34x_libusb',
   },
 ]
 
@@ -43,11 +47,11 @@ for (const { name, packageName } of copies) {
 }
 
 // The vendor CH34X.DLL is only present on machines that already have it.
-// Copying it next to the sidecar keeps the adapter package self-contained and
-// lets the sidecar load the DLL without relying on the main executable's dir.
+// It belongs to the dll-backend package only; the libusb package must stay
+// DLL-free.
 const dllSource = path.join(srcTauri, 'CH34X.DLL')
 if (fs.existsSync(dllSource)) {
-  const dllDestination = path.join(pluginsDir, 'uni.hal.ch34x', 'CH34X.DLL')
+  const dllDestination = path.join(pluginsDir, 'uni.hal.ch34x_dll', 'CH34X.DLL')
   try {
     fs.copyFileSync(dllSource, dllDestination)
     console.log(`[copy-sidecars] CH34X.DLL -> ${dllDestination}`)

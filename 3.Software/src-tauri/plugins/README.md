@@ -22,7 +22,8 @@ plugins/
 - `uni.tauri.hexview` — 依附于 Tauri 壳的 HexViewer（L1 必需）；
   未来 Slint 壳对应 `uni.slint` / `uni.slint.hexview`；
 - `uni.hal` / `uni.proto` / `uni.chipdb` — L1 基础层；
-- `uni.hal.ch34x` — 挂在 HAL 层上的 CH341A / CH347T / CH347F 适配器（L2）。
+- `uni.hal.ch34x_dll` — CH341A / CH347T / CH347F 官方 DLL 后端（L2）；
+- `uni.hal.ch34x_libusb` — CH341A / CH347T / CH347F libusb 后端（L2）。
 
 `plugins/builtin/` 存放 L1 必需插件（`uni.tauri`、`uni.hal`、
 `uni.chipdb`、`uni.tauri.hexview`、`uni.proto`）。这些清单由主程序在启动
@@ -34,11 +35,12 @@ plugins/
 用户的启用状态保存在 `plugin-state.toml`（位于 `plugins/` 同级目录），
 启动时随插件目录一起加载。
 
-`plugins/builtin/uni.hal.ch34x/` 是随程序发布的内置 L2 示例：
-manifest 指向 sidecar 进程 `uni_ch34x_sidecar`，由 uni-hal 在启动时拉起、
-探测并注册。内置插件默认启用，也可以在插件管理器中显式禁用。
-构建流程会把编译出的 sidecar 二进制复制进该插件目录，
-保证 `plugins/` 资源树自包含。
+`plugins/builtin/uni.hal.ch34x_dll/` 与 `uni.hal.ch34x_libusb/` 是随程序
+发布的内置 L2 示例：同一个 sidecar 源码分别按 DLL 与 libusb 后端编译，
+manifest 指向 `uni_ch34x_sidecar_dll` / `uni_ch34x_sidecar_libusb`，
+由 uni-hal 在启动时拉起、探测并注册。内置插件默认启用，也可以在插件
+管理器中显式禁用。构建流程会把两个 sidecar 二进制复制进各自插件目录，
+保证 `plugins/` 资源树自包含；CH34X.DLL 只复制进 DLL 后端包。
 
 Sidecar 调试/验证面板默认在插件管理器中隐藏；需要时到 设置 →
 “显示 Sidecar 插件面板（实验性）” 打开。
