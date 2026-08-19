@@ -1,0 +1,16 @@
+# 编译期内置插件：十六进制视图。
+# 当前随主程序一起编译，后续 L1 拆分时再改为独立插件包。
+[package]
+name = "uni.hexview"
+version = "1.0.0"
+plugin_api = 1
+kind = "ui"
+layer = "required"
+entry = "builtin"
+provider = "builtin"
+
+[dependencies]
+
+[permissions]
+
+[capabilities]

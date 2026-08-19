@@ -14,6 +14,25 @@ use std::str::FromStr;
 pub const PLUGIN_API_VERSION: u32 = 1;
 /// Version of the built-in `uni-base` virtual dependency.
 pub const UNI_BASE_API_VERSION: &str = "1.0.0";
+/// L1 required plugin set. These plugins are implicit and must be present at
+/// boot; they are compile-time builtins represented by shipped manifests.
+pub const REQUIRED_PLUGIN_NAMES: &[&str] = &[
+    "uni.ui.webview",
+    "uni.hal",
+    "uni.chipdb",
+    "uni.hexview",
+    "uni.proto",
+];
+
+/// Result of the boot-time required-plugin check.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct BootCheck {
+    /// Required plugin names that were not loaded at all.
+    pub missing: Vec<String>,
+    /// Required plugin names whose manifest was loaded but recorded as invalid
+    /// (parse error or duplicate name).
+    pub invalid: Vec<String>,
+}
 
 /// Plugin category, serialized in snake_case in manifests and IPC payloads.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -362,6 +381,7 @@ pub struct PluginManifest {
     pub os: Vec<String>,
     pub arch: Vec<String>,
     pub app: Option<String>,
+    pub provider: Option<String>,
 }
 
 impl PluginManifest {
@@ -387,6 +407,7 @@ impl PluginManifest {
                 "kind",
                 "layer",
                 "entry",
+                "provider",
                 "os",
                 "arch",
                 "app",
@@ -412,6 +433,7 @@ impl PluginManifest {
         };
         let entry =
             string_field(package, "entry")?.ok_or_else(|| "missing package.entry".to_string())?;
+        let provider = string_field(package, "provider")?;
         let os = string_array_field(package, "os")?;
         let arch = string_array_field(package, "arch")?;
         let app = string_field(package, "app")?;
@@ -442,6 +464,7 @@ impl PluginManifest {
             os,
             arch,
             app,
+            provider,
         })
     }
 }
@@ -477,64 +500,101 @@ pub struct PluginManager {
 }
 
 impl PluginManager {
-    /// Scan `<root>/plugins/*` (non-recursive) for `unipkg.toml` or the
+    /// Scan `<root>/plugins/*` (non-recursive) and
+    /// `<root>/plugins/builtin/*` (non-recursive) for `unipkg.toml` or the
     /// legacy `manifest.toml`; `unipkg.toml` is preferred when both exist.
     /// Directories without a manifest are ignored; invalid manifests are
-    /// recorded in `errors` and skipped.
+    /// recorded in `errors` and skipped. Duplicate plugin names are detected
+    /// across both scan roots.
     pub fn load(root: &Path) -> Self {
         let plugins_dir = root.join("plugins");
         let mut plugins = Vec::new();
         let mut errors = Vec::new();
         let mut first_path_by_name: HashMap<String, String> = HashMap::new();
 
-        let entries = match fs::read_dir(&plugins_dir) {
-            Ok(entries) => entries,
-            Err(_) => return PluginManager { plugins, errors },
-        };
+        if fs::read_dir(&plugins_dir).is_err() {
+            return PluginManager { plugins, errors };
+        }
 
-        for entry in entries.flatten() {
-            let plugin_dir = entry.path();
-            if !plugin_dir.is_dir() {
-                continue;
-            }
-            let manifest_path = match manifest_candidates(&plugin_dir).into_iter().next() {
-                Some(path) => path,
-                None => continue,
+        for scan_dir in [plugins_dir.clone(), plugins_dir.join("builtin")] {
+            let entries = match fs::read_dir(&scan_dir) {
+                Ok(entries) => entries,
+                Err(_) => continue,
             };
 
-            let manifest_path_text = manifest_path.display().to_string();
-            let text = match fs::read_to_string(&manifest_path) {
-                Ok(text) => text,
-                Err(e) => {
-                    errors.push((manifest_path_text, format!("failed to read manifest: {e}")));
+            for entry in entries.flatten() {
+                let plugin_dir = entry.path();
+                if !plugin_dir.is_dir() {
                     continue;
                 }
-            };
+                let manifest_path = match manifest_candidates(&plugin_dir).into_iter().next() {
+                    Some(path) => path,
+                    None => continue,
+                };
 
-            match PluginManifest::parse(&text) {
-                Ok(manifest) => {
-                    if let Some(first_path) = first_path_by_name.get(&manifest.name) {
-                        errors.push((
-                            manifest_path_text,
-                            format!(
-                                "duplicate plugin name '{}' (already loaded from {})",
-                                manifest.name, first_path
-                            ),
-                        ));
-                    } else {
-                        first_path_by_name.insert(manifest.name.clone(), manifest_path_text);
-                        plugins.push(LoadedPlugin {
-                            manifest,
-                            path: plugin_dir,
-                            enabled: false,
-                        });
+                let manifest_path_text = manifest_path.display().to_string();
+                let text = match fs::read_to_string(&manifest_path) {
+                    Ok(text) => text,
+                    Err(e) => {
+                        errors.push((manifest_path_text, format!("failed to read manifest: {e}")));
+                        continue;
                     }
+                };
+
+                match PluginManifest::parse(&text) {
+                    Ok(manifest) => {
+                        if let Some(first_path) = first_path_by_name.get(&manifest.name) {
+                            errors.push((
+                                manifest_path_text,
+                                format!(
+                                    "duplicate plugin name '{}' (already loaded from {})",
+                                    manifest.name, first_path
+                                ),
+                            ));
+                        } else {
+                            first_path_by_name.insert(manifest.name.clone(), manifest_path_text);
+                            plugins.push(LoadedPlugin {
+                                manifest,
+                                path: plugin_dir,
+                                enabled: false,
+                            });
+                        }
+                    }
+                    Err(e) => errors.push((manifest_path_text, e)),
                 }
-                Err(e) => errors.push((manifest_path_text, e)),
             }
         }
 
         PluginManager { plugins, errors }
+    }
+
+    /// Check the L1 required plugin set against the loaded manifests.
+    ///
+    /// A required name is reported in `missing` when no plugin with that name
+    /// was loaded and no matching error was recorded. When `errors` contains
+    /// an entry for its name or manifest path (for example a parse error or a
+    /// duplicate name) it is reported in `invalid`.
+    pub fn boot_check(&self) -> BootCheck {
+        let mut missing = Vec::new();
+        let mut invalid = Vec::new();
+
+        for required in REQUIRED_PLUGIN_NAMES {
+            let has_error = self
+                .errors
+                .iter()
+                .any(|(key, _)| error_key_matches(key, required));
+            if has_error {
+                invalid.push(required.to_string());
+                continue;
+            }
+
+            let loaded = self.plugins.iter().any(|p| p.manifest.name == *required);
+            if !loaded {
+                missing.push(required.to_string());
+            }
+        }
+
+        BootCheck { missing, invalid }
     }
 
     /// Validate and resolve the dependency graph for `name`.
@@ -649,7 +709,14 @@ impl PluginManager {
 
     /// Enable a plugin after validating API, platform compatibility and
     /// dependencies. This only flips the in-memory flag.
+    ///
+    /// Required L1 plugins are implicit and always enabled, so enabling one is
+    /// a no-op success.
     pub fn enable(&mut self, name: &str) -> Result<(), String> {
+        if REQUIRED_PLUGIN_NAMES.contains(&name) {
+            return Ok(());
+        }
+
         let index = self
             .plugins
             .iter()
@@ -698,7 +765,13 @@ impl PluginManager {
     }
 
     /// Disable a plugin. In-memory state only.
+    ///
+    /// Required L1 plugins cannot be disabled.
     pub fn disable(&mut self, name: &str) -> Result<(), String> {
+        if REQUIRED_PLUGIN_NAMES.contains(&name) {
+            return Err(format!("required plugin '{name}' cannot be disabled"));
+        }
+
         let plugin = self
             .plugins
             .iter_mut()
@@ -707,6 +780,18 @@ impl PluginManager {
         plugin.enabled = false;
         Ok(())
     }
+}
+
+/// Best-effort match of a manager error key (`(plugin name or manifest path,
+/// error)`) against a required plugin name.
+fn error_key_matches(key: &str, required_name: &str) -> bool {
+    if key == required_name {
+        return true;
+    }
+
+    let slash_needle = format!("/{required_name}/");
+    let backslash_needle = format!("\\{required_name}\\");
+    key.contains(slash_needle.as_str()) || key.contains(backslash_needle.as_str())
 }
 
 fn parse_dependencies(
@@ -1026,6 +1111,45 @@ entry = "plugin.exe"
         fs::write(dir.join("manifest.toml"), content).expect("write test manifest");
     }
 
+    fn write_builtin_manifest(root: &Path, plugin_dir: &str, content: &str) {
+        let dir = root.join("plugins").join("builtin").join(plugin_dir);
+        fs::create_dir_all(&dir).expect("create test builtin plugin dir");
+        fs::write(dir.join("unipkg.toml"), content).expect("write test builtin manifest");
+    }
+
+    fn builtin_manifest(name: &str, kind: &str) -> String {
+        format!(
+            r#"
+[package]
+name = "{name}"
+version = "1.0.0"
+plugin_api = 1
+kind = "{kind}"
+layer = "required"
+entry = "builtin"
+provider = "builtin"
+
+[dependencies]
+
+[permissions]
+
+[capabilities]
+"#
+        )
+    }
+
+    fn write_required_builtin_set(root: &Path) {
+        for (name, kind) in [
+            ("uni.ui.webview", "ui"),
+            ("uni.hal", "adapter"),
+            ("uni.chipdb", "chipdb"),
+            ("uni.hexview", "ui"),
+            ("uni.proto", "protocol"),
+        ] {
+            write_builtin_manifest(root, name, &builtin_manifest(name, kind));
+        }
+    }
+
     fn loaded_plugin(name: &str, version: &str, dependencies: Vec<Dependency>) -> LoadedPlugin {
         LoadedPlugin {
             manifest: PluginManifest {
@@ -1041,6 +1165,7 @@ entry = "plugin.exe"
                 os: Vec::new(),
                 arch: Vec::new(),
                 app: None,
+                provider: None,
             },
             path: PathBuf::from(name),
             enabled: false,
@@ -1057,6 +1182,7 @@ version = "1.2.3"
 plugin_api = 1
 kind = "adapter"
 entry = "plugin.exe"
+provider = "vnd.example"
 os = ["windows", "linux"]
 arch = ["x86_64"]
 app = "^0.3"
@@ -1104,6 +1230,7 @@ foo = "bar"
         assert_eq!(manifest.kind, PluginKind::Adapter);
         assert_eq!(manifest.layer, PluginLayer::Cold);
         assert_eq!(manifest.entry, "plugin.exe");
+        assert_eq!(manifest.provider.as_deref(), Some("vnd.example"));
         assert_eq!(manifest.os, vec!["windows", "linux"]);
         assert_eq!(manifest.arch, vec!["x86_64"]);
         assert_eq!(manifest.app.as_deref(), Some("^0.3"));
@@ -1534,6 +1661,122 @@ entry = "plugin.exe"
             .resolve_dependencies("a")
             .expect_err("cycle must fail");
         assert!(err.contains("dependency cycle"), "{err}");
+    }
+
+    #[test]
+    fn load_scans_plugins_builtin_directory() {
+        let root = test_root("builtin-scan");
+        write_builtin_manifest(&root, "uni.hal", &builtin_manifest("uni.hal", "adapter"));
+
+        let manager = PluginManager::load(&root);
+
+        assert_eq!(manager.errors, Vec::<(String, String)>::new());
+        assert_eq!(manager.plugins.len(), 1);
+        assert_eq!(manager.plugins[0].manifest.name, "uni.hal");
+        assert_eq!(manager.plugins[0].manifest.layer, PluginLayer::Required);
+        assert_eq!(
+            manager.plugins[0].manifest.provider.as_deref(),
+            Some("builtin")
+        );
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn boot_check_ok_when_all_required_builtin_manifests_exist() {
+        let root = test_root("boot-ok");
+        write_required_builtin_set(&root);
+
+        let manager = PluginManager::load(&root);
+        assert_eq!(manager.plugins.len(), REQUIRED_PLUGIN_NAMES.len());
+
+        let boot = manager.boot_check();
+        assert!(
+            boot.missing.is_empty(),
+            "unexpected missing: {:?}",
+            boot.missing
+        );
+        assert!(
+            boot.invalid.is_empty(),
+            "unexpected invalid: {:?}",
+            boot.invalid
+        );
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn boot_check_reports_missing_required_plugins() {
+        let manager = PluginManager {
+            plugins: vec![loaded_plugin("uni.hal", "1.0.0", Vec::new())],
+            errors: Vec::new(),
+        };
+
+        let boot = manager.boot_check();
+        assert_eq!(
+            boot.missing,
+            vec![
+                "uni.ui.webview".to_string(),
+                "uni.chipdb".to_string(),
+                "uni.hexview".to_string(),
+                "uni.proto".to_string(),
+            ]
+        );
+        assert!(boot.invalid.is_empty());
+    }
+
+    #[test]
+    fn boot_check_reports_duplicate_required_plugin_as_invalid() {
+        let root = test_root("boot-invalid");
+        write_manifest(&root, "uni.hal", &builtin_manifest("uni.hal", "adapter"));
+        write_builtin_manifest(&root, "uni.hal", &builtin_manifest("uni.hal", "adapter"));
+
+        let manager = PluginManager::load(&root);
+        assert_eq!(manager.plugins.len(), 1);
+        assert_eq!(manager.errors.len(), 1);
+
+        let boot = manager.boot_check();
+        assert_eq!(boot.invalid, vec!["uni.hal".to_string()]);
+        assert!(!boot.missing.contains(&"uni.hal".to_string()));
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn boot_check_reports_parse_error_required_plugin_as_invalid() {
+        let manager = PluginManager {
+            plugins: Vec::new(),
+            errors: vec![(
+                "/plugins/builtin/uni.hal/unipkg.toml".to_string(),
+                "invalid TOML: expected a table".to_string(),
+            )],
+        };
+
+        let boot = manager.boot_check();
+        assert_eq!(boot.invalid, vec!["uni.hal".to_string()]);
+        assert!(!boot.missing.contains(&"uni.hal".to_string()));
+    }
+
+    #[test]
+    fn required_plugin_cannot_be_disabled_and_enable_is_noop() {
+        let mut manager = PluginManager {
+            plugins: vec![loaded_plugin("uni.hal", "1.0.0", Vec::new())],
+            errors: Vec::new(),
+        };
+
+        let err = manager
+            .disable("uni.hal")
+            .expect_err("required plugin must not be disabled");
+        assert!(
+            err.contains("required plugin 'uni.hal' cannot be disabled"),
+            "unexpected error: {err}"
+        );
+        assert!(!manager.plugins[0].enabled);
+
+        manager
+            .enable("uni.hal")
+            .expect("enabling a required plugin is a no-op success");
+        assert!(!manager.plugins[0].enabled);
     }
 
     #[test]
