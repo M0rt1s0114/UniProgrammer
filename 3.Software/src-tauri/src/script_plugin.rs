@@ -15,9 +15,10 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
-use rquickjs::{Context, Ctx, Exception, Function, Null, Object, Runtime};
+use rquickjs::{Array, Context, Ctx, Exception, Function, Null, Object, Runtime, Value};
 use serde::Serialize;
 
+use crate::hal_router::HalRouter;
 use crate::plugin::{PluginKind, PluginManifest};
 
 /// A single log line emitted by a script plugin.
@@ -54,6 +55,23 @@ const TIMEOUT_MESSAGE: &str = "脚本执行超时或被资源限制中断";
 /// Runs a single `kind = "protocol"` script plugin in a fresh sandboxed
 /// QuickJS context.
 pub fn run_plugin(manifest: &PluginManifest, source: &str) -> Result<ScriptRunResult, String> {
+    run_plugin_inner(manifest, source, None)
+}
+
+/// Runs a script plugin with a live HAL router exposed as `uni.hal`.
+pub fn run_plugin_with_hal(
+    manifest: &PluginManifest,
+    source: &str,
+    hal: &mut HalRouter,
+) -> Result<ScriptRunResult, String> {
+    run_plugin_inner(manifest, source, Some(hal))
+}
+
+fn run_plugin_inner(
+    manifest: &PluginManifest,
+    source: &str,
+    mut hal: Option<&mut HalRouter>,
+) -> Result<ScriptRunResult, String> {
     if manifest.kind != PluginKind::Protocol {
         return Err(format!(
             "script plugins require kind = \"protocol\", got '{}'",
@@ -91,9 +109,17 @@ pub fn run_plugin(manifest: &PluginManifest, source: &str) -> Result<ScriptRunRe
         }
     })));
 
+    let run_logs = logs.clone();
+    let run_registrations = registrations.clone();
     let result = context.with(|ctx| {
         harden_globals(&ctx)?;
-        inject_uni(&ctx, manifest, logs.clone(), registrations.clone())?;
+        inject_uni(
+            &ctx,
+            manifest,
+            run_logs,
+            run_registrations,
+            reborrow_hal(&mut hal),
+        )?;
         ctx.eval::<(), _>(source)
             .map_err(|err| describe_script_error(&ctx, err, interrupted.get()))
     });
@@ -107,6 +133,13 @@ pub fn run_plugin(manifest: &PluginManifest, source: &str) -> Result<ScriptRunRe
         logs: collected_logs,
         registrations: collected_registrations,
     })
+}
+
+/// Reborrows the HAL router option so `run_plugin_inner` keeps the original
+/// `&mut HalRouter` alive until the freshly-created QuickJS context has been
+/// dropped.
+fn reborrow_hal<'a>(hal: &'a mut Option<&mut HalRouter>) -> Option<&'a mut HalRouter> {
+    hal.as_deref_mut()
 }
 
 /// Removes unsafe globals before any plugin code runs.
@@ -160,6 +193,7 @@ fn inject_uni<'js>(
     manifest: &PluginManifest,
     logs: Rc<RefCell<Vec<ScriptLogEntry>>>,
     registrations: Rc<RefCell<Vec<ScriptRegistration>>>,
+    hal_param: Option<&mut HalRouter>,
 ) -> Result<(), String> {
     let globals = ctx.globals();
 
@@ -244,10 +278,15 @@ fn inject_uni<'js>(
         .map_err(|e| format!("failed to set uni.register: {e}"))?;
 
     let hal = Object::new(ctx.clone()).map_err(|e| format!("failed to create uni.hal: {e}"))?;
-    hal.set("available", false)
-        .map_err(|e| format!("failed to set uni.hal.available: {e}"))?;
-    hal.set("call", Null)
-        .map_err(|e| format!("failed to set uni.hal.call: {e}"))?;
+    match hal_param {
+        Some(router) => inject_hal(ctx, &hal, router)?,
+        None => {
+            hal.set("available", false)
+                .map_err(|e| format!("failed to set uni.hal.available: {e}"))?;
+            hal.set("call", Null)
+                .map_err(|e| format!("failed to set uni.hal.call: {e}"))?;
+        }
+    }
     uni.set("hal", hal)
         .map_err(|e| format!("failed to set uni.hal: {e}"))?;
 
@@ -255,6 +294,199 @@ fn inject_uni<'js>(
         .set("uni", uni)
         .map_err(|e| format!("failed to set global uni: {e}"))?;
     Ok(())
+}
+
+/// Injects the live `uni.hal` API backed by `router`.
+fn inject_hal<'js>(
+    ctx: &Ctx<'js>,
+    hal: &Object<'js>,
+    router: &mut HalRouter,
+) -> Result<(), String> {
+    hal.set("available", true)
+        .map_err(|e| format!("failed to set uni.hal.available: {e}"))?;
+
+    // `Function::new` requires its Rust closures to live as long as the JS
+    // context (`'js`), so a plain `&mut HalRouter` borrow cannot be captured
+    // directly. The borrow is erased into a raw pointer and kept alive by the
+    // `hal` argument of `run_plugin_inner` for the whole synchronous run; the
+    // functions and context are dropped before that borrow ends.
+    let hal_cell = Rc::new(RefCell::new(router as *mut HalRouter));
+
+    let adapters_fn = Function::new(ctx.clone(), {
+        let hal_cell = hal_cell.clone();
+        move |ctx: Ctx<'js>| -> rquickjs::Result<Array<'js>> {
+            with_hal_router(&ctx, &hal_cell, "adapters", |router| {
+                adapters_array(&ctx, router)
+            })
+        }
+    })
+    .map_err(|e| format!("failed to create uni.hal.adapters: {e}"))?;
+    hal.set("adapters", adapters_fn)
+        .map_err(|e| format!("failed to set uni.hal.adapters: {e}"))?;
+
+    let open_fn = Function::new(ctx.clone(), {
+        let hal_cell = hal_cell.clone();
+        move |ctx: Ctx<'js>, adapter: String, device: String| -> rquickjs::Result<String> {
+            with_hal_router(&ctx, &hal_cell, "open", |router| {
+                router.open(&adapter, &device).map_err(|message| {
+                    Exception::throw_type(&ctx, &format!("uni.hal.open: {message}"))
+                })
+            })
+        }
+    })
+    .map_err(|e| format!("failed to create uni.hal.open: {e}"))?;
+    hal.set("open", open_fn)
+        .map_err(|e| format!("failed to set uni.hal.open: {e}"))?;
+
+    let close_fn = Function::new(ctx.clone(), {
+        let hal_cell = hal_cell.clone();
+        move |ctx: Ctx<'js>, adapter: String, device: String| -> rquickjs::Result<Object<'js>> {
+            with_hal_router(&ctx, &hal_cell, "close", |router| {
+                router.close(&adapter, &device).map_err(|message| {
+                    Exception::throw_type(&ctx, &format!("uni.hal.close: {message}"))
+                })?;
+                Object::new(ctx.clone())
+            })
+        }
+    })
+    .map_err(|e| format!("failed to create uni.hal.close: {e}"))?;
+    hal.set("close", close_fn)
+        .map_err(|e| format!("failed to set uni.hal.close: {e}"))?;
+
+    let call_fn = Function::new(ctx.clone(), {
+        let hal_cell = hal_cell.clone();
+        move |ctx: Ctx<'js>,
+              adapter: String,
+              device: String,
+              op: Object<'js>|
+              -> rquickjs::Result<Object<'js>> {
+            let write = parse_write_bytes(&ctx, &op)?;
+            let read_len = parse_read_len(&ctx, &op)?;
+
+            let data = with_hal_router(&ctx, &hal_cell, "call", |router| {
+                router
+                    .spi_transact(&adapter, &device, &write, read_len)
+                    .map_err(|message| {
+                        Exception::throw_type(&ctx, &format!("uni.hal.call: {message}"))
+                    })
+            })?;
+
+            let result = Object::new(ctx)?;
+            result.set("data", data)?;
+            Ok(result)
+        }
+    })
+    .map_err(|e| format!("failed to create uni.hal.call: {e}"))?;
+    hal.set("call", call_fn)
+        .map_err(|e| format!("failed to set uni.hal.call: {e}"))?;
+
+    Ok(())
+}
+
+/// Runs `f` with a mutable HAL router borrow, rejecting nested re-entrant
+/// calls as JS type errors instead of panicking through `RefCell`.
+fn with_hal_router<'js, T>(
+    ctx: &Ctx<'js>,
+    hal_cell: &Rc<RefCell<*mut HalRouter>>,
+    method: &str,
+    f: impl FnOnce(&mut HalRouter) -> rquickjs::Result<T>,
+) -> rquickjs::Result<T> {
+    let mut borrowed = hal_cell.try_borrow_mut().map_err(|_| {
+        Exception::throw_type(
+            ctx,
+            &format!("uni.hal.{method}: nested re-entrant HAL call is not supported"),
+        )
+    })?;
+    // Safety: the pointer originates from the `&mut HalRouter` held by
+    // `run_plugin_inner` for the entire synchronous script run, and the JS
+    // functions / context are dropped before that borrow ends.
+    let router = unsafe { &mut **borrowed };
+    f(router)
+}
+
+/// Builds the JS `adapters()` array from the live HAL router.
+fn adapters_array<'js>(ctx: &Ctx<'js>, router: &HalRouter) -> rquickjs::Result<Array<'js>> {
+    let adapters = Array::new(ctx.clone())?;
+    for (adapter_index, adapter) in router.adapters.iter().enumerate() {
+        let devices = Array::new(ctx.clone())?;
+        for (device_index, device) in adapter.devices.iter().enumerate() {
+            let device_object = Object::new(ctx.clone())?;
+            device_object.set("id", device.id.clone())?;
+            device_object.set("kind", device.kind.clone())?;
+            device_object.set("detail", device.detail.clone())?;
+            devices.set(device_index, device_object)?;
+        }
+
+        let adapter_object = Object::new(ctx.clone())?;
+        adapter_object.set("name", adapter.name.clone())?;
+        adapter_object.set("devices", devices)?;
+        adapters.set(adapter_index, adapter_object)?;
+    }
+    Ok(adapters)
+}
+
+/// Validates `op.write` and converts it into bytes.
+fn parse_write_bytes(ctx: &Ctx<'_>, op: &Object<'_>) -> rquickjs::Result<Vec<u8>> {
+    let value: Value = op.get("write")?;
+    if !value.is_array() {
+        return Err(Exception::throw_type(
+            ctx,
+            "uni.hal.call: op.write must be an array of byte numbers",
+        ));
+    }
+    let array = value
+        .as_array()
+        .ok_or_else(|| Exception::throw_type(ctx, "uni.hal.call: op.write must be an array"))?;
+
+    let mut write = Vec::with_capacity(array.len());
+    for index in 0..array.len() {
+        let item: Value = array.get(index)?;
+        let number = item.as_number().ok_or_else(|| {
+            Exception::throw_type(ctx, "uni.hal.call: op.write must contain only numbers")
+        })?;
+        if !number.is_finite() || number.fract() != 0.0 {
+            return Err(Exception::throw_type(
+                ctx,
+                "uni.hal.call: op.write must contain only integers",
+            ));
+        }
+        if !(0.0..=255.0).contains(&number) {
+            return Err(Exception::throw_range(
+                ctx,
+                "uni.hal.call: op.write bytes must be in range 0..=255",
+            ));
+        }
+        write.push(number as u8);
+    }
+
+    if write.len() > 4096 {
+        return Err(Exception::throw_range(
+            ctx,
+            "uni.hal.call: op.write must be at most 4096 bytes",
+        ));
+    }
+    Ok(write)
+}
+
+/// Validates `op.readLen` and converts it into a byte count.
+fn parse_read_len(ctx: &Ctx<'_>, op: &Object<'_>) -> rquickjs::Result<usize> {
+    let value: Value = op.get("readLen")?;
+    let number = value
+        .as_number()
+        .ok_or_else(|| Exception::throw_type(ctx, "uni.hal.call: op.readLen must be a number"))?;
+    if !number.is_finite() || number.fract() != 0.0 {
+        return Err(Exception::throw_type(
+            ctx,
+            "uni.hal.call: op.readLen must be an integer",
+        ));
+    }
+    if !(0.0..=65536.0).contains(&number) {
+        return Err(Exception::throw_range(
+            ctx,
+            "uni.hal.call: op.readLen must be in range 0..=65536",
+        ));
+    }
+    Ok(number as usize)
 }
 
 /// Creates one `uni.log.<level>(message)` convenience function.
