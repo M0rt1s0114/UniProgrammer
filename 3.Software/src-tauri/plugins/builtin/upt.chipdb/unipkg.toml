@@ -1,0 +1,16 @@
+# 编译期内置插件：芯片数据库。
+# 当前随主程序一起编译，后续 L1 拆分时再改为独立插件包。
+[package]
+name = "upt.chipdb"
+version = "1.0.0"
+plugin_api = 1
+kind = "chipdb"
+layer = "required"
+entry = "upt_chipdb_sidecar"
+provider = "builtin"
+
+[dependencies]
+
+[permissions]
+
+[capabilities]

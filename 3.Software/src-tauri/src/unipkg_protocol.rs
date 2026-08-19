@@ -3,8 +3,8 @@
 //! UI plugins are plain static web packages. `unipkg://<plugin-name>/<path>`
 //! serves files from the resolved plugin directory (installed plugins first,
 //! then `plugins/builtin/`), which makes L1 UI packages — including the main
-//! window shell (`uni.tauri`) and embedded contribution pages such as
-//! `uni.tauri.hexview` — replaceable without touching the L0 executable.
+//! window shell (`upt.tauri`) and embedded contribution pages such as
+//! `upt.tauri.hexview` — replaceable without touching the L0 executable.
 //!
 //! In debug builds the two built-in UI plugins are redirected to their Vite
 //! dev servers (started by `npm run dev`) so hot reload keeps working.
@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use std::path::{Component, Path, PathBuf};
 
 use tauri::http::{header, Response, StatusCode};
-use uni_plugin::{PluginKind, PluginManager};
+use upt_plugin::{PluginKind, PluginManager};
 
 /// Resolved web root for one UI plugin package.
 #[derive(Debug, Clone)]
@@ -211,8 +211,8 @@ fn html_escape(text: &str) -> String {
 #[cfg(debug_assertions)]
 fn dev_server_port(plugin_name: &str) -> Option<u16> {
     match plugin_name {
-        "uni.tauri" => Some(1420),
-        "uni.tauri.hexview" => Some(1421),
+        "upt.tauri" => Some(1420),
+        "upt.tauri.hexview" => Some(1421),
         _ => None,
     }
 }
@@ -238,7 +238,7 @@ fn redirect_html(target: &str) -> Response<Vec<u8>> {
 mod tests {
     use super::*;
     use std::fs;
-    use uni_plugin::PluginManager;
+    use upt_plugin::PluginManager;
 
     fn test_root(tag: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
@@ -260,7 +260,7 @@ mod tests {
         let plugin_dir = root
             .join("plugins")
             .join("builtin")
-            .join("uni.tauri.hexview");
+            .join("upt.tauri.hexview");
         let dist = plugin_dir.join("dist");
         let assets = dist.join("assets");
         fs::create_dir_all(&assets).unwrap();
@@ -268,14 +268,14 @@ mod tests {
         fs::write(assets.join("app.js"), "console.log(1)").unwrap();
         fs::write(
             plugin_dir.join("unipkg.toml"),
-            "[package]\nname = \"uni.tauri.hexview\"\nversion = \"1.0.0\"\nplugin_api = 1\n\
+            "[package]\nname = \"upt.tauri.hexview\"\nversion = \"1.0.0\"\nplugin_api = 1\n\
              kind = \"ui\"\nlayer = \"required\"\nentry = \"dist/index.html\"\n",
         )
         .unwrap();
 
         let manager = PluginManager::load(&root);
         let protocol = UnipkgProtocol::from_manager(&manager);
-        let asset = protocol.plugins.get("uni.tauri.hexview").unwrap();
+        let asset = protocol.plugins.get("upt.tauri.hexview").unwrap();
         assert_eq!(asset.entry, "dist/index.html");
         assert!(asset.package_dir.join("dist/index.html").is_file());
 

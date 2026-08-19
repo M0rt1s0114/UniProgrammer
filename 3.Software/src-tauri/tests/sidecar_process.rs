@@ -3,7 +3,7 @@
 //! the framed stdio protocol.
 
 use serde_json::json;
-use uni_plugin::{CapabilitySet, SpiCapability};
+use upt_plugin::{CapabilitySet, SpiCapability};
 
 fn spi_capabilities() -> CapabilitySet {
     CapabilitySet {
@@ -25,10 +25,10 @@ fn spi_capabilities() -> CapabilitySet {
 fn sidecar_process_spi_roundtrip() {
     let caps = spi_capabilities();
 
-    let mut client = uni_hal::spawn_sidecar(
+    let mut client = upt_hal::spawn_sidecar(
         env!("CARGO_BIN_EXE_sidecar_mock"),
         &[],
-        "uni-hal-integration-test",
+        "upt-hal-integration-test",
         "1.0.0",
         &caps,
     )

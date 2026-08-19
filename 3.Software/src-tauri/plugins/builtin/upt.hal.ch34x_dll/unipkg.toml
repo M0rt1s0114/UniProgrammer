@@ -1,0 +1,24 @@
+# L2 冷启动插件：CH34X（CH341A / CH347T / CH347F）官方 CH34X.DLL 后端。
+# 需要厂商 CH34X.DLL（默认随 Windows 厂商驱动安装）。
+[package]
+name = "upt.hal.ch34x_dll"
+version = "1.0.0"
+plugin_api = 1
+kind = "adapter"
+layer = "cold"
+entry = "upt_ch34x_sidecar_dll"
+provider = "builtin"
+os = ["windows"]
+arch = ["x86_64", "aarch64"]
+
+[dependencies]
+"upt.hal" = "^1"
+
+[permissions]
+usb = true
+
+[capabilities.spi]
+enabled = true
+pins = { cs = "CS0", sck = "SCK", mosi = "MOSI", miso = "MISO" }
+max_frame = 4092
+max_freq_khz = 60000

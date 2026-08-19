@@ -15,8 +15,8 @@ const root = path.resolve(__dirname, '..')
 const cargoManifest = path.join(root, 'src-tauri', 'Cargo.toml')
 
 const cargoTargets = [
-  { feature: 'hal-dll', bin: 'uni_ch34x_sidecar_dll' },
-  { feature: 'hal-libusb', bin: 'uni_ch34x_sidecar_libusb' },
+  { feature: 'hal-dll', bin: 'upt_ch34x_sidecar_dll' },
+  { feature: 'hal-libusb', bin: 'upt_ch34x_sidecar_libusb' },
 ]
 
 for (const { feature, bin } of cargoTargets) {
@@ -28,7 +28,7 @@ for (const { feature, bin } of cargoTargets) {
       '--manifest-path',
       cargoManifest,
       '-p',
-      'uni-devices',
+      'upt-devices',
       '--features',
       feature,
       '--bin',

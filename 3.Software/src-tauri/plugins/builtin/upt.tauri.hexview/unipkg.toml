@@ -1,0 +1,18 @@
+# L1 必需插件：Tauri UI 的十六进制视图贡献页。
+# 命名 `upt.tauri.hexview` 表示它依附于 `upt.tauri` 壳；
+# 将来 Slint 壳对应 `upt.slint.hexview`。
+[package]
+name = "upt.tauri.hexview"
+version = "1.0.0"
+plugin_api = 1
+kind = "ui"
+layer = "required"
+entry = "dist/index.html"
+provider = "builtin"
+
+[dependencies]
+"upt.tauri" = "^1"
+
+[permissions]
+
+[capabilities]

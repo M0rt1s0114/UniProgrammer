@@ -9,7 +9,7 @@
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use serde_json::{json, Value};
 use std::io::{self, Read, Write};
-use uni_devices::serprog;
+use upt_devices::serprog;
 
 const FRAME_HEADER_LEN: usize = 4;
 const MAX_FRAME_LEN: usize = 64 * 1024 * 1024;

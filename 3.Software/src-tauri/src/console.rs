@@ -4,7 +4,7 @@
 //! allocates a console. When the user enables “调试控制台” in settings,
 //! [`attach`] allocates one very early in `main` and routes Rust's standard
 //! error output to it; sidecar child processes inherit the same console when
-//! `UNIPROG_DEBUG_CONSOLE=1` is set (see `uni-hal`).
+//! `UNIPROG_DEBUG_CONSOLE=1` is set (see `upt-hal`).
 
 /// Allocate a console and redirect the standard output/error handles to it.
 #[cfg(windows)]

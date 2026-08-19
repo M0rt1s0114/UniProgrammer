@@ -8,7 +8,7 @@
 use serde::Serialize;
 
 #[cfg(any(hal_backend_dll, hal_backend_libusb))]
-use uni_devices::ch34x::ChipKind;
+use upt_devices::ch34x::ChipKind;
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -42,7 +42,7 @@ pub fn scan_ch34x() -> Vec<ProgrammerCandidate> {
 
     #[cfg(hal_backend_dll)]
     {
-        match uni_devices::ch34x::enumerate_dll_devices() {
+        match upt_devices::ch34x::enumerate_dll_devices() {
             Ok(devices) => {
                 for (index, kind) in devices {
                     let (kind_str, name) = kind_name(kind);
@@ -66,7 +66,7 @@ pub fn scan_ch34x() -> Vec<ProgrammerCandidate> {
 
     #[cfg(hal_backend_libusb)]
     {
-        for (kind, bus, address) in uni_devices::ch34x::enumerate_libusb_devices() {
+        for (kind, bus, address) in upt_devices::ch34x::enumerate_libusb_devices() {
             let (kind_str, name) = kind_name(kind);
             out.push(ProgrammerCandidate {
                 id: format!("{kind_str}:{bus}:{address}"),
@@ -89,7 +89,7 @@ pub fn scan_ch34x() -> Vec<ProgrammerCandidate> {
 pub fn scan_serprog(ports: &[String], quick: bool) -> Vec<ProgrammerCandidate> {
     let mut out = Vec::new();
     for port in ports {
-        if let Some(version) = uni_devices::serprog::Serprog::probe(port, quick) {
+        if let Some(version) = upt_devices::serprog::Serprog::probe(port, quick) {
             out.push(ProgrammerCandidate {
                 id: format!("serprog:{port}"),
                 kind: "serprog".to_string(),

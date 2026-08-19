@@ -6,8 +6,8 @@ use serde::Serialize;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
-use uni_devices::ch34x::{self, Ch34xDevice, DeviceMode};
-use uni_devices::serprog;
+use upt_devices::ch34x::{self, Ch34xDevice, DeviceMode};
+use upt_devices::serprog;
 
 use crate::{chiplib, protocols, sfdp};
 

@@ -3,7 +3,7 @@
 //!
 //! Every [`run_plugin`] call creates a fresh QuickJS runtime and context so
 //! no JS state (globals, caches, prototypes) can leak across runs. Only the
-//! QuickJS default built-ins plus the injected `uni` object are visible:
+//! QuickJS default built-ins plus the injected `upt` object are visible:
 //! dynamic evaluation (`eval` / `Function`) and any Node/Web platform globals
 //! are removed before the script executes.
 //!
@@ -18,8 +18,8 @@ use std::time::{Duration, Instant};
 use rquickjs::{Array, Context, Ctx, Exception, Function, Null, Object, Runtime, Value};
 use serde::Serialize;
 
-use uni_hal::hal_router::HalRouter;
-use uni_plugin::{PluginKind, PluginManifest};
+use upt_hal::hal_router::HalRouter;
+use upt_plugin::{PluginKind, PluginManifest};
 
 /// A single log line emitted by a script plugin.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -28,7 +28,7 @@ pub struct ScriptLogEntry {
     pub message: String,
 }
 
-/// A protocol registration emitted by `uni.register`.
+/// A protocol registration emitted by `upt.register`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ScriptRegistration {
     pub id: String,
@@ -58,7 +58,7 @@ pub fn run_plugin(manifest: &PluginManifest, source: &str) -> Result<ScriptRunRe
     run_plugin_inner(manifest, source, None)
 }
 
-/// Runs a script plugin with a live HAL router exposed as `uni.hal`.
+/// Runs a script plugin with a live HAL router exposed as `upt.hal`.
 pub fn run_plugin_with_hal(
     manifest: &PluginManifest,
     source: &str,
@@ -113,7 +113,7 @@ fn run_plugin_inner(
     let run_registrations = registrations.clone();
     let result = context.with(|ctx| {
         harden_globals(&ctx)?;
-        inject_uni(
+        inject_upt(
             &ctx,
             manifest,
             run_logs,
@@ -187,8 +187,8 @@ fn harden_globals(ctx: &Ctx<'_>) -> Result<(), String> {
     Ok(())
 }
 
-/// Injects the `uni` SDK object into the global object.
-fn inject_uni<'js>(
+/// Injects the `upt` SDK object into the global object.
+fn inject_upt<'js>(
     ctx: &Ctx<'js>,
     manifest: &PluginManifest,
     logs: Rc<RefCell<Vec<ScriptLogEntry>>>,
@@ -197,23 +197,23 @@ fn inject_uni<'js>(
 ) -> Result<(), String> {
     let globals = ctx.globals();
 
-    let uni = Object::new(ctx.clone()).map_err(|e| format!("failed to create uni: {e}"))?;
-    uni.set("pluginApiVersion", 1u32)
-        .map_err(|e| format!("failed to set uni.pluginApiVersion: {e}"))?;
+    let upt = Object::new(ctx.clone()).map_err(|e| format!("failed to create upt: {e}"))?;
+    upt.set("pluginApiVersion", 1u32)
+        .map_err(|e| format!("failed to set upt.pluginApiVersion: {e}"))?;
 
     let manifest_obj =
-        Object::new(ctx.clone()).map_err(|e| format!("failed to create uni.manifest: {e}"))?;
+        Object::new(ctx.clone()).map_err(|e| format!("failed to create upt.manifest: {e}"))?;
     manifest_obj
         .set("name", manifest.name.clone())
-        .map_err(|e| format!("failed to set uni.manifest.name: {e}"))?;
+        .map_err(|e| format!("failed to set upt.manifest.name: {e}"))?;
     manifest_obj
         .set("version", manifest.version.to_string())
-        .map_err(|e| format!("failed to set uni.manifest.version: {e}"))?;
+        .map_err(|e| format!("failed to set upt.manifest.version: {e}"))?;
     manifest_obj
         .set("kind", manifest.kind.as_str())
-        .map_err(|e| format!("failed to set uni.manifest.kind: {e}"))?;
-    uni.set("manifest", manifest_obj)
-        .map_err(|e| format!("failed to set uni.manifest: {e}"))?;
+        .map_err(|e| format!("failed to set upt.manifest.kind: {e}"))?;
+    upt.set("manifest", manifest_obj)
+        .map_err(|e| format!("failed to set upt.manifest: {e}"))?;
 
     let log_fn = Function::new(ctx.clone(), {
         let logs = logs.clone();
@@ -226,18 +226,18 @@ fn inject_uni<'js>(
             Ok(())
         }
     })
-    .map_err(|e| format!("failed to create uni.log: {e}"))?;
+    .map_err(|e| format!("failed to create upt.log: {e}"))?;
     log_fn
         .set("info", log_level_fn(ctx, logs.clone(), "info")?)
-        .map_err(|e| format!("failed to create uni.log.info: {e}"))?;
+        .map_err(|e| format!("failed to create upt.log.info: {e}"))?;
     log_fn
         .set("warn", log_level_fn(ctx, logs.clone(), "warn")?)
-        .map_err(|e| format!("failed to create uni.log.warn: {e}"))?;
+        .map_err(|e| format!("failed to create upt.log.warn: {e}"))?;
     log_fn
         .set("error", log_level_fn(ctx, logs.clone(), "error")?)
-        .map_err(|e| format!("failed to create uni.log.error: {e}"))?;
-    uni.set("log", log_fn)
-        .map_err(|e| format!("failed to set uni.log: {e}"))?;
+        .map_err(|e| format!("failed to create upt.log.error: {e}"))?;
+    upt.set("log", log_fn)
+        .map_err(|e| format!("failed to set upt.log: {e}"))?;
 
     let register_fn = Function::new(ctx.clone(), {
         let logs = logs.clone();
@@ -248,7 +248,7 @@ fn inject_uni<'js>(
             let Some(id) = id else {
                 return Err(Exception::throw_type(
                     &ctx,
-                    "uni.register: descriptor.id must be a non-empty string",
+                    "upt.register: descriptor.id must be a non-empty string",
                 ));
             };
 
@@ -258,7 +258,7 @@ fn inject_uni<'js>(
                 logs.borrow_mut().push(ScriptLogEntry {
                     level: "warn".to_string(),
                     message: format!(
-                        "uni.register: ignored registration for '{id}': unknown kind '{kind}'"
+                        "upt.register: ignored registration for '{id}': unknown kind '{kind}'"
                     ),
                 });
                 return Ok(false);
@@ -273,37 +273,37 @@ fn inject_uni<'js>(
             Ok(true)
         }
     })
-    .map_err(|e| format!("failed to create uni.register: {e}"))?;
-    uni.set("register", register_fn)
-        .map_err(|e| format!("failed to set uni.register: {e}"))?;
+    .map_err(|e| format!("failed to create upt.register: {e}"))?;
+    upt.set("register", register_fn)
+        .map_err(|e| format!("failed to set upt.register: {e}"))?;
 
-    let hal = Object::new(ctx.clone()).map_err(|e| format!("failed to create uni.hal: {e}"))?;
+    let hal = Object::new(ctx.clone()).map_err(|e| format!("failed to create upt.hal: {e}"))?;
     match hal_param {
         Some(router) => inject_hal(ctx, &hal, router)?,
         None => {
             hal.set("available", false)
-                .map_err(|e| format!("failed to set uni.hal.available: {e}"))?;
+                .map_err(|e| format!("failed to set upt.hal.available: {e}"))?;
             hal.set("call", Null)
-                .map_err(|e| format!("failed to set uni.hal.call: {e}"))?;
+                .map_err(|e| format!("failed to set upt.hal.call: {e}"))?;
         }
     }
-    uni.set("hal", hal)
-        .map_err(|e| format!("failed to set uni.hal: {e}"))?;
+    upt.set("hal", hal)
+        .map_err(|e| format!("failed to set upt.hal: {e}"))?;
 
     globals
-        .set("uni", uni)
-        .map_err(|e| format!("failed to set global uni: {e}"))?;
+        .set("upt", upt)
+        .map_err(|e| format!("failed to set global upt: {e}"))?;
     Ok(())
 }
 
-/// Injects the live `uni.hal` API backed by `router`.
+/// Injects the live `upt.hal` API backed by `router`.
 fn inject_hal<'js>(
     ctx: &Ctx<'js>,
     hal: &Object<'js>,
     router: &mut HalRouter,
 ) -> Result<(), String> {
     hal.set("available", true)
-        .map_err(|e| format!("failed to set uni.hal.available: {e}"))?;
+        .map_err(|e| format!("failed to set upt.hal.available: {e}"))?;
 
     // `Function::new` requires its Rust closures to live as long as the JS
     // context (`'js`), so a plain `&mut HalRouter` borrow cannot be captured
@@ -320,38 +320,38 @@ fn inject_hal<'js>(
             })
         }
     })
-    .map_err(|e| format!("failed to create uni.hal.adapters: {e}"))?;
+    .map_err(|e| format!("failed to create upt.hal.adapters: {e}"))?;
     hal.set("adapters", adapters_fn)
-        .map_err(|e| format!("failed to set uni.hal.adapters: {e}"))?;
+        .map_err(|e| format!("failed to set upt.hal.adapters: {e}"))?;
 
     let open_fn = Function::new(ctx.clone(), {
         let hal_cell = hal_cell.clone();
         move |ctx: Ctx<'js>, adapter: String, device: String| -> rquickjs::Result<String> {
             with_hal_router(&ctx, &hal_cell, "open", |router| {
                 router.open(&adapter, &device).map_err(|message| {
-                    Exception::throw_type(&ctx, &format!("uni.hal.open: {message}"))
+                    Exception::throw_type(&ctx, &format!("upt.hal.open: {message}"))
                 })
             })
         }
     })
-    .map_err(|e| format!("failed to create uni.hal.open: {e}"))?;
+    .map_err(|e| format!("failed to create upt.hal.open: {e}"))?;
     hal.set("open", open_fn)
-        .map_err(|e| format!("failed to set uni.hal.open: {e}"))?;
+        .map_err(|e| format!("failed to set upt.hal.open: {e}"))?;
 
     let close_fn = Function::new(ctx.clone(), {
         let hal_cell = hal_cell.clone();
         move |ctx: Ctx<'js>, adapter: String, device: String| -> rquickjs::Result<Object<'js>> {
             with_hal_router(&ctx, &hal_cell, "close", |router| {
                 router.close(&adapter, &device).map_err(|message| {
-                    Exception::throw_type(&ctx, &format!("uni.hal.close: {message}"))
+                    Exception::throw_type(&ctx, &format!("upt.hal.close: {message}"))
                 })?;
                 Object::new(ctx.clone())
             })
         }
     })
-    .map_err(|e| format!("failed to create uni.hal.close: {e}"))?;
+    .map_err(|e| format!("failed to create upt.hal.close: {e}"))?;
     hal.set("close", close_fn)
-        .map_err(|e| format!("failed to set uni.hal.close: {e}"))?;
+        .map_err(|e| format!("failed to set upt.hal.close: {e}"))?;
 
     let call_fn = Function::new(ctx.clone(), {
         let hal_cell = hal_cell.clone();
@@ -367,7 +367,7 @@ fn inject_hal<'js>(
                 router
                     .spi_transact(&adapter, &device, &write, read_len)
                     .map_err(|message| {
-                        Exception::throw_type(&ctx, &format!("uni.hal.call: {message}"))
+                        Exception::throw_type(&ctx, &format!("upt.hal.call: {message}"))
                     })
             })?;
 
@@ -376,9 +376,9 @@ fn inject_hal<'js>(
             Ok(result)
         }
     })
-    .map_err(|e| format!("failed to create uni.hal.call: {e}"))?;
+    .map_err(|e| format!("failed to create upt.hal.call: {e}"))?;
     hal.set("call", call_fn)
-        .map_err(|e| format!("failed to set uni.hal.call: {e}"))?;
+        .map_err(|e| format!("failed to set upt.hal.call: {e}"))?;
 
     Ok(())
 }
@@ -394,7 +394,7 @@ fn with_hal_router<'js, T>(
     let mut borrowed = hal_cell.try_borrow_mut().map_err(|_| {
         Exception::throw_type(
             ctx,
-            &format!("uni.hal.{method}: nested re-entrant HAL call is not supported"),
+            &format!("upt.hal.{method}: nested re-entrant HAL call is not supported"),
         )
     })?;
     // Safety: the pointer originates from the `&mut HalRouter` held by
@@ -431,29 +431,29 @@ fn parse_write_bytes(ctx: &Ctx<'_>, op: &Object<'_>) -> rquickjs::Result<Vec<u8>
     if !value.is_array() {
         return Err(Exception::throw_type(
             ctx,
-            "uni.hal.call: op.write must be an array of byte numbers",
+            "upt.hal.call: op.write must be an array of byte numbers",
         ));
     }
     let array = value
         .as_array()
-        .ok_or_else(|| Exception::throw_type(ctx, "uni.hal.call: op.write must be an array"))?;
+        .ok_or_else(|| Exception::throw_type(ctx, "upt.hal.call: op.write must be an array"))?;
 
     let mut write = Vec::with_capacity(array.len());
     for index in 0..array.len() {
         let item: Value = array.get(index)?;
         let number = item.as_number().ok_or_else(|| {
-            Exception::throw_type(ctx, "uni.hal.call: op.write must contain only numbers")
+            Exception::throw_type(ctx, "upt.hal.call: op.write must contain only numbers")
         })?;
         if !number.is_finite() || number.fract() != 0.0 {
             return Err(Exception::throw_type(
                 ctx,
-                "uni.hal.call: op.write must contain only integers",
+                "upt.hal.call: op.write must contain only integers",
             ));
         }
         if !(0.0..=255.0).contains(&number) {
             return Err(Exception::throw_range(
                 ctx,
-                "uni.hal.call: op.write bytes must be in range 0..=255",
+                "upt.hal.call: op.write bytes must be in range 0..=255",
             ));
         }
         write.push(number as u8);
@@ -462,7 +462,7 @@ fn parse_write_bytes(ctx: &Ctx<'_>, op: &Object<'_>) -> rquickjs::Result<Vec<u8>
     if write.len() > 4096 {
         return Err(Exception::throw_range(
             ctx,
-            "uni.hal.call: op.write must be at most 4096 bytes",
+            "upt.hal.call: op.write must be at most 4096 bytes",
         ));
     }
     Ok(write)
@@ -473,23 +473,23 @@ fn parse_read_len(ctx: &Ctx<'_>, op: &Object<'_>) -> rquickjs::Result<usize> {
     let value: Value = op.get("readLen")?;
     let number = value
         .as_number()
-        .ok_or_else(|| Exception::throw_type(ctx, "uni.hal.call: op.readLen must be a number"))?;
+        .ok_or_else(|| Exception::throw_type(ctx, "upt.hal.call: op.readLen must be a number"))?;
     if !number.is_finite() || number.fract() != 0.0 {
         return Err(Exception::throw_type(
             ctx,
-            "uni.hal.call: op.readLen must be an integer",
+            "upt.hal.call: op.readLen must be an integer",
         ));
     }
     if !(0.0..=65536.0).contains(&number) {
         return Err(Exception::throw_range(
             ctx,
-            "uni.hal.call: op.readLen must be in range 0..=65536",
+            "upt.hal.call: op.readLen must be in range 0..=65536",
         ));
     }
     Ok(number as usize)
 }
 
-/// Creates one `uni.log.<level>(message)` convenience function.
+/// Creates one `upt.log.<level>(message)` convenience function.
 fn log_level_fn<'js>(
     ctx: &Ctx<'js>,
     logs: Rc<RefCell<Vec<ScriptLogEntry>>>,
@@ -505,7 +505,7 @@ fn log_level_fn<'js>(
             Ok(())
         },
     )
-    .map_err(|e| format!("failed to create uni.log.{level}: {e}"))
+    .map_err(|e| format!("failed to create upt.log.{level}: {e}"))
 }
 
 /// Converts a JS engine error into a readable string, including the thrown
@@ -555,10 +555,10 @@ entry = "{entry}"
         let result = run_plugin(
             &manifest,
             r#"
-                uni.log("info", "hello");
-                uni.log.warn("careful");
-                uni.log("debug", "normalized to info");
-                uni.register({
+                upt.log("info", "hello");
+                upt.log.warn("careful");
+                upt.log("debug", "normalized to info");
+                upt.register({
                     id: "vnd.example.helloworld",
                     kind: "protocol",
                     description: "Example protocol plugin"
@@ -591,16 +591,16 @@ entry = "{entry}"
             &manifest,
             r#"
                 if (typeof require === 'undefined') {
-                    uni.register({ id: "sandbox.no-require", kind: "protocol" });
+                    upt.register({ id: "sandbox.no-require", kind: "protocol" });
                 }
                 if (typeof fetch === 'undefined') {
-                    uni.register({ id: "sandbox.no-fetch", kind: "protocol" });
+                    upt.register({ id: "sandbox.no-fetch", kind: "protocol" });
                 }
                 if (typeof eval === 'undefined') {
-                    uni.register({ id: "sandbox.no-eval", kind: "protocol" });
+                    upt.register({ id: "sandbox.no-eval", kind: "protocol" });
                 }
                 if (typeof Function === 'undefined') {
-                    uni.register({ id: "sandbox.no-function", kind: "protocol" });
+                    upt.register({ id: "sandbox.no-function", kind: "protocol" });
                 }
             "#,
         )
@@ -620,7 +620,7 @@ entry = "{entry}"
     #[test]
     fn rejects_non_js_entry() {
         let manifest = protocol_manifest("plugin.py");
-        let error = run_plugin(&manifest, "uni.log('info', 'x');").unwrap_err();
+        let error = run_plugin(&manifest, "upt.log('info', 'x');").unwrap_err();
         assert!(error.contains("must end with \".js\""), "{error}");
     }
 
@@ -637,15 +637,15 @@ entry = "plugin.js"
 "#,
         )
         .expect("test manifest should parse");
-        let error = run_plugin(&manifest, "uni.log('info', 'x');").unwrap_err();
+        let error = run_plugin(&manifest, "upt.log('info', 'x');").unwrap_err();
         assert!(error.contains("require kind = \"protocol\""), "{error}");
     }
 
     #[test]
     fn missing_register_id_throws_readable_error() {
         let manifest = protocol_manifest("plugin.js");
-        let error = run_plugin(&manifest, "uni.register({ kind: 'protocol' });").unwrap_err();
-        assert!(error.contains("uni.register"), "{error}");
+        let error = run_plugin(&manifest, "upt.register({ kind: 'protocol' });").unwrap_err();
+        assert!(error.contains("upt.register"), "{error}");
         assert!(error.contains("id"), "{error}");
     }
 

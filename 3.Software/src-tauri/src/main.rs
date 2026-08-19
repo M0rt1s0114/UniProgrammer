@@ -21,12 +21,12 @@ use serde::Serialize;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use tauri::{Emitter, Manager, State, WindowEvent};
-use uni_chipdb as chiplib;
-use uni_devices::{ch34x, serprog};
-use uni_hal::hal_router::{HalRouter, SidecarSelection};
-use uni_hal::sidecar_nor::SidecarNor;
-use uni_plugin::{self as plugin, BootCheck, BuiltinModule, PluginManager};
-use uni_proto::{firmware, protocols, sfdp};
+use upt_chipdb as chiplib;
+use upt_devices::{ch34x, serprog};
+use upt_hal::hal_router::{HalRouter, SidecarSelection};
+use upt_hal::sidecar_nor::SidecarNor;
+use upt_plugin::{self as plugin, BootCheck, BuiltinModule, PluginManager};
+use upt_proto::{firmware, protocols, sfdp};
 
 #[derive(Clone, Serialize)]
 struct ReadProgressEvent {
@@ -78,7 +78,7 @@ struct FirmwareLoadResult {
 #[derive(Serialize)]
 struct SidecarAdapterEntry {
     name: String,
-    devices: Vec<uni_hal::SidecarDevice>,
+    devices: Vec<upt_hal::SidecarDevice>,
 }
 
 #[derive(Serialize)]

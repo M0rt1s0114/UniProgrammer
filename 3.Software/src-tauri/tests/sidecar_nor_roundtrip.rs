@@ -7,9 +7,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
-use uni_hal::hal_router::HalRouter;
-use uni_hal::sidecar_nor::SidecarNor;
-use uni_plugin::PluginManager;
+use upt_hal::hal_router::HalRouter;
+use upt_hal::sidecar_nor::SidecarNor;
+use upt_plugin::PluginManager;
 
 static TMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 

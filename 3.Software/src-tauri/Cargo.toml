@@ -1,12 +1,12 @@
 [package]
 name = "uniprog"
-version = "0.4.0-alpha.11"
+version = "0.4.0-alpha.12"
 edition = "2021"
 license = "GPL-3.0-or-later"
 
 [workspace]
-members = [".", "crates/uni-chipdb", "crates/uni-devices", "crates/uni-hal", "crates/uni-plugin", "crates/uni-proto"]
-default-members = [".", "crates/uni-chipdb", "crates/uni-devices", "crates/uni-hal", "crates/uni-plugin", "crates/uni-proto"]
+members = [".", "crates/upt-chipdb", "crates/upt-devices", "crates/upt-hal", "crates/upt-plugin", "crates/upt-proto"]
+default-members = [".", "crates/upt-chipdb", "crates/upt-devices", "crates/upt-hal", "crates/upt-plugin", "crates/upt-proto"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
@@ -24,11 +24,11 @@ base64 = "0.22"
 rquickjs = "0.12.2"
 zip = "2.4"
 ureq = "2.12"
-uni-chipdb = { path = "crates/uni-chipdb" }
-uni-devices = { path = "crates/uni-devices" }
-uni-hal = { path = "crates/uni-hal" }
-uni-plugin = { path = "crates/uni-plugin" }
-uni-proto = { path = "crates/uni-proto" }
+upt-chipdb = { path = "crates/upt-chipdb" }
+upt-devices = { path = "crates/upt-devices" }
+upt-hal = { path = "crates/upt-hal" }
+upt-plugin = { path = "crates/upt-plugin" }
+upt-proto = { path = "crates/upt-proto" }
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.58", features = ["Win32_Foundation", "Win32_System_Com", "Win32_System_Console", "Win32_System_LibraryLoader", "Win32_UI_Shell", "Win32_UI_Shell_Common"] }
@@ -40,5 +40,5 @@ custom-protocol = ["tauri/custom-protocol"]
 #  - 都不启用：按平台自动选择（Windows -> DLL，其他 -> libusb）
 #  - hal-dll     ：强制 CH34X.DLL（仅 Windows 有意义）
 #  - hal-libusb ：强制 libusb/rusb（Windows 调试或 Linux 正常路径）
-hal-dll = ["uni-devices/hal-dll"]
-hal-libusb = ["uni-devices/hal-libusb"]
+hal-dll = ["upt-devices/hal-dll"]
+hal-libusb = ["upt-devices/hal-libusb"]

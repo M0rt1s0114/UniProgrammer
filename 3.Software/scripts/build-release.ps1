@@ -5,9 +5,9 @@
 #   powershell -ExecutionPolicy Bypass -File scripts/build-release.ps1 -Profile libusb
 #
 # Profiles:
-#   libusb  GPL-compliant public build: only uni.hal.ch34x_libusb is shipped,
-#           CH34X.DLL / uni.hal.ch34x_dll are kept out of the bundle.
-#   dll     local/maintainer build: only uni.hal.ch34x_dll (+ CH34X.DLL) is
+#   libusb  GPL-compliant public build: only upt.hal.ch34x_libusb is shipped,
+#           CH34X.DLL / upt.hal.ch34x_dll are kept out of the bundle.
+#   dll     local/maintainer build: only upt.hal.ch34x_dll (+ CH34X.DLL) is
 #           shipped for friends who use the vendor driver.
 #
 # The non-selected plugin package is temporarily moved out of
@@ -24,7 +24,7 @@ $root = Split-Path -Parent $PSScriptRoot
 $builtin = Join-Path $root 'src-tauri\plugins\builtin'
 $hold = Join-Path $root 'src-tauri\plugins-hold'
 
-$hide = if ($Profile -eq 'libusb') { 'uni.hal.ch34x_dll' } else { 'uni.hal.ch34x_libusb' }
+$hide = if ($Profile -eq 'libusb') { 'upt.hal.ch34x_dll' } else { 'upt.hal.ch34x_libusb' }
 $source = Join-Path $builtin $hide
 $target = Join-Path $hold $hide
 

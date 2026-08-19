@@ -1,10 +1,10 @@
 {
   "productName": "UniProgrammer",
   "mainBinaryName": "uniprog",
-  "version": "0.4.0-alpha.11",
+  "version": "0.4.0-alpha.12",
   "identifier": "com.uniprogrammer.app",
   "build": {
-    "frontendDist": "unipkg://localhost/uni.tauri/",
+    "frontendDist": "unipkg://localhost/upt.tauri/",
     "devUrl": "http://localhost:1420",
     "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build",

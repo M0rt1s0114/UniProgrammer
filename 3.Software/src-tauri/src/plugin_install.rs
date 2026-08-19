@@ -10,7 +10,7 @@ use std::fs;
 use std::io::{self, Read};
 use std::path::{Component, Path, PathBuf};
 use std::time::Duration;
-use uni_plugin::{manifest_candidates, PluginManifest};
+use upt_plugin::{manifest_candidates, PluginManifest};
 
 /// Result of a successful plugin package install.
 #[derive(Debug, Clone, Serialize)]

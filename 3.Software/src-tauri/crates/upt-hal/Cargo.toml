@@ -1,0 +1,11 @@
+[package]
+name = "upt-hal"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+
+[dependencies]
+upt-plugin = { path = "../upt-plugin" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+base64 = "0.22"

@@ -16,17 +16,17 @@ plugins/
 
 ## 命名规则
 
-插件 ID 采用 `uni.<层次/宿主>.<组件>`：
+插件 ID 采用 `upt.<层次/宿主>.<组件>`：
 
-- `uni.tauri` — Tauri UI 壳（L1 必需）；
-- `uni.tauri.hexview` — 依附于 Tauri 壳的 HexViewer（L1 必需）；
-  未来 Slint 壳对应 `uni.slint` / `uni.slint.hexview`；
-- `uni.hal` / `uni.proto` / `uni.chipdb` — L1 基础层；
-- `uni.hal.ch34x_dll` — CH341A / CH347T / CH347F 官方 DLL 后端（L2）；
-- `uni.hal.ch34x_libusb` — CH341A / CH347T / CH347F libusb 后端（L2）。
+- `upt.tauri` — Tauri UI 壳（L1 必需）；
+- `upt.tauri.hexview` — 依附于 Tauri 壳的 HexViewer（L1 必需）；
+  未来 Slint 壳对应 `upt.slint` / `upt.slint.hexview`；
+- `upt.hal` / `upt.proto` / `upt.chipdb` — L1 基础层；
+- `upt.hal.ch34x_dll` — CH341A / CH347T / CH347F 官方 DLL 后端（L2）；
+- `upt.hal.ch34x_libusb` — CH341A / CH347T / CH347F libusb 后端（L2）。
 
-`plugins/builtin/` 存放 L1 必需插件（`uni.tauri`、`uni.hal`、
-`uni.chipdb`、`uni.tauri.hexview`、`uni.proto`）。这些清单由主程序在启动
+`plugins/builtin/` 存放 L1 必需插件（`upt.tauri`、`upt.hal`、
+`upt.chipdb`、`upt.tauri.hexview`、`upt.proto`）。这些清单由主程序在启动
 时检查，缺失或无效会导致启动失败；**请勿删除或改名该目录**。
 
 ## L2 冷启动插件
@@ -35,10 +35,10 @@ plugins/
 用户的启用状态保存在 `plugin-state.toml`（位于 `plugins/` 同级目录），
 启动时随插件目录一起加载。
 
-`plugins/builtin/uni.hal.ch34x_dll/` 与 `uni.hal.ch34x_libusb/` 是随程序
+`plugins/builtin/upt.hal.ch34x_dll/` 与 `upt.hal.ch34x_libusb/` 是随程序
 发布的内置 L2 示例：同一个 sidecar 源码分别按 DLL 与 libusb 后端编译，
-manifest 指向 `uni_ch34x_sidecar_dll` / `uni_ch34x_sidecar_libusb`，
-由 uni-hal 在启动时拉起、探测并注册。内置插件默认启用，也可以在插件
+manifest 指向 `upt_ch34x_sidecar_dll` / `upt_ch34x_sidecar_libusb`，
+由 upt-hal 在启动时拉起、探测并注册。内置插件默认启用，也可以在插件
 管理器中显式禁用。构建流程会把两个 sidecar 二进制复制进各自插件目录，
 保证 `plugins/` 资源树自包含；CH34X.DLL 只复制进 DLL 后端包。
 
@@ -53,11 +53,11 @@ Sidecar 调试/验证面板默认在插件管理器中隐藏；需要时到 设�
 - 根路径 `unipkg://localhost/<插件名>/` → `[package].entry` 指向的页面
   （内置插件约定为 `dist/index.html`）；
 - 其它路径直接映射到插件目录下同名文件，例如
-  `unipkg://localhost/uni.tauri.hexview/dist/assets/app.js`
+  `unipkg://localhost/upt.tauri.hexview/dist/assets/app.js`
   → `<插件目录>/dist/assets/app.js`。
 
-主窗口本身加载 `unipkg://localhost/uni.tauri/`，因此 **整个 UI 壳是
-一个普通 L1 插件**，用另一份 `uni.tauri` 包覆盖内置目录即可替换
+主窗口本身加载 `unipkg://localhost/upt.tauri/`，因此 **整个 UI 壳是
+一个普通 L1 插件**，用另一份 `upt.tauri` 包覆盖内置目录即可替换
 （重启生效）。
 
 > Windows/WebView2 的 iframe 里不能直接用自定义 scheme URL；wry 要求写成
@@ -66,7 +66,7 @@ Sidecar 调试/验证面板默认在插件管理器中隐藏；需要时到 设�
 > IPC 命令才会放行）。macOS/Linux 仍使用 `unipkg://localhost/...` 原形。
 > UI 插件自身的构建产物也应当以 `<插件名>/dist/` 为 base。
 
-## `uni.tauri.hexview` 贡献点契约（v1）
+## `upt.tauri.hexview` 贡献点契约（v1）
 
 UI 壳把 HexViewer 包放入 `<iframe>` 加载，插件页面内不能使用 Tauri IPC，
 只能通过 `window.postMessage` 与壳通信。消息方向约定：
@@ -89,5 +89,5 @@ UI 壳把 HexViewer 包放入 `<iframe>` 加载，插件页面内不能使用 Ta
 | `uniprog:hex:replace` | `data: Uint8Array` | 整块替换（填充 / 撤销等批量操作） |
 | `uniprog:hex:log`     | `level`, `message` | 转发到主日志面板                  |
 
-替换 `uni.tauri.hexview` 时只需保持入口页可达并实现上述消息；界面与实现
+替换 `upt.tauri.hexview` 时只需保持入口页可达并实现上述消息；界面与实现
 完全自由。

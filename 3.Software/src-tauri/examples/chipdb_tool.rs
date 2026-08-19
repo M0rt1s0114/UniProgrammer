@@ -17,7 +17,7 @@
 
 use std::fs;
 
-use uni_chipdb as chiplib;
+use upt_chipdb as chiplib;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();

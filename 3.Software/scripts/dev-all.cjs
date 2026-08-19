@@ -1,8 +1,8 @@
 /* global require, process, __dirname, console */
 /* eslint-disable @typescript-eslint/no-require-imports */
 // Runs the Vite dev servers for every built-in UI plugin in one command:
-//   - uni.tauri         -> http://localhost:1420 (main window in `tauri dev`)
-//   - uni.tauri.hexview -> http://localhost:1421 (loaded through the unipkg://
+//   - upt.tauri         -> http://localhost:1420 (main window in `tauri dev`)
+//   - upt.tauri.hexview -> http://localhost:1421 (loaded through the unipkg://
 //     protocol, which redirects to this server in debug builds)
 const { spawn, spawnSync } = require('node:child_process')
 const path = require('node:path')
@@ -15,8 +15,8 @@ const pluginsDir = path.join(root, 'src-tauri', 'plugins', 'builtin')
 // executables in their package directories when `npm run dev` is used.
 const cargoManifest = path.join(root, 'src-tauri', 'Cargo.toml')
 const sidecarTargets = [
-  { feature: 'hal-dll', bin: 'uni_ch34x_sidecar_dll' },
-  { feature: 'hal-libusb', bin: 'uni_ch34x_sidecar_libusb' },
+  { feature: 'hal-dll', bin: 'upt_ch34x_sidecar_dll' },
+  { feature: 'hal-libusb', bin: 'upt_ch34x_sidecar_libusb' },
 ]
 for (const { feature, bin } of sidecarTargets) {
   const result = spawnSync(
@@ -26,7 +26,7 @@ for (const { feature, bin } of sidecarTargets) {
       '--manifest-path',
       cargoManifest,
       '-p',
-      'uni-devices',
+      'upt-devices',
       '--features',
       feature,
       '--bin',
@@ -52,8 +52,8 @@ if (copySidecars.status !== 0) {
 }
 
 const targets = [
-  { name: 'uni.tauri', config: 'uni.tauri/vite.config.js' },
-  { name: 'uni.tauri.hexview', config: 'uni.tauri.hexview/vite.config.js' },
+  { name: 'upt.tauri', config: 'upt.tauri/vite.config.js' },
+  { name: 'upt.tauri.hexview', config: 'upt.tauri.hexview/vite.config.js' },
 ]
 
 const children = targets.map((target) => {

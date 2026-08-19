@@ -19,12 +19,12 @@ const exeSuffix = process.platform === 'win32' ? '.exe' : ''
 
 const copies = [
   {
-    name: 'uni_ch34x_sidecar_dll',
-    packageName: 'uni.hal.ch34x_dll',
+    name: 'upt_ch34x_sidecar_dll',
+    packageName: 'upt.hal.ch34x_dll',
   },
   {
-    name: 'uni_ch34x_sidecar_libusb',
-    packageName: 'uni.hal.ch34x_libusb',
+    name: 'upt_ch34x_sidecar_libusb',
+    packageName: 'upt.hal.ch34x_libusb',
   },
 ]
 
@@ -55,7 +55,7 @@ for (const { name, packageName } of copies) {
 // It belongs to the dll-backend package only; the libusb package must stay
 // DLL-free.
 const dllSource = path.join(srcTauri, 'CH34X.DLL')
-const dllPackageDir = path.join(pluginsDir, 'uni.hal.ch34x_dll')
+const dllPackageDir = path.join(pluginsDir, 'upt.hal.ch34x_dll')
 if (fs.existsSync(dllSource) && fs.existsSync(dllPackageDir)) {
   const dllDestination = path.join(dllPackageDir, 'CH34X.DLL')
   try {

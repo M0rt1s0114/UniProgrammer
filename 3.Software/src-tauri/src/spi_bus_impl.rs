@@ -1,14 +1,14 @@
 //! App-local [`SpiBus`] implementations for the built-in CH34X and serprog
 //! programmers.
 //!
-//! The [`SpiBus`] trait itself lives in `uni-hal`; these implementations stay
+//! The [`SpiBus`] trait itself lives in `upt-hal`; these implementations stay
 //! in the app crate because they wrap app-local device types (`Ch34xDevice`
 //! and `Serprog`) and orphan rules would prevent implementing the external
 //! trait for those local types outside this crate.
 
-use uni_devices::ch34x::Ch34xDevice;
-use uni_devices::serprog::Serprog;
-use uni_hal::spi_bus::SpiBus;
+use upt_devices::ch34x::Ch34xDevice;
+use upt_devices::serprog::Serprog;
+use upt_hal::spi_bus::SpiBus;
 
 /// [`SpiBus`] over a built-in CH34X programmer.
 ///
