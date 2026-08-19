@@ -47,3 +47,6 @@ feature/
 *.msi
 *.dmg
 *.AppImage
+
+# Portable program test directory (local only)
+ProgramTest/
