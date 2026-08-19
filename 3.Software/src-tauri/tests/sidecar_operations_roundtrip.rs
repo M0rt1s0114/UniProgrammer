@@ -19,6 +19,10 @@ mod hal_router;
 #[allow(dead_code)] // reusing the full module exposes more public API than this test needs
 mod sidecar_nor;
 
+#[path = "../src/nor_ops.rs"]
+#[allow(dead_code)]
+mod nor_ops;
+
 #[path = "../src/ch34x.rs"]
 #[allow(dead_code)] // pulled in by operations; only the sidecar path is exercised
 mod ch34x;

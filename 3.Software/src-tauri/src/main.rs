@@ -7,6 +7,7 @@ mod core;
 mod dialogs;
 mod firmware;
 pub mod hal_router;
+pub mod nor_ops;
 mod operations;
 mod plugin;
 mod protocols;
