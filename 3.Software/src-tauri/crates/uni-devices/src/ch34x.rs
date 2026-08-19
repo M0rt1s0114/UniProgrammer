@@ -246,7 +246,7 @@ fn open_device_matching(
 }
 
 #[cfg(hal_backend_libusb)]
-pub(crate) fn enumerate_libusb_devices() -> Vec<(ChipKind, u8, u8)> {
+pub fn enumerate_libusb_devices() -> Vec<(ChipKind, u8, u8)> {
     let mut found = Vec::new();
     let Ok(devices) = rusb::devices() else {
         return found;

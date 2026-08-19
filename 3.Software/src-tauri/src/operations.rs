@@ -5,7 +5,6 @@
 use serde::Serialize;
 use std::time::{Duration, Instant};
 
-use crate::ch34x::Ch34xDevice;
 use crate::core::{
     nor_params, open_ch34x, open_ch34x_mode, parse_nand_bad_block_mode, prepare_bypass_if_needed,
     scan_nand_bad_blocks_for_mode, serprog_wait_ready, spi_4byte_mode, spi_read_status,
@@ -13,6 +12,7 @@ use crate::core::{
     NOR_BP_MASK_SR1,
 };
 use crate::protocols;
+use uni_devices::ch34x::Ch34xDevice;
 use uni_hal::hal_router::{HalRouter, SidecarSelection};
 use uni_hal::sidecar_nor::SidecarNor;
 

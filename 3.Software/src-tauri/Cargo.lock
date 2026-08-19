@@ -3926,6 +3926,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "uni-devices"
+version = "0.1.0"
+dependencies = [
+ "rusb",
+ "serialport",
+ "windows 0.58.0",
+]
+
+[[package]]
 name = "uni-hal"
 version = "0.1.0"
 dependencies = [
@@ -4009,7 +4018,6 @@ dependencies = [
  "open",
  "quick-xml 0.31.0",
  "rquickjs",
- "rusb",
  "semver",
  "serde",
  "serde_json",
@@ -4018,6 +4026,7 @@ dependencies = [
  "tauri-build",
  "toml 0.8.23",
  "uni-chipdb",
+ "uni-devices",
  "uni-hal",
  "uni-plugin",
  "uni-proto",

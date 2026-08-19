@@ -5,8 +5,8 @@ edition = "2021"
 license = "GPL-3.0-or-later"
 
 [workspace]
-members = [".", "crates/uni-chipdb", "crates/uni-hal", "crates/uni-plugin", "crates/uni-proto"]
-default-members = [".", "crates/uni-chipdb", "crates/uni-hal", "crates/uni-plugin", "crates/uni-proto"]
+members = [".", "crates/uni-chipdb", "crates/uni-devices", "crates/uni-hal", "crates/uni-plugin", "crates/uni-proto"]
+default-members = [".", "crates/uni-chipdb", "crates/uni-devices", "crates/uni-hal", "crates/uni-plugin", "crates/uni-proto"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
@@ -16,7 +16,6 @@ tauri = { version = "2", features = [] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 quick-xml = "0.31"
-rusb = "0.9"
 serialport = "4.2"
 open = "5"
 toml = "0.8"
@@ -26,6 +25,7 @@ rquickjs = "0.12.2"
 zip = "2.4"
 ureq = "2.12"
 uni-chipdb = { path = "crates/uni-chipdb" }
+uni-devices = { path = "crates/uni-devices" }
 uni-hal = { path = "crates/uni-hal" }
 uni-plugin = { path = "crates/uni-plugin" }
 uni-proto = { path = "crates/uni-proto" }
@@ -40,5 +40,5 @@ custom-protocol = ["tauri/custom-protocol"]
 #  - 都不启用：按平台自动选择（Windows -> DLL，其他 -> libusb）
 #  - hal-dll     ：强制 CH34X.DLL（仅 Windows 有意义）
 #  - hal-libusb ：强制 libusb/rusb（Windows 调试或 Linux 正常路径）
-hal-dll = []
-hal-libusb = []
+hal-dll = ["uni-devices/hal-dll"]
+hal-libusb = ["uni-devices/hal-libusb"]

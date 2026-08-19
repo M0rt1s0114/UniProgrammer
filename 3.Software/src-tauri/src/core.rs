@@ -6,8 +6,10 @@ use serde::Serialize;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
-use crate::ch34x::{Ch34xDevice, DeviceMode};
-use crate::{chiplib, protocols, serprog, sfdp};
+use uni_devices::ch34x::{self, Ch34xDevice, DeviceMode};
+use uni_devices::serprog;
+
+use crate::{chiplib, protocols, sfdp};
 
 #[derive(Serialize)]
 pub struct ChipDetectResult {
@@ -42,7 +44,7 @@ pub struct ChipDetectInfo {
 }
 
 pub struct AppState {
-    pub ch34x: Option<crate::ch34x::Ch34xSettings>,
+    pub ch34x: Option<ch34x::Ch34xSettings>,
     pub serprog: Option<serprog::Serprog>,
     pub lib: Option<chiplib::Chiplib>,
     pub connected_device: Option<String>,

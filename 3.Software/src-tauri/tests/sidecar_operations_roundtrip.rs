@@ -3,17 +3,9 @@
 //! starts the HAL router and drives erase / write / verify / read through
 //! `operations::sidecar_*` over the real child-process protocol.
 
-#[path = "../src/ch34x.rs"]
-#[allow(dead_code)] // pulled in by operations; only the sidecar path is exercised
-mod ch34x;
-
 #[path = "../src/autodetect.rs"]
 #[allow(dead_code)] // pulled in by core; only the sidecar path is exercised
 mod autodetect;
-
-#[path = "../src/serprog.rs"]
-#[allow(dead_code)] // pulled in by core; only the sidecar path is exercised
-mod serprog;
 
 #[path = "../src/core.rs"]
 #[allow(dead_code)] // pulled in by operations; only the sidecar path is exercised
@@ -26,6 +18,9 @@ mod protocols;
 #[path = "../src/operations.rs"]
 #[allow(dead_code)] // reusing the full module exposes more public API than this test needs
 mod operations;
+
+#[allow(unused_imports)] // kept so the included app modules resolve the device transports
+use uni_devices::{ch34x, serprog};
 
 use std::fs;
 use std::path::{Path, PathBuf};

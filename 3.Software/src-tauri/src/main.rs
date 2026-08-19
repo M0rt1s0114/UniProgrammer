@@ -1,14 +1,12 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod autodetect;
-mod ch34x;
 mod core;
 mod dialogs;
 mod operations;
 pub mod plugin_install;
 mod protocols;
 pub mod script_plugin;
-mod serprog;
 mod settings;
 pub mod spi_bus_impl;
 
@@ -23,6 +21,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use tauri::{Emitter, Manager, State, WindowEvent};
 use uni_chipdb as chiplib;
+use uni_devices::{ch34x, serprog};
 use uni_hal::hal_router::{HalRouter, SidecarSelection};
 use uni_hal::sidecar_nor::SidecarNor;
 use uni_plugin::{self as plugin, BootCheck, BuiltinModule, PluginManager};

@@ -4,10 +4,10 @@
 //! (see `bus_mode_for_protocol`). CS/START/STOP are driven manually exactly
 //! like IMSProg. The device is opened and closed per operation by the caller.
 
-use crate::ch34x::{Ch34xDevice, DeviceMode};
 use crate::chiplib::ChipInfo;
 use serde::Serialize;
 use std::time::{Duration, Instant};
+use uni_devices::ch34x::{Ch34xDevice, DeviceMode};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NandDummyMode {

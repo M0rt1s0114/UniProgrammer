@@ -6,8 +6,8 @@
 //! and `Serprog`) and orphan rules would prevent implementing the external
 //! trait for those local types outside this crate.
 
-use crate::ch34x::Ch34xDevice;
-use crate::serprog::Serprog;
+use uni_devices::ch34x::Ch34xDevice;
+use uni_devices::serprog::Serprog;
 use uni_hal::spi_bus::SpiBus;
 
 /// [`SpiBus`] over a built-in CH34X programmer.

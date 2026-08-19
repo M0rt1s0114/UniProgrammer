@@ -6,13 +6,10 @@
 //! `probe` lists available serial ports without touching them; `open` and
 //! `execute` delegate to the in-process [`serprog`] adapter.
 
-#[path = "../src/serprog.rs"]
-#[allow(dead_code)] // in-process adapter has optional helpers the sidecar does not call
-mod serprog;
-
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use serde_json::{json, Value};
 use std::io::{self, Read, Write};
+use uni_devices::serprog;
 
 const FRAME_HEADER_LEN: usize = 4;
 const MAX_FRAME_LEN: usize = 64 * 1024 * 1024;
