@@ -60,7 +60,7 @@ USB/串口传输之间保持清晰分离。
 
 ### 预构建产物
 
-Alpha 构建产物会发布在 GitHub Releases，从 `v0.4.0-alpha.1` 开始。
+Alpha 构建产物会发布在 GitHub Releases，从 `v0.4.0-alpha.2` 开始。
 
 - Windows：CI 生成 libusb 后端的便携版。出于许可证原因，官方
   `CH34X.DLL` 不随源码分发；Windows DLL 后端需要本地放置厂商 DLL 后构建。
