@@ -15,6 +15,8 @@ quick-xml = "0.31"
 rusb = "0.9"
 serialport = "4.2"
 open = "5"
+toml = "0.8"
+semver = "1"
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.58", features = ["Win32_Foundation", "Win32_System_Com", "Win32_System_LibraryLoader", "Win32_UI_Shell", "Win32_UI_Shell_Common"] }

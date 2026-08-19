@@ -7,6 +7,7 @@ mod core;
 mod dialogs;
 mod firmware;
 mod operations;
+mod plugin;
 mod protocols;
 mod serprog;
 mod settings;
@@ -18,6 +19,7 @@ use core::{
     BbmLutResult, ChipDetectInfo, ChipDetectResult, NorWriteProtectStatus, RawBytesResult,
 };
 use operations::BlankCheckResult;
+use plugin::PluginManager;
 use serde::Serialize;
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -657,7 +659,55 @@ fn save_settings(content: String) -> Result<String, String> {
     settings::save(&content)
 }
 
+#[derive(Serialize)]
+struct PluginListEntry {
+    name: String,
+    version: String,
+    kind: String,
+    enabled: bool,
+    error: Option<String>,
+}
+
+#[tauri::command]
+fn plugin_list(state: State<'_, Mutex<PluginManager>>) -> Result<Vec<PluginListEntry>, String> {
+    let manager = state.lock().map_err(|e| e.to_string())?;
+    Ok(manager
+        .plugins
+        .iter()
+        .map(|p| {
+            let manifest_path = p.path.join("manifest.toml").display().to_string();
+            let error = manager
+                .errors
+                .iter()
+                .find(|(key, _)| *key == p.manifest.name || *key == manifest_path)
+                .map(|(_, e)| e.clone());
+            PluginListEntry {
+                name: p.manifest.name.clone(),
+                version: p.manifest.version.to_string(),
+                kind: p.manifest.kind.as_str().to_string(),
+                enabled: p.enabled,
+                error,
+            }
+        })
+        .collect())
+}
+
+#[tauri::command]
+fn plugin_enable(state: State<'_, Mutex<PluginManager>>, name: String) -> Result<String, String> {
+    let mut manager = state.lock().map_err(|e| e.to_string())?;
+    manager.enable(&name)?;
+    Ok(format!("plugin enabled: {name}"))
+}
+
+#[tauri::command]
+fn plugin_disable(state: State<'_, Mutex<PluginManager>>, name: String) -> Result<String, String> {
+    let mut manager = state.lock().map_err(|e| e.to_string())?;
+    manager.disable(&name)?;
+    Ok(format!("plugin disabled: {name}"))
+}
+
 fn main() {
+    let exe = exe_dir();
     tauri::Builder::default()
         .manage(Mutex::new(AppState {
             ch34x: None,
@@ -669,6 +719,7 @@ fn main() {
             cached_serprog: Vec::new(),
             operation_running: false,
         }))
+        .manage(Mutex::new(PluginManager::load(&exe)))
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
                 let busy = window
@@ -722,6 +773,9 @@ fn main() {
             set_operation_running,
             load_settings,
             save_settings,
+            plugin_list,
+            plugin_enable,
+            plugin_disable,
         ])
         .run(tauri::generate_context!())
         .expect("启动失败");
