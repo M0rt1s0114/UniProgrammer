@@ -32,7 +32,12 @@ let failures = 0
 
 for (const { name, packageName } of copies) {
   const source = path.join(targetDir, `${name}${exeSuffix}`)
-  const destination = path.join(pluginsDir, packageName, `${name}${exeSuffix}`)
+  const packageDir = path.join(pluginsDir, packageName)
+  const destination = path.join(packageDir, `${name}${exeSuffix}`)
+  if (!fs.existsSync(packageDir)) {
+    console.log(`[copy-sidecars] skip ${name}: package ${packageName} is absent in this profile`)
+    continue
+  }
   if (!fs.existsSync(source)) {
     console.log(`[copy-sidecars] skip ${name}: ${source} not built yet`)
     continue
@@ -50,8 +55,9 @@ for (const { name, packageName } of copies) {
 // It belongs to the dll-backend package only; the libusb package must stay
 // DLL-free.
 const dllSource = path.join(srcTauri, 'CH34X.DLL')
-if (fs.existsSync(dllSource)) {
-  const dllDestination = path.join(pluginsDir, 'uni.hal.ch34x_dll', 'CH34X.DLL')
+const dllPackageDir = path.join(pluginsDir, 'uni.hal.ch34x_dll')
+if (fs.existsSync(dllSource) && fs.existsSync(dllPackageDir)) {
+  const dllDestination = path.join(dllPackageDir, 'CH34X.DLL')
   try {
     fs.copyFileSync(dllSource, dllDestination)
     console.log(`[copy-sidecars] CH34X.DLL -> ${dllDestination}`)
