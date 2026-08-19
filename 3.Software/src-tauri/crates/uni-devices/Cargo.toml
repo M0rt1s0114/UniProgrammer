@@ -3,6 +3,7 @@ name = "uni-devices"
 version = "0.1.0"
 edition = "2021"
 license = "GPL-3.0-or-later"
+autobins = false
 
 [dependencies]
 base64 = "0.22"
@@ -21,11 +22,15 @@ hal-libusb = []
 # 同一个 sidecar 源码，按后端分别编译成两个可执行文件，
 # 供 uni.hal.ch34x_dll / uni.hal.ch34x_libusb 两个插件包使用。
 [[bin]]
-name = "uni_ch34x_sidecar_dll"
+name = "uni_ch34x_sidecar"
 path = "src/bin/uni_ch34x_sidecar.rs"
+
+[[bin]]
+name = "uni_ch34x_sidecar_dll"
+path = "src/bin/uni_ch34x_sidecar_dll.rs"
 required-features = ["hal-dll"]
 
 [[bin]]
 name = "uni_ch34x_sidecar_libusb"
-path = "src/bin/uni_ch34x_sidecar.rs"
+path = "src/bin/uni_ch34x_sidecar_libusb.rs"
 required-features = ["hal-libusb"]
