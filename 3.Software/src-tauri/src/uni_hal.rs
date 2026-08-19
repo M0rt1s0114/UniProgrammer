@@ -14,6 +14,7 @@
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 
 /// Current sidecar protocol version.
 pub const SIDECAR_PROTOCOL_VERSION: u32 = 1;
@@ -184,6 +185,79 @@ impl SidecarClient {
             .cloned()
             .ok_or_else(|| format!("'{method}' response missing result"))
     }
+}
+
+/// A real child-process transport that speaks framed JSON on the child's
+/// stdin/stdout. Stderr is inherited so sidecar debug logs stay visible.
+pub struct ChildTransport {
+    child: Child,
+    stdin: Option<ChildStdin>,
+    stdout: ChildStdout,
+}
+
+impl ChildTransport {
+    /// Spawn `program` with `args` as a sidecar process.
+    ///
+    /// The child is started with piped stdin/stdout and inherited stderr.
+    /// No shell is involved.
+    pub fn spawn_child(program: &str, args: &[String]) -> Result<Self, String> {
+        let mut command = Command::new(program);
+        command.args(args);
+        command.stdin(Stdio::piped());
+        command.stdout(Stdio::piped());
+        command.stderr(Stdio::inherit());
+
+        let mut child = command
+            .spawn()
+            .map_err(|e| format!("failed to spawn sidecar process '{program}': {e}"))?;
+        let stdin = child.stdin.take();
+        let stdout = child.stdout.take().ok_or_else(|| {
+            let _ = child.kill();
+            let _ = child.wait();
+            "failed to capture sidecar stdout pipe".to_string()
+        })?;
+
+        Ok(Self {
+            child,
+            stdin,
+            stdout,
+        })
+    }
+}
+
+impl SidecarTransport for ChildTransport {
+    fn send(&mut self, bytes: &[u8]) -> Result<(), String> {
+        let stdin = self
+            .stdin
+            .as_mut()
+            .ok_or_else(|| "sidecar stdin is not connected".to_string())?;
+        frame::write_frame(stdin, bytes)
+    }
+
+    fn recv(&mut self) -> Result<Vec<u8>, String> {
+        frame::read_frame(&mut self.stdout)
+    }
+}
+
+impl Drop for ChildTransport {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+}
+
+/// Spawn a sidecar adapter process and perform the protocol handshake.
+pub fn spawn_sidecar(
+    program: &str,
+    args: &[String],
+    name: &str,
+    version: &str,
+    capabilities: &crate::plugin::CapabilitySet,
+) -> Result<SidecarClient, String> {
+    let transport = ChildTransport::spawn_child(program, args)?;
+    let mut client = SidecarClient::new(Box::new(transport));
+    client.handshake(name, version, capabilities)?;
+    Ok(client)
 }
 
 fn describe_rpc_error(code: i64, message: &str) -> String {

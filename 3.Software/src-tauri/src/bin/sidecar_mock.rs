@@ -1,0 +1,207 @@
+// Binary target for integration tests.
+//
+// This is a copy of `examples/sidecar_mock.rs`. `include!` cannot be used to
+// reuse that file directly because its inner `//!` doc comments are rejected
+// at the include site. Keep the two files in sync manually.
+
+use base64::{engine::general_purpose::STANDARD, Engine as _};
+use serde_json::{json, Value};
+use std::io::{self, Read, Write};
+
+const FRAME_HEADER_LEN: usize = 4;
+const MAX_FRAME_LEN: usize = 64 * 1024 * 1024;
+
+const CAPABILITY_NOT_EXPOSED: i32 = -32001;
+const BUSY: i32 = -32002;
+const INVALID_PARAMS: i32 = -32602;
+const METHOD_NOT_FOUND: i32 = -32601;
+
+fn encode_frame(payload: &[u8]) -> Result<Vec<u8>, String> {
+    let len = u32::try_from(payload.len())
+        .map_err(|_| format!("payload too large to frame: {} bytes", payload.len()))?;
+    let mut frame = Vec::with_capacity(FRAME_HEADER_LEN + len as usize);
+    frame.extend_from_slice(&len.to_le_bytes());
+    frame.extend_from_slice(payload);
+    Ok(frame)
+}
+
+fn write_frame<W: Write>(writer: &mut W, payload: &[u8]) -> Result<(), String> {
+    let frame = encode_frame(payload)?;
+    writer
+        .write_all(&frame)
+        .map_err(|e| format!("failed to write frame: {e}"))
+}
+
+fn read_frame<R: Read>(reader: &mut R) -> Result<Vec<u8>, String> {
+    let mut header = [0u8; FRAME_HEADER_LEN];
+    reader
+        .read_exact(&mut header)
+        .map_err(|e| format!("failed to read 4-byte frame length header: {e}"))?;
+
+    let payload_len = u32::from_le_bytes(header) as usize;
+    if payload_len > MAX_FRAME_LEN {
+        return Err(format!(
+            "declared frame length {payload_len} exceeds maximum {MAX_FRAME_LEN}"
+        ));
+    }
+
+    let mut payload = vec![0u8; payload_len];
+    reader
+        .read_exact(&mut payload)
+        .map_err(|e| format!("failed to read frame payload of {payload_len} bytes: {e}"))?;
+    Ok(payload)
+}
+
+fn success_response(id: u64, result: Value) -> Value {
+    json!({ "id": id, "result": result })
+}
+
+fn error_response(id: u64, code: i32, message: impl Into<String>) -> Value {
+    json!({ "id": id, "error": { "code": code, "message": message.into() } })
+}
+
+fn handle_spi_transact(id: u64, op: &Value) -> Value {
+    let Some(write_b64) = op.get("write_b64").and_then(Value::as_str) else {
+        return error_response(id, INVALID_PARAMS, "missing write_b64");
+    };
+    let Some(read_len) = op.get("read_len").and_then(Value::as_u64) else {
+        return error_response(id, INVALID_PARAMS, "missing read_len");
+    };
+    let Ok(read_len) = usize::try_from(read_len) else {
+        return error_response(id, INVALID_PARAMS, "read_len does not fit usize");
+    };
+
+    let write_bytes = match STANDARD.decode(write_b64) {
+        Ok(bytes) => bytes,
+        Err(e) => return error_response(id, INVALID_PARAMS, format!("invalid write_b64: {e}")),
+    };
+
+    let mut data = vec![0xFFu8; read_len];
+    if write_bytes.contains(&0x9F) {
+        let jedec = [0xEF, 0x40, 0x18];
+        for (i, byte) in jedec.iter().enumerate().take(read_len) {
+            data[i] = *byte;
+        }
+    }
+
+    eprintln!(
+        "[sidecar_mock] spi_transact write_len={} read_len={read_len}",
+        write_bytes.len()
+    );
+    success_response(id, json!({ "data_b64": STANDARD.encode(&data) }))
+}
+
+fn handle_execute(id: u64, params: &Value, session_id: Option<&str>) -> Value {
+    let Some(sid) = params.get("session_id").and_then(Value::as_str) else {
+        return error_response(id, BUSY, "execute before open or missing session_id");
+    };
+    if session_id != Some(sid) {
+        return error_response(id, BUSY, "execute before open or unknown session_id");
+    }
+
+    let op = params.get("op").cloned().unwrap_or_else(|| json!({}));
+    let op_name = op.get("op").and_then(Value::as_str).unwrap_or("");
+
+    match op_name {
+        "spi_transact" => handle_spi_transact(id, &op),
+        _ => error_response(
+            id,
+            CAPABILITY_NOT_EXPOSED,
+            format!("capability not exposed: {op_name}"),
+        ),
+    }
+}
+
+fn main() {
+    let stdin = io::stdin();
+    let stdout = io::stdout();
+    let mut reader = stdin.lock();
+    let mut writer = stdout.lock();
+    let mut session_id: Option<String> = None;
+
+    eprintln!("[sidecar_mock] ready");
+
+    loop {
+        let payload = match read_frame(&mut reader) {
+            Ok(payload) => payload,
+            Err(e) => {
+                eprintln!("[sidecar_mock] read error: {e}");
+                break;
+            }
+        };
+
+        let request: Value = match serde_json::from_slice(&payload) {
+            Ok(request) => request,
+            Err(e) => {
+                eprintln!("[sidecar_mock] invalid JSON request: {e}");
+                continue;
+            }
+        };
+
+        let Some(id) = request.get("id").and_then(Value::as_u64) else {
+            eprintln!("[sidecar_mock] request without numeric id ignored");
+            continue;
+        };
+        let method = request.get("method").and_then(Value::as_str).unwrap_or("");
+        let params = request.get("params").cloned().unwrap_or_else(|| json!({}));
+
+        let response = match method {
+            "handshake" => {
+                eprintln!(
+                    "[sidecar_mock] handshake name={} version={}",
+                    params.get("name").and_then(Value::as_str).unwrap_or("?"),
+                    params.get("version").and_then(Value::as_str).unwrap_or("?")
+                );
+                success_response(id, json!({ "protocol_version": 1 }))
+            }
+            "probe" => {
+                eprintln!("[sidecar_mock] probe");
+                success_response(
+                    id,
+                    json!({
+                        "devices": [
+                            { "id": "mock-0", "kind": "spi", "detail": "Mock sidecar adapter" }
+                        ]
+                    }),
+                )
+            }
+            "open" => {
+                let device_id = params
+                    .get("device_id")
+                    .and_then(Value::as_str)
+                    .unwrap_or("?");
+                eprintln!("[sidecar_mock] open device={device_id}");
+                let sid = "mock-session-1".to_string();
+                session_id = Some(sid.clone());
+                success_response(id, json!({ "session_id": sid }))
+            }
+            "close" => {
+                let sid = params
+                    .get("session_id")
+                    .and_then(Value::as_str)
+                    .unwrap_or("");
+                if session_id.as_deref() == Some(sid) {
+                    eprintln!("[sidecar_mock] close session={sid}");
+                    session_id = None;
+                    success_response(id, json!({}))
+                } else {
+                    error_response(id, BUSY, "close before open or unknown session_id")
+                }
+            }
+            "execute" => handle_execute(id, &params, session_id.as_deref()),
+            _ => error_response(id, METHOD_NOT_FOUND, format!("method not found: {method}")),
+        };
+
+        let response_payload = serde_json::to_vec(&response).expect("response must encode");
+        if let Err(e) = write_frame(&mut writer, &response_payload) {
+            eprintln!("[sidecar_mock] write error: {e}");
+            break;
+        }
+        if let Err(e) = writer.flush() {
+            eprintln!("[sidecar_mock] flush error: {e}");
+            break;
+        }
+    }
+
+    eprintln!("[sidecar_mock] exiting");
+}
