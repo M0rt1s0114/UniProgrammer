@@ -4,11 +4,13 @@
 //! stdout is reserved for protocol frames.
 //!
 //! The mock models a synchronous 1 MiB SPI NOR flash (W25Q128-style JEDEC ID
-//! but truncated to 1 MiB). Each open session receives a fresh erased model.
+//! but truncated to 1 MiB). The flash model is process-global and persists
+//! across open/close cycles.
 
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use serde_json::{json, Value};
 use std::io::{self, Read, Write};
+use std::sync::{Mutex, OnceLock};
 
 const FRAME_HEADER_LEN: usize = 4;
 const MAX_FRAME_LEN: usize = 64 * 1024 * 1024;
@@ -22,21 +24,24 @@ const FLASH_SIZE: usize = 1024 * 1024;
 const SECTOR_SIZE: usize = 4 * 1024;
 const BLOCK_SIZE: usize = 64 * 1024;
 
-/// One open session: a private 1 MiB NOR model plus its write-enable latch.
-struct FlashSession {
-    id: String,
+/// Process-global 1 MiB SPI NOR model plus its write-enable latch.
+struct FlashModel {
     flash: Vec<u8>,
     wel: bool,
 }
 
-impl FlashSession {
-    fn new(id: &str) -> Self {
+impl FlashModel {
+    fn new() -> Self {
         Self {
-            id: id.to_string(),
             flash: vec![0xFF; FLASH_SIZE],
             wel: false,
         }
     }
+}
+
+fn flash_model() -> &'static Mutex<FlashModel> {
+    static MODEL: OnceLock<Mutex<FlashModel>> = OnceLock::new();
+    MODEL.get_or_init(|| Mutex::new(FlashModel::new()))
 }
 
 fn encode_frame(payload: &[u8]) -> Result<Vec<u8>, String> {
@@ -196,7 +201,7 @@ fn spi_transact(
     Ok(data)
 }
 
-fn handle_spi_transact(id: u64, op: &Value, session: &mut FlashSession) -> Value {
+fn handle_spi_transact(id: u64, op: &Value, model: &mut FlashModel) -> Value {
     let Some(write_b64) = op.get("write_b64").and_then(Value::as_str) else {
         return error_response(id, INVALID_PARAMS, "missing write_b64");
     };
@@ -212,7 +217,7 @@ fn handle_spi_transact(id: u64, op: &Value, session: &mut FlashSession) -> Value
         Err(e) => return error_response(id, INVALID_PARAMS, format!("invalid write_b64: {e}")),
     };
 
-    let data = match spi_transact(&mut session.flash, &mut session.wel, &write_bytes, read_len) {
+    let data = match spi_transact(&mut model.flash, &mut model.wel, &write_bytes, read_len) {
         Ok(data) => data,
         Err((code, message)) => return error_response(id, code, message),
     };
@@ -224,14 +229,11 @@ fn handle_spi_transact(id: u64, op: &Value, session: &mut FlashSession) -> Value
     success_response(id, json!({ "data_b64": STANDARD.encode(&data) }))
 }
 
-fn handle_execute(id: u64, params: &Value, session: Option<&mut FlashSession>) -> Value {
+fn handle_execute(id: u64, params: &Value, open_session_id: Option<&str>) -> Value {
     let Some(sid) = params.get("session_id").and_then(Value::as_str) else {
         return error_response(id, BUSY, "execute before open or missing session_id");
     };
-    let Some(session) = session else {
-        return error_response(id, BUSY, "execute before open or unknown session_id");
-    };
-    if session.id != sid {
+    if open_session_id != Some(sid) {
         return error_response(id, BUSY, "execute before open or unknown session_id");
     }
 
@@ -239,7 +241,13 @@ fn handle_execute(id: u64, params: &Value, session: Option<&mut FlashSession>) -
     let op_name = op.get("op").and_then(Value::as_str).unwrap_or("");
 
     match op_name {
-        "spi_transact" => handle_spi_transact(id, &op, session),
+        "spi_transact" => {
+            let model = flash_model();
+            let mut model = model
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            handle_spi_transact(id, &op, &mut model)
+        }
         _ => error_response(
             id,
             CAPABILITY_NOT_EXPOSED,
@@ -253,7 +261,7 @@ fn main() {
     let stdout = io::stdout();
     let mut reader = stdin.lock();
     let mut writer = stdout.lock();
-    let mut session: Option<FlashSession> = None;
+    let mut open_session_id: Option<String> = None;
 
     eprintln!("[sidecar_mock] ready");
 
@@ -308,7 +316,7 @@ fn main() {
                     .unwrap_or("?");
                 eprintln!("[sidecar_mock] open device={device_id}");
                 let sid = "mock-session-1".to_string();
-                session = Some(FlashSession::new(&sid));
+                open_session_id = Some(sid.clone());
                 success_response(id, json!({ "session_id": sid }))
             }
             "close" => {
@@ -316,15 +324,15 @@ fn main() {
                     .get("session_id")
                     .and_then(Value::as_str)
                     .unwrap_or("");
-                if session.as_ref().map(|s| s.id.as_str()) == Some(sid) {
+                if open_session_id.as_deref() == Some(sid) {
                     eprintln!("[sidecar_mock] close session={sid}");
-                    session = None;
+                    open_session_id = None;
                     success_response(id, json!({}))
                 } else {
                     error_response(id, BUSY, "close before open or unknown session_id")
                 }
             }
-            "execute" => handle_execute(id, &params, session.as_mut()),
+            "execute" => handle_execute(id, &params, open_session_id.as_deref()),
             _ => error_response(id, METHOD_NOT_FOUND, format!("method not found: {method}")),
         };
 

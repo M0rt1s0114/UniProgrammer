@@ -32,16 +32,12 @@ pub struct SidecarSelection {
     pub device_id: String,
 }
 
-/// Runtime HAL router: adapters, open sessions, idle sessions available for
-/// reuse, and the per-adapter error log.
+/// Runtime HAL router: adapters, open sessions, and the per-adapter error
+/// log.
 pub struct HalRouter {
     pub adapters: Vec<LoadedAdapter>,
     pub sessions: Vec<AdapterSession>,
     pub errors: Vec<(String, String)>,
-    /// Sessions that were closed locally but whose sidecar session is kept
-    /// alive so a subsequent `open` for the same adapter + device can reuse
-    /// it without resetting the adapter-side state.
-    idle_sessions: Vec<AdapterSession>,
 }
 
 impl HalRouter {
@@ -103,7 +99,6 @@ impl HalRouter {
             adapters,
             sessions: Vec::new(),
             errors,
-            idle_sessions: Vec::new(),
         }
     }
 
@@ -118,11 +113,9 @@ impl HalRouter {
     /// Open a session on an adapter device.
     ///
     /// If a session for the same adapter and device is already open it is
-    /// reused as-is. If the adapter has another active session it is moved to
-    /// the idle pool first. If an idle session for the same adapter and device
-    /// exists it is reactivated without contacting the sidecar, which keeps
-    /// adapter-side state (for example a SPI NOR model) intact across
-    /// operation-level open/close cycles.
+    /// reused as-is. If the adapter has another active session it is closed
+    /// best-effort first, then a new sidecar session is opened for the
+    /// requested device.
     pub fn open(&mut self, adapter_name: &str, device_id: &str) -> Result<String, String> {
         if let Some(session) = self
             .sessions
@@ -136,22 +129,6 @@ impl HalRouter {
             let existing_device_id = self.sessions[index].device_id.clone();
             let _ = self.close(adapter_name, &existing_device_id);
         }
-
-        if let Some(index) = self
-            .idle_sessions
-            .iter()
-            .position(|s| s.adapter == adapter_name && s.device_id == device_id)
-        {
-            let session = self.idle_sessions.remove(index);
-            let session_id = session.session_id.clone();
-            self.sessions.push(session);
-            return Ok(session_id);
-        }
-
-        // The adapter may have idle sessions for other devices; close those on
-        // the sidecar before opening a new session so an adapter never keeps
-        // more than one idle server-side session alive.
-        self.close_idle_adapter_sessions(adapter_name);
 
         let adapter = self
             .adapters
@@ -170,12 +147,9 @@ impl HalRouter {
 
     /// Close the session for `(adapter_name, device_id)`.
     ///
-    /// The local session is moved to the idle pool instead of being closed on
-    /// the sidecar. Idle sessions are reused by [`HalRouter::open`] for the
-    /// same adapter + device, and are closed on [`HalRouter::shutdown`] (or
-    /// when the adapter is opened with a different device). This keeps
-    /// adapter-side state alive across operation-level open/close cycles. A
-    /// missing session is the only error returned.
+    /// The sidecar session is closed best-effort (errors are recorded in
+    /// [`HalRouter::errors`]) and the local session is removed. A missing
+    /// session is the only error returned.
     pub fn close(&mut self, adapter_name: &str, device_id: &str) -> Result<(), String> {
         let Some(index) = self
             .sessions
@@ -186,34 +160,17 @@ impl HalRouter {
         };
 
         let session = self.sessions.remove(index);
-        self.idle_sessions.push(session);
-        Ok(())
-    }
-
-    /// Close every idle session for `adapter_name` on the sidecar and remove
-    /// them from the idle pool.
-    fn close_idle_adapter_sessions(&mut self, adapter_name: &str) {
-        let idle_indexes: Vec<usize> = self
-            .idle_sessions
-            .iter()
-            .enumerate()
-            .filter(|(_, s)| s.adapter == adapter_name)
-            .map(|(index, _)| index)
-            .collect();
-
-        for index in idle_indexes.into_iter().rev() {
-            let session = self.idle_sessions.remove(index);
-            if let Some(adapter) = self
-                .adapters
-                .iter_mut()
-                .find(|adapter| adapter.name == adapter_name)
-            {
-                if let Err(e) = adapter.client.close(&session.session_id) {
-                    self.errors
-                        .push((adapter_name.to_string(), format!("close failed: {e}")));
-                }
+        if let Some(adapter) = self
+            .adapters
+            .iter_mut()
+            .find(|adapter| adapter.name == adapter_name)
+        {
+            if let Err(e) = adapter.client.close(&session.session_id) {
+                self.errors
+                    .push((adapter_name.to_string(), format!("close failed: {e}")));
             }
         }
+        Ok(())
     }
 
     /// Route an SPI full-duplex transaction to an open adapter session.
@@ -240,12 +197,11 @@ impl HalRouter {
         adapter.client.spi_transact(&session_id, write, read_len)
     }
 
-    /// Close every open and idle session best-effort, drop all clients
-    /// (dropping `ChildTransport` kills the sidecar child processes) and clear
-    /// the adapter/session vectors.
+    /// Close every open session best-effort, drop all clients (dropping
+    /// `ChildTransport` kills the sidecar child processes) and clear the
+    /// adapter/session vectors.
     pub fn shutdown(&mut self) {
-        let mut sessions = std::mem::take(&mut self.sessions);
-        sessions.extend(std::mem::take(&mut self.idle_sessions));
+        let sessions = std::mem::take(&mut self.sessions);
         for session in sessions {
             if let Some(adapter) = self
                 .adapters
@@ -263,6 +219,5 @@ impl HalRouter {
 
         self.adapters.clear();
         self.sessions.clear();
-        self.idle_sessions.clear();
     }
 }
