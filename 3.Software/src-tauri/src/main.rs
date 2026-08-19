@@ -12,6 +12,7 @@ mod protocols;
 mod serprog;
 mod settings;
 mod sfdp;
+pub mod uni_hal;
 
 use ch34x::{Ch34xDevice, Ch34xSettings, ChipKind};
 use core::{
