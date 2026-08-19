@@ -5,8 +5,8 @@ import { fileURLToPath, URL } from 'node:url'
 export default defineConfig(({ command }) => ({
   root: fileURLToPath(new URL('.', import.meta.url)),
   // Same reason as uni.ui.webview: the iframe page is served at
-  // `unipkg://uni.hexview/` and its files live in `<package>/dist/`.
-  base: command === 'build' ? 'dist/' : '/',
+  // `unipkg://localhost/uni.hexview/` and its files live in `<package>/dist/`.
+  base: command === 'build' ? 'uni.hexview/dist/' : '/',
   plugins: [vue()],
   resolve: {
     alias: {

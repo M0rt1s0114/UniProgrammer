@@ -66,33 +66,49 @@ impl UnipkgProtocol {
         let host = uri.host().unwrap_or_default();
         let raw_path = uri.path();
 
+        // Canonical form: `unipkg://localhost/<plugin>/<path>` (Windows/Android
+        // WebViews translate it to `http(s)://unipkg.localhost/<plugin>/<path>`
+        // before wry reverts it). The host-based legacy form
+        // `unipkg://<plugin>/<path>` is still accepted for older packages.
+        let (plugin_name, plugin_path) = if host == "localhost" {
+            let path = raw_path.trim_start_matches('/');
+            match path.split_once('/') {
+                Some((plugin, rest)) => (plugin.to_string(), rest.to_string()),
+                None => (path.to_string(), String::new()),
+            }
+        } else {
+            (
+                host.to_string(),
+                raw_path.trim_start_matches('/').to_string(),
+            )
+        };
+
         #[cfg(debug_assertions)]
-        if let Some(port) = dev_server_port(host) {
-            let path = if raw_path.is_empty() { "/" } else { raw_path };
+        if let Some(port) = dev_server_port(&plugin_name) {
+            let path = if plugin_path.is_empty() {
+                "/".to_string()
+            } else {
+                format!("/{plugin_path}")
+            };
             return redirect_html(&format!("http://127.0.0.1:{port}{path}"));
         }
 
-        let Some(asset) = self.plugins.get(host) else {
+        let Some(asset) = self.plugins.get(&plugin_name) else {
             return error_response(
                 StatusCode::NOT_FOUND,
-                &format!("未找到插件：{host}\n\nPlugin not found: {host}"),
+                &format!("未找到插件：{plugin_name}\n\nPlugin not found: {plugin_name}"),
             );
         };
 
-        let request_path = match raw_path {
-            "" | "/" => None,
-            other => Some(other.trim_start_matches('/')),
-        };
-
-        let relative = match request_path {
-            Some(path) if safe_relative_path(path) => path,
-            Some(_) => {
-                return error_response(
-                    StatusCode::FORBIDDEN,
-                    "路径越界，拒绝访问。\n\nPath traversal rejected.",
-                );
-            }
-            None => asset.entry.as_str(),
+        let relative = if plugin_path.is_empty() {
+            asset.entry.as_str()
+        } else if safe_relative_path(&plugin_path) {
+            plugin_path.as_str()
+        } else {
+            return error_response(
+                StatusCode::FORBIDDEN,
+                "路径越界，拒绝访问。\n\nPath traversal rejected.",
+            );
         };
 
         let candidate = asset.package_dir.join(relative);
@@ -290,27 +306,34 @@ mod tests {
         let manager = PluginManager::load(&root);
         let protocol = UnipkgProtocol::from_manager(&manager);
 
-        let entry_uri: tauri::http::Uri = "unipkg://vnd.test.ui/".parse().unwrap();
+        let entry_uri: tauri::http::Uri = "unipkg://localhost/vnd.test.ui/".parse().unwrap();
         let entry = protocol.respond(&entry_uri);
         assert_eq!(entry.status(), StatusCode::OK);
         assert_eq!(entry.body(), b"<html>ok</html>");
 
+        // The host-style legacy form must keep working.
+        let legacy_uri: tauri::http::Uri = "unipkg://vnd.test.ui/".parse().unwrap();
+        assert_eq!(protocol.respond(&legacy_uri).status(), StatusCode::OK);
+
         // Vite emits `./assets/...` references from `dist/index.html`; the
         // protocol must serve them from `<package>/dist/assets/...`.
-        let asset_uri: tauri::http::Uri =
-            "unipkg://vnd.test.ui/dist/assets/app.js".parse().unwrap();
+        let asset_uri: tauri::http::Uri = "unipkg://localhost/vnd.test.ui/dist/assets/app.js"
+            .parse()
+            .unwrap();
         let asset = protocol.respond(&asset_uri);
         assert_eq!(asset.status(), StatusCode::OK);
         assert_eq!(asset.body(), b"console.log('plugin asset')");
 
-        let missing_uri: tauri::http::Uri = "unipkg://vnd.test.ui/missing.js".parse().unwrap();
+        let missing_uri: tauri::http::Uri =
+            "unipkg://localhost/vnd.test.ui/missing.js".parse().unwrap();
         assert_eq!(
             protocol.respond(&missing_uri).status(),
             StatusCode::NOT_FOUND
         );
 
-        let traversal_uri: tauri::http::Uri =
-            "unipkg://vnd.test.ui/../unipkg.toml".parse().unwrap();
+        let traversal_uri: tauri::http::Uri = "unipkg://localhost/vnd.test.ui/../unipkg.toml"
+            .parse()
+            .unwrap();
         assert_eq!(
             protocol.respond(&traversal_uri).status(),
             StatusCode::FORBIDDEN

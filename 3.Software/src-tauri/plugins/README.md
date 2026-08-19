@@ -36,19 +36,22 @@ manifest 指向 sidecar 进程 `uni_ch34x_sidecar`，由 uni-hal 在启动时拉
 ## UI 插件与 `unipkg://` 协议
 
 `kind = "ui"` 的插件是一个自包含的静态 Web 包。主程序注册了
-`unipkg://<插件名>/<路径>` 自定义协议，并把请求映射到该插件目录：
+`unipkg://localhost/<插件名>/<路径>` 自定义协议，并把请求映射到该插件目录：
 
-- 根路径 `unipkg://<插件名>/` → `[package].entry` 指向的页面
+- 根路径 `unipkg://localhost/<插件名>/` → `[package].entry` 指向的页面
   （内置插件约定为 `dist/index.html`）；
 - 其它路径直接映射到插件目录下同名文件，例如
-  `unipkg://uni.hexview/dist/assets/app.js` → `<插件目录>/dist/assets/app.js`。
+  `unipkg://localhost/uni.hexview/dist/assets/app.js`
+  → `<插件目录>/dist/assets/app.js`。
 
-主窗口本身加载 `unipkg://uni.ui.webview/`，因此 **整个 UI 壳是一个普通
-L1 插件**，用另一份 `uni.ui.webview` 包覆盖内置目录即可替换（重启生效）。
+主窗口本身加载 `unipkg://localhost/uni.ui.webview/`，因此 **整个 UI 壳是
+一个普通 L1 插件**，用另一份 `uni.ui.webview` 包覆盖内置目录即可替换
+（重启生效）。
 
 > Windows/WebView2 的 iframe 里不能直接用自定义 scheme URL；wry 要求写成
-> `http://unipkg.<插件名>/...`（请求到达 Rust 端前会被还原为
-> `unipkg://<插件名>/...`）。macOS/Linux 仍使用 `unipkg://` 原形。
+> `http://unipkg.localhost/<插件名>/...`（请求到达 Rust 端前会被还原为
+> `unipkg://localhost/<插件名>/...`，同时该 origin 被 Tauri 视为本地页面，
+> IPC 命令才会放行）。macOS/Linux 仍使用 `unipkg://localhost/...` 原形。
 > UI 插件自身的构建产物也应当以 `dist/` 为 base，页面入口在根路径时
 > 资产才会命中 `<插件目录>/dist/...`。
 

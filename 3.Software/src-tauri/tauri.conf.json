@@ -4,7 +4,7 @@
   "version": "0.4.0-alpha.4",
   "identifier": "com.uniprogrammer.app",
   "build": {
-    "frontendDist": "unipkg://uni.ui.webview/",
+    "frontendDist": "unipkg://localhost/uni.ui.webview/",
     "devUrl": "http://localhost:1420",
     "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build",

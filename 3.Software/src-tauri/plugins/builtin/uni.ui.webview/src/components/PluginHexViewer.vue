@@ -10,12 +10,12 @@ import { locale } from '@/i18n'
 const store = useProgStore()
 
 // On Windows, WebView2 only loads registered custom protocols in subframes
-// through wry's `http://<scheme>.<host>/...` workaround URL; macOS/Linux use
-// the plain `unipkg://` URL. The unipkg protocol handler receives the original
-// URI in both cases.
+// through wry's `http(s)://<scheme>.localhost/<path>` workaround URL;
+// macOS/Linux use the plain `unipkg://localhost/<path>` URL. The unipkg
+// protocol handler receives the original URI in both cases.
 const HEXVIEW_URL = navigator.userAgent.includes('Windows')
-  ? 'http://unipkg.uni.hexview/'
-  : 'unipkg://uni.hexview/'
+  ? 'http://unipkg.localhost/uni.hexview/'
+  : 'unipkg://localhost/uni.hexview/'
 const READY_TIMEOUT_MS = 8_000
 
 const frameKey = ref(0)
