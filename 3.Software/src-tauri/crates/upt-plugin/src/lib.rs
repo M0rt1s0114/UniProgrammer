@@ -275,9 +275,9 @@ pub fn builtin_modules() -> Vec<BuiltinModule> {
 
     vec![
         module(
-            "upt.core",
+            "upt-core",
             CapabilitySet::default(),
-            "应用状态、操作流水线与插件管理器核心",
+            "核心组件：应用状态、操作流水线与插件管理器",
         ),
         module(
             "upt.hal",
@@ -336,7 +336,7 @@ pub fn builtin_modules() -> Vec<BuiltinModule> {
 /// Look up a built-in module version by exact name.
 pub fn builtin_version(name: &str) -> Option<&'static str> {
     match name {
-        "upt.core"
+        "upt-core"
         | "upt.tauri"
         | "upt.hal"
         | "upt.chipdb"
