@@ -14,6 +14,7 @@ pub mod script_plugin;
 mod serprog;
 mod settings;
 mod sfdp;
+pub mod sidecar_nor;
 pub mod uni_hal;
 
 use ch34x::{Ch34xDevice, Ch34xSettings, ChipKind};
