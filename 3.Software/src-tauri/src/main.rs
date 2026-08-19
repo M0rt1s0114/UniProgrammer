@@ -8,6 +8,7 @@ pub mod plugin_install;
 pub mod script_plugin;
 mod settings;
 pub mod spi_bus_impl;
+pub mod unipkg_protocol;
 
 use ch34x::{Ch34xDevice, Ch34xSettings, ChipKind};
 use core::{
@@ -1054,7 +1055,8 @@ fn main() {
         std::process::exit(1);
     }
     let hal_router = HalRouter::start(&mut plugin_manager, &exe);
-    tauri::Builder::default()
+    let plugin_assets = unipkg_protocol::UnipkgProtocol::from_manager(&plugin_manager);
+    let builder = tauri::Builder::default()
         .manage(Mutex::new(AppState {
             ch34x: None,
             serprog: None,
@@ -1139,7 +1141,8 @@ fn main() {
             sidecar_read,
             sidecar_write,
             sidecar_verify,
-        ])
+        ]);
+    unipkg_protocol::UnipkgProtocol::register(builder, plugin_assets)
         .run(tauri::generate_context!())
         .expect("启动失败");
 }

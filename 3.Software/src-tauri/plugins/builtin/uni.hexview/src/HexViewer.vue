@@ -1,14 +1,25 @@
 <script setup lang="ts">
 import { computed, ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
-import { t } from '@/i18n'
-import { useProgStore } from '@/stores/prog'
-
-const store = useProgStore()
+import { t } from './i18n'
 
 const props = defineProps<{
   data: Uint8Array | null
   baseAddr?: number
 }>()
+
+const emit = defineEmits<{
+  edit: [offset: number, value: number]
+  replace: [data: Uint8Array]
+  log: [level: string, message: string]
+}>()
+
+// Plugin-local working copy. The host keeps its own authoritative buffer;
+// mutations never touch `props.data` directly.
+const buf = ref<Uint8Array | null>(null)
+const viewData = computed(() => buf.value)
+// Per-byte edits mutate `buf` in place, so rendering needs this explicit
+// dependency bump instead of copying the whole buffer on every keystroke.
+const editTick = ref(0)
 
 const BYTES_PER_ROW = 16
 const ROW_HEIGHT = 20
@@ -63,37 +74,59 @@ function stopDrag() {
 
 // ── 编辑 ────────────────────────────────────────────────────────────────────
 const editing = ref<{ row: number; col: number; text: string } | null>(null)
-const history = ref<Uint8Array[]>([])
+
+type EditPatch =
+  | { kind: 'byte'; offset: number; before: number; after: number }
+  | { kind: 'buffer'; before: Uint8Array; after: Uint8Array }
+
+const history = ref<EditPatch[]>([])
+
+function pushHistory(patch: EditPatch) {
+  history.value.push(patch)
+  if (history.value.length > 50) history.value.shift()
+}
 
 function byteIndex(row: number, col: number) {
   return row * BYTES_PER_ROW + col
 }
 
 function startEdit(row: number, col: number, text: string) {
-  if (!props.data || text === '  ') return
+  if (!buf.value || text === '  ') return
   editing.value = { row, col, text }
 }
 
 function commitEdit() {
   const e = editing.value
   editing.value = null
-  if (!e || !props.data) return
+  const current = buf.value
+  if (!e || !current) return
   const text = e.text.trim()
   if (!/^[0-9a-fA-F]{1,2}$/.test(text)) return
   const value = parseInt(text, 16)
   const idx = byteIndex(e.row, e.col)
-  if (idx >= props.data.length) return
+  if (idx >= current.length) return
+  const before = current[idx]
+  if (before === value) return
 
-  history.value.push(props.data.slice())
-  if (history.value.length > 50) history.value.shift()
-  const next = new Uint8Array(props.data)
-  next[idx] = value
-  store.hexData = next
+  current[idx] = value
+  editTick.value++
+  pushHistory({ kind: 'byte', offset: idx, before, after: value })
+  emit('edit', idx, value)
 }
 
 function undo() {
-  const prev = history.value.pop()
-  if (prev) store.hexData = prev
+  const patch = history.value.pop()
+  const current = buf.value
+  if (!patch || !current) return
+  if (patch.kind === 'byte') {
+    if (patch.offset >= current.length) return
+    current[patch.offset] = patch.before
+    editTick.value++
+    emit('edit', patch.offset, patch.before)
+    return
+  }
+  buf.value = patch.before
+  emit('replace', patch.before)
 }
 
 // ── 搜索 ────────────────────────────────────────────────────────────────────
@@ -116,14 +149,15 @@ function parseHexPattern(text: string): number[] | null {
 }
 
 function findNext() {
-  if (!props.data) return
+  const current = buf.value
+  if (!current) return
   const pattern = parseHexPattern(searchText.value)
   if (!pattern || pattern.length === 0) return
   const start = matchStart.value + 1
-  for (let i = start; i <= props.data.length - pattern.length; i++) {
+  for (let i = start; i <= current.length - pattern.length; i++) {
     let ok = true
     for (let j = 0; j < pattern.length; j++) {
-      if (props.data[i + j] !== pattern[j]) {
+      if (current[i + j] !== pattern[j]) {
         ok = false
         break
       }
@@ -132,15 +166,15 @@ function findNext() {
       matchStart.value = i
       matchLen.value = pattern.length
       scrollToRow(Math.floor(i / BYTES_PER_ROW))
-      store.addLog(`${t('hex.foundAt')}0x${i.toString(16).padStart(8, '0').toUpperCase()}`, 'info')
+      emit('log', 'info', `${t('hex.foundAt')}0x${i.toString(16).padStart(8, '0').toUpperCase()}`)
       return
     }
   }
   // 从头再来一轮
-  for (let i = 0; i < Math.min(start, props.data.length - pattern.length + 1); i++) {
+  for (let i = 0; i < Math.min(start, current.length - pattern.length + 1); i++) {
     let ok = true
     for (let j = 0; j < pattern.length; j++) {
-      if (props.data[i + j] !== pattern[j]) {
+      if (current[i + j] !== pattern[j]) {
         ok = false
         break
       }
@@ -149,13 +183,13 @@ function findNext() {
       matchStart.value = i
       matchLen.value = pattern.length
       scrollToRow(Math.floor(i / BYTES_PER_ROW))
-      store.addLog(`${t('hex.foundAt')}0x${i.toString(16).padStart(8, '0').toUpperCase()}`, 'info')
+      emit('log', 'info', `${t('hex.foundAt')}0x${i.toString(16).padStart(8, '0').toUpperCase()}`)
       return
     }
   }
   matchStart.value = -1
   matchLen.value = 0
-  store.addLog(t('hex.notFound'), 'warn')
+  emit('log', 'warn', t('hex.notFound'))
 }
 
 function isHit(row: number, col: number) {
@@ -177,27 +211,29 @@ function scrollToRow(row: number) {
 }
 
 function gotoAddress() {
-  if (!props.data) return
+  const current = buf.value
+  if (!current) return
   const addr = parseInt(gotoText.value.trim(), 16)
-  if (Number.isNaN(addr) || addr < 0 || addr >= props.data.length) {
-    store.addLog(`地址超出范围: ${gotoText.value}`, 'warn')
+  if (Number.isNaN(addr) || addr < 0 || addr >= current.length) {
+    emit('log', 'warn', `地址超出范围: ${gotoText.value}`)
     return
   }
   scrollToRow(Math.floor(addr / BYTES_PER_ROW))
 }
 
 function fillBuffer() {
-  if (!props.data) return
+  const current = buf.value
+  if (!current) return
   const pattern = parseHexPattern(fillText.value)
   if (!pattern || pattern.length === 0) return
-  history.value.push(props.data.slice())
-  if (history.value.length > 50) history.value.shift()
-  const next = new Uint8Array(props.data.length)
+  const next = new Uint8Array(current.length)
   for (let i = 0; i < next.length; i++) {
     next[i] = pattern[i % pattern.length]
   }
-  store.hexData = next
-  store.addLog(t('hex.fillDone'), 'success')
+  pushHistory({ kind: 'buffer', before: current, after: next })
+  buf.value = next
+  emit('replace', next)
+  emit('log', 'success', t('hex.fillDone'))
 }
 
 let crcTable: Uint32Array | null = null
@@ -221,22 +257,24 @@ function crc32(data: Uint8Array): number {
 }
 
 function checksum() {
-  if (!props.data) return
+  const current = buf.value
+  if (!current) return
   let sum8 = 0
   let sum16 = 0
   let xor8 = 0
-  for (let i = 0; i < props.data.length; i++) {
-    sum8 = (sum8 + props.data[i]) & 0xff
-    sum16 = (sum16 + props.data[i]) & 0xffff
-    xor8 ^= props.data[i]
+  for (let i = 0; i < current.length; i++) {
+    sum8 = (sum8 + current[i]) & 0xff
+    sum16 = (sum16 + current[i]) & 0xffff
+    xor8 ^= current[i]
   }
-  const crc = crc32(props.data)
-  store.addLog(
+  const crc = crc32(current)
+  emit(
+    'log',
+    'info',
     `Checksum: SUM8=0x${sum8.toString(16).padStart(2, '0').toUpperCase()} ` +
       `SUM16=0x${sum16.toString(16).padStart(4, '0').toUpperCase()} ` +
       `XOR8=0x${xor8.toString(16).padStart(2, '0').toUpperCase()} ` +
       `CRC32=0x${crc.toString(16).padStart(8, '0').toUpperCase()}`,
-    'info',
   )
 }
 
@@ -245,7 +283,7 @@ const scrollTop = ref(0)
 const containerRef = ref<HTMLElement | null>(null)
 const containerHeight = ref(0)
 
-const totalRows = computed(() => (props.data ? Math.ceil(props.data.length / BYTES_PER_ROW) : 0))
+const totalRows = computed(() => (buf.value ? Math.ceil(buf.value.length / BYTES_PER_ROW) : 0))
 const totalHeight = computed(() => totalRows.value * ROW_HEIGHT)
 
 // 浏览器会钳制超高的滚动容器（Chromium 上限约 3350 万 px）。
@@ -285,12 +323,16 @@ interface HexRow {
 }
 
 const visibleRows = computed<HexRow[]>(() => {
-  if (!props.data) return []
+  // `editTick` is an explicit dependency so in-place byte edits re-render
+  // without copying the whole buffer.
+  void editTick.value
+  const current = buf.value
+  if (!current) return []
   const rows: HexRow[] = []
   const base = props.baseAddr ?? 0
   for (let r = startRow.value; r < endRow.value; r++) {
     const offset = r * BYTES_PER_ROW
-    const chunk = props.data.slice(offset, offset + BYTES_PER_ROW)
+    const chunk = current.slice(offset, offset + BYTES_PER_ROW)
     const bytes: string[] = []
     let ascii = ''
     for (let i = 0; i < BYTES_PER_ROW; i++) {
@@ -339,12 +381,16 @@ defineExpose({ scrollToTop })
 
 watch(
   () => props.data,
-  () => {
+  (next) => {
+    buf.value = next
     editing.value = null
     matchStart.value = -1
     matchLen.value = 0
+    history.value = []
+    editTick.value++
     scrollToTop()
   },
+  { immediate: true },
 )
 
 let resizeObserver: ResizeObserver | null = null
@@ -427,7 +473,7 @@ onUnmounted(() => {
     </div>
 
     <div ref="containerRef" class="hex-scroll" @scroll="onScroll">
-      <div v-if="!data || data.length === 0" class="hex-empty">
+      <div v-if="!viewData || viewData.length === 0" class="hex-empty">
         <svg
           width="32"
           height="32"
@@ -487,9 +533,9 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <div v-if="data && data.length" class="hex-footer">
-      <span>{{ data.length.toLocaleString() }} {{ t('hex.bytes') }}</span>
-      <span>{{ Math.ceil(data.length / 1024).toLocaleString() }} {{ t('hex.kb') }}</span>
+    <div v-if="viewData && viewData.length" class="hex-footer">
+      <span>{{ viewData.length.toLocaleString() }} {{ t('hex.bytes') }}</span>
+      <span>{{ Math.ceil(viewData.length / 1024).toLocaleString() }} {{ t('hex.kb') }}</span>
       <span>{{ totalRows.toLocaleString() }} {{ t('hex.rows') }}</span>
     </div>
   </div>

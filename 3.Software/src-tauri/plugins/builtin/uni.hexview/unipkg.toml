@@ -1,12 +1,13 @@
-# 编译期内置插件：十六进制视图。
-# 当前随主程序一起编译，后续 L1 拆分时再改为独立插件包。
+# L1 必需插件：十六进制视图。
+# 由 UI 壳通过 unipkg://uni.hexview/ 加载 dist 下的独立页面，
+# 与壳之间只通过 postMessage 的稳定契约通信（见 plugins/README.md）。
 [package]
 name = "uni.hexview"
 version = "1.0.0"
 plugin_api = 1
 kind = "ui"
 layer = "required"
-entry = "builtin"
+entry = "dist/index.html"
 provider = "builtin"
 
 [dependencies]

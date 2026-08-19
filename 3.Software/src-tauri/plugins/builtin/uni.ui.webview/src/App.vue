@@ -7,7 +7,7 @@ import { useProgStore } from '@/stores/prog'
 import { t } from '@/i18n'
 import OperationPanel from '@/components/OperationPanel.vue'
 import ToolBar from '@/components/ToolBar.vue'
-import HexViewer from '@/components/HexViewer.vue'
+import PluginHexViewer from '@/components/PluginHexViewer.vue'
 import LogConsole from '@/components/LogConsole.vue'
 import StatusBar from '@/components/StatusBar.vue'
 
@@ -207,7 +207,7 @@ async function fitWindowToSidebar() {
             <div class="pane-bar-spacer" />
           </div>
           <div class="pane-body">
-            <HexViewer :data="store.hexData" :base-addr="0" />
+            <PluginHexViewer />
           </div>
         </div>
 
