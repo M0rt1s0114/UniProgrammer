@@ -10,6 +10,7 @@ use serde::Serialize;
 use std::fs;
 use std::io::{self, Read};
 use std::path::{Component, Path, PathBuf};
+use std::time::Duration;
 
 /// Result of a successful plugin package install.
 #[derive(Debug, Clone, Serialize)]
@@ -17,6 +18,274 @@ pub struct InstallResult {
     pub id: String,
     pub version: String,
     pub path: PathBuf,
+}
+
+/// Git hosting services for which raw manifest URLs can be constructed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GitHost {
+    GitHub,
+    GitLab,
+    Gitee,
+}
+
+/// Preview of a plugin git repository before installing it.
+#[derive(Debug, Clone, Serialize)]
+pub struct GitPluginPreview {
+    pub url: String,
+    pub name: String,
+    pub version: String,
+    pub kind: String,
+    pub layer: String,
+    pub marker_file: String,
+}
+
+/// Recognize the git host in `url`, including `www.` host prefixes and
+/// repository URLs that end in `.git`.
+pub fn parse_git_host(url: &str) -> Option<GitHost> {
+    let after = host_portion(url);
+    known_host(after).map(|(host, _)| host)
+}
+
+/// Build the raw-file URL for `marker` at `HEAD` of the repository described
+/// by `url`.
+///
+/// Supports `https://host/owner/repo[.git]` and `git@host:owner/repo.git`
+/// forms.
+pub fn raw_url_for(url: &str, marker: &str) -> Option<String> {
+    let (host, owner, repo) = split_git_url(url)?;
+    let raw = match host {
+        GitHost::GitHub => {
+            format!("https://raw.githubusercontent.com/{owner}/{repo}/HEAD/{marker}")
+        }
+        GitHost::GitLab => format!("https://gitlab.com/{owner}/{repo}/-/raw/HEAD/{marker}"),
+        GitHost::Gitee => format!("https://gitee.com/{owner}/{repo}/raw/HEAD/{marker}"),
+    };
+    Some(raw)
+}
+
+/// Parse plugin manifest TOML using the shared manifest parser.
+pub fn parse_plugin_toml(text: &str) -> Result<PluginManifest, String> {
+    PluginManifest::parse(text)
+}
+
+/// Fetch a plugin manifest from a git repository for user confirmation.
+///
+/// For GitHub/GitLab/Gitee URLs the raw manifest files are fetched directly
+/// over HTTPS. If that fails (or the URL is not one of those hosts, such as a
+/// `file://` URL used in tests), a temporary inspection-only clone is created
+/// before any user confirmation; the clone is removed immediately afterwards.
+pub fn preview_git_repo(url: &str) -> Result<GitPluginPreview, String> {
+    let markers = ["unipkg.toml", "manifest.toml"];
+    let mut first_fetch_error: Option<String> = None;
+
+    for marker in markers {
+        let Some(raw_url) = raw_url_for(url, marker) else {
+            continue;
+        };
+        match fetch_plugin_toml(&raw_url) {
+            Ok(text) => {
+                let manifest = parse_plugin_toml(&text)
+                    .map_err(|e| format!("invalid plugin manifest at {raw_url}: {e}"))?;
+                return Ok(preview_from_manifest(url, marker, manifest));
+            }
+            Err(e) => {
+                if first_fetch_error.is_none() {
+                    first_fetch_error = Some(e);
+                }
+            }
+        }
+    }
+
+    // Fallback: temporary, inspection-only clone. This runs before the user
+    // confirms the install; it is removed before the function returns.
+    let temp_dir = std::env::temp_dir().join(format!("uniprog-preview-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&temp_dir);
+    if let Err(clone_err) = run_git_clone(url, &temp_dir, None) {
+        let raw_reason = first_fetch_error
+            .unwrap_or_else(|| "URL does not map to a GitHub/GitLab/Gitee raw URL".to_string());
+        return Err(format!(
+            "failed to fetch plugin manifest from remote ({raw_reason}); fallback git clone also failed: {clone_err}"
+        ));
+    }
+
+    let result = read_manifest_from_dir(&temp_dir).map(|(marker_path, manifest)| {
+        let marker_file = marker_path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("unipkg.toml")
+            .to_string();
+        preview_from_manifest(url, &marker_file, manifest)
+    });
+    let _ = fs::remove_dir_all(&temp_dir);
+    result
+}
+
+/// Clone a git repository into a staging directory and install it as a plugin
+/// package.
+pub fn install_git_repo(
+    url: &str,
+    plugins_root: &Path,
+    replace: bool,
+    branch: Option<&str>,
+) -> Result<InstallResult, String> {
+    fs::create_dir_all(plugins_root)
+        .map_err(|e| io_error("create plugins root directory", plugins_root, e))?;
+
+    let staging = plugins_root.join(format!(".git-staging-{}", std::process::id()));
+    clean_path(&staging)?;
+
+    if let Err(e) = run_git_clone(url, &staging, branch) {
+        let _ = fs::remove_dir_all(&staging);
+        return Err(format!("failed to clone git repository {url}: {e}"));
+    }
+
+    let result = read_manifest_from_dir(&staging).and_then(|(_marker_path, _manifest)| {
+        // The plugin package itself must not carry the inspection clone's VCS
+        // metadata into `<plugins_root>/plugins/<id>`.
+        let _ = fs::remove_dir_all(staging.join(".git"));
+        install_folder(&staging, plugins_root, replace)
+    });
+
+    let _ = fs::remove_dir_all(&staging);
+    result
+}
+
+fn preview_from_manifest(
+    url: &str,
+    marker_file: &str,
+    manifest: PluginManifest,
+) -> GitPluginPreview {
+    GitPluginPreview {
+        url: url.to_string(),
+        name: manifest.name,
+        version: manifest.version.to_string(),
+        kind: manifest.kind.to_string(),
+        layer: manifest.layer.to_string(),
+        marker_file: marker_file.to_string(),
+    }
+}
+
+fn fetch_plugin_toml(raw_url: &str) -> Result<String, String> {
+    let response = ureq::get(raw_url)
+        .timeout(Duration::from_secs(10))
+        .call()
+        .map_err(|e| format!("request failed for {raw_url}: {e}"))?;
+    let status = response.status();
+    if !(200..300).contains(&status) {
+        return Err(format!("request for {raw_url} returned HTTP {status}"));
+    }
+    response
+        .into_string()
+        .map_err(|e| format!("failed to read response body from {raw_url}: {e}"))
+}
+
+fn run_git_clone(url: &str, dest: &Path, branch: Option<&str>) -> Result<(), String> {
+    let mut command = std::process::Command::new("git");
+    command
+        .arg("clone")
+        .arg("--depth")
+        .arg("1")
+        .arg("--no-tags");
+    if let Some(branch) = branch {
+        command.arg("--branch").arg(branch);
+    }
+    command.arg(url).arg(dest).env("GIT_TERMINAL_PROMPT", "0");
+
+    let output = command
+        .output()
+        .map_err(|e| format!("failed to run git clone: {e}"))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("git clone failed: {}", stderr.trim()));
+    }
+    Ok(())
+}
+
+fn host_portion(url: &str) -> &str {
+    let url = url.trim();
+    let after_scheme = match url.find("://") {
+        Some(idx) => &url[idx + 3..],
+        None => url,
+    };
+    let after_user = after_scheme
+        .rsplit_once('@')
+        .map(|(_, host)| host)
+        .unwrap_or(after_scheme);
+    after_user.split(['?', '#']).next().unwrap_or(after_user)
+}
+
+fn known_host(after: &str) -> Option<(GitHost, usize)> {
+    let lower = after.to_ascii_lowercase();
+    const HOSTS: [(&str, GitHost); 6] = [
+        ("www.github.com", GitHost::GitHub),
+        ("github.com", GitHost::GitHub),
+        ("www.gitlab.com", GitHost::GitLab),
+        ("gitlab.com", GitHost::GitLab),
+        ("www.gitee.com", GitHost::Gitee),
+        ("gitee.com", GitHost::Gitee),
+    ];
+
+    for (prefix, host) in HOSTS {
+        if let Some(rest) = lower.strip_prefix(prefix) {
+            if rest.is_empty() || rest.starts_with('/') || rest.starts_with(':') {
+                return Some((host, prefix.len()));
+            }
+            return None;
+        }
+    }
+    None
+}
+
+fn split_git_url(url: &str) -> Option<(GitHost, String, String)> {
+    let after = host_portion(url);
+    let (host, host_len) = known_host(after)?;
+    let rest = &after[host_len..];
+    let path = path_after_host(rest)?;
+    let (owner, repo) = parse_owner_repo(path)?;
+    Some((host, owner, repo))
+}
+
+fn path_after_host(rest: &str) -> Option<&str> {
+    if let Some(path) = rest.strip_prefix('/') {
+        return Some(path);
+    }
+    if let Some(path) = rest.strip_prefix(':') {
+        // `git@host:owner/repo.git` scp-like form. An optional numeric port
+        // (`host:443/owner/repo`) is accepted after the host name.
+        if let Some((port, after_slash)) = path.split_once('/') {
+            if !port.is_empty() && port.bytes().all(|b| b.is_ascii_digit()) {
+                return Some(after_slash);
+            }
+        }
+        return Some(path);
+    }
+    None
+}
+
+fn parse_owner_repo(path: &str) -> Option<(String, String)> {
+    let path = path.trim_matches('/');
+    let path = path.strip_suffix(".git").unwrap_or(path);
+    let mut parts = path.split('/').filter(|part| !part.is_empty());
+    let owner = parts.next()?;
+    let repo = parts.next()?;
+    if parts.next().is_some() {
+        return None;
+    }
+    if owner.is_empty() || repo.is_empty() {
+        return None;
+    }
+    Some((owner.to_string(), repo.to_string()))
+}
+
+fn clean_path(path: &Path) -> Result<(), String> {
+    if path.exists() {
+        if path.is_dir() {
+            fs::remove_dir_all(path).map_err(|e| io_error("clean path", path, e))?;
+        } else {
+            fs::remove_file(path).map_err(|e| io_error("clean path", path, e))?;
+        }
+    }
+    Ok(())
 }
 
 /// Install an unpacked plugin folder.
@@ -406,6 +675,122 @@ entry = "plugin.exe"
     }
 
     #[test]
+    fn parse_git_host_recognizes_known_hosts() {
+        assert_eq!(
+            parse_git_host("https://github.com/owner/repo"),
+            Some(GitHost::GitHub)
+        );
+        assert_eq!(
+            parse_git_host("https://www.github.com/owner/repo.git"),
+            Some(GitHost::GitHub)
+        );
+        assert_eq!(
+            parse_git_host("https://gitlab.com/owner/repo"),
+            Some(GitHost::GitLab)
+        );
+        assert_eq!(
+            parse_git_host("https://www.gitlab.com/owner/repo.git"),
+            Some(GitHost::GitLab)
+        );
+        assert_eq!(
+            parse_git_host("https://gitee.com/owner/repo"),
+            Some(GitHost::Gitee)
+        );
+        assert_eq!(
+            parse_git_host("https://www.gitee.com/owner/repo.git"),
+            Some(GitHost::Gitee)
+        );
+        assert_eq!(
+            parse_git_host("git@github.com:owner/repo.git"),
+            Some(GitHost::GitHub)
+        );
+        assert_eq!(
+            parse_git_host("git@gitlab.com:owner/repo.git"),
+            Some(GitHost::GitLab)
+        );
+        assert_eq!(
+            parse_git_host("git@gitee.com:owner/repo.git"),
+            Some(GitHost::Gitee)
+        );
+    }
+
+    #[test]
+    fn parse_git_host_rejects_unknown_hosts() {
+        assert_eq!(parse_git_host("https://example.com/owner/repo"), None);
+        assert_eq!(
+            parse_git_host("https://github.com.evil.com/owner/repo"),
+            None
+        );
+        assert_eq!(parse_git_host("not a url"), None);
+    }
+
+    #[test]
+    fn raw_url_for_github_variants() {
+        assert_eq!(
+            raw_url_for("https://github.com/owner/repo", "unipkg.toml").as_deref(),
+            Some("https://raw.githubusercontent.com/owner/repo/HEAD/unipkg.toml")
+        );
+        assert_eq!(
+            raw_url_for("https://www.github.com/owner/repo.git", "manifest.toml").as_deref(),
+            Some("https://raw.githubusercontent.com/owner/repo/HEAD/manifest.toml")
+        );
+        assert_eq!(
+            raw_url_for("git@github.com:owner/repo.git", "unipkg.toml").as_deref(),
+            Some("https://raw.githubusercontent.com/owner/repo/HEAD/unipkg.toml")
+        );
+    }
+
+    #[test]
+    fn raw_url_for_gitlab_variants() {
+        assert_eq!(
+            raw_url_for("https://gitlab.com/owner/repo", "unipkg.toml").as_deref(),
+            Some("https://gitlab.com/owner/repo/-/raw/HEAD/unipkg.toml")
+        );
+        assert_eq!(
+            raw_url_for("https://www.gitlab.com/owner/repo.git", "manifest.toml").as_deref(),
+            Some("https://gitlab.com/owner/repo/-/raw/HEAD/manifest.toml")
+        );
+        assert_eq!(
+            raw_url_for("git@gitlab.com:owner/repo.git", "unipkg.toml").as_deref(),
+            Some("https://gitlab.com/owner/repo/-/raw/HEAD/unipkg.toml")
+        );
+    }
+
+    #[test]
+    fn raw_url_for_gitee_variants() {
+        assert_eq!(
+            raw_url_for("https://gitee.com/owner/repo", "unipkg.toml").as_deref(),
+            Some("https://gitee.com/owner/repo/raw/HEAD/unipkg.toml")
+        );
+        assert_eq!(
+            raw_url_for("https://www.gitee.com/owner/repo.git", "manifest.toml").as_deref(),
+            Some("https://gitee.com/owner/repo/raw/HEAD/manifest.toml")
+        );
+        assert_eq!(
+            raw_url_for("git@gitee.com:owner/repo.git", "unipkg.toml").as_deref(),
+            Some("https://gitee.com/owner/repo/raw/HEAD/unipkg.toml")
+        );
+    }
+
+    #[test]
+    fn raw_url_for_malformed_returns_none() {
+        assert_eq!(
+            raw_url_for("https://example.com/owner/repo", "unipkg.toml"),
+            None
+        );
+        assert_eq!(raw_url_for("https://github.com/owner", "unipkg.toml"), None);
+        assert_eq!(
+            raw_url_for("https://github.com/owner/repo/sub", "unipkg.toml"),
+            None
+        );
+        assert_eq!(
+            raw_url_for("https://github.com.evil.com/owner/repo", "unipkg.toml"),
+            None
+        );
+        assert_eq!(raw_url_for("not a url", "unipkg.toml"), None);
+    }
+
+    #[test]
     fn install_folder_copies_contents() {
         let root = test_root("folder");
         let plugins_root = root.join("plugins-root");
@@ -588,6 +973,101 @@ entry = "plugin.exe"
 
         let err = install_unipkg(&zip_path, &plugins_root, false).expect_err("traversal must fail");
         assert!(err.contains("unsafe path in ZIP package"), "{err}");
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    fn git_available() -> bool {
+        std::process::Command::new("git")
+            .arg("--version")
+            .output()
+            .map(|output| output.status.success())
+            .unwrap_or(false)
+    }
+
+    fn run_git(repo: &Path, args: &[&str]) {
+        let status = std::process::Command::new("git")
+            .arg("-C")
+            .arg(repo)
+            .args(args)
+            .env("GIT_TERMINAL_PROMPT", "0")
+            .status()
+            .expect("run git");
+        assert!(status.success(), "git {args:?} failed");
+    }
+
+    fn run_git_commit(repo: &Path) {
+        let status = std::process::Command::new("git")
+            .arg("-C")
+            .arg(repo)
+            .args(["commit", "-m", "init"])
+            .env("GIT_AUTHOR_NAME", "test")
+            .env("GIT_AUTHOR_EMAIL", "test@example.com")
+            .env("GIT_COMMITTER_NAME", "test")
+            .env("GIT_COMMITTER_EMAIL", "test@example.com")
+            .env("GIT_TERMINAL_PROMPT", "0")
+            .status()
+            .expect("run git commit");
+        assert!(status.success(), "git commit failed");
+    }
+
+    fn file_url(path: &Path) -> String {
+        format!(
+            "file:///{}",
+            path.to_string_lossy()
+                .replace('\\', "/")
+                .trim_start_matches('/')
+        )
+    }
+
+    #[test]
+    #[ignore = "requires local git"]
+    fn preview_and_install_git_repo_from_local_file_url() {
+        if !git_available() {
+            eprintln!("git is not available; skipping");
+            return;
+        }
+
+        let root = test_root("git-repo");
+        let repo = root.join("repo");
+        fs::create_dir_all(&repo).expect("create git repo dir");
+        fs::write(repo.join("unipkg.toml"), MINIMAL).expect("write unipkg manifest");
+        fs::write(repo.join("plugin.js"), "// local git plugin").expect("write plugin payload");
+
+        run_git(&repo, &["init"]);
+        run_git(&repo, &["add", "-A"]);
+        run_git_commit(&repo);
+
+        let url = file_url(&repo);
+        let preview = preview_git_repo(&url).expect("preview local git repo");
+        assert_eq!(preview.name, "vnd.example.minimal");
+        assert_eq!(preview.version, "0.1.0");
+        assert_eq!(preview.kind, "adapter");
+        assert_eq!(preview.layer, "cold");
+        assert_eq!(preview.marker_file, "unipkg.toml");
+
+        let plugins_root = root.join("plugins-root");
+        let installed =
+            install_git_repo(&url, &plugins_root, false, None).expect("install local git repo");
+        assert_eq!(installed.id, "vnd.example.minimal");
+        assert_eq!(installed.version, "0.1.0");
+        let dest = plugins_root.join("plugins").join("vnd.example.minimal");
+        assert_eq!(installed.path, dest);
+        assert!(dest.join("unipkg.toml").is_file());
+        assert_eq!(
+            fs::read_to_string(dest.join("plugin.js")).expect("read installed payload"),
+            "// local git plugin"
+        );
+        assert!(
+            !dest.join(".git").exists(),
+            "clone metadata must not be installed"
+        );
+        assert!(
+            !plugins_root
+                .join(format!(".git-staging-{}", std::process::id()))
+                .exists(),
+            "clone staging must be removed"
+        );
 
         let _ = fs::remove_dir_all(&root);
     }
