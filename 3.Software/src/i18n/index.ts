@@ -86,6 +86,16 @@ const zh: MessageRecord = {
   'sidecar.write': '写入',
   'sidecar.verify': '校验',
 
+  // Plugin manager
+  'pluginManager.title': '插件管理器',
+  'pluginManager.open': '管理插件',
+  'pluginManager.installed': '已安装插件',
+  'pluginManager.builtin': '内置模块（uni-base）',
+  'pluginManager.enable': '启用',
+  'pluginManager.disable': '禁用',
+  'pluginManager.close': '关闭',
+  'pluginManager.runningDisabled': '操作进行中，禁止修改插件',
+
   // Programmer auto detection
   'programmer.autoMode': '自动识别',
   'programmer.manualMode': '手动选择',
@@ -366,6 +376,16 @@ const en: MessageRecord = {
   'sidecar.read': 'Read',
   'sidecar.write': 'Write',
   'sidecar.verify': 'Verify',
+
+  // Plugin manager
+  'pluginManager.title': 'Plugin Manager',
+  'pluginManager.open': 'Manage Plugins',
+  'pluginManager.installed': 'Installed Plugins',
+  'pluginManager.builtin': 'Built-in Modules (uni-base)',
+  'pluginManager.enable': 'Enable',
+  'pluginManager.disable': 'Disable',
+  'pluginManager.close': 'Close',
+  'pluginManager.runningDisabled': 'Operation in progress; plugin changes disabled',
 
   // Programmer auto detection
   'programmer.autoMode': 'Auto Detect',

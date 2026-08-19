@@ -86,3 +86,33 @@ export function verifySidecarChip(
 export function sidecarErrors(): Promise<SidecarError[]> {
   return call<SidecarError[]>('sidecar_errors')
 }
+
+export interface PluginInfo {
+  name: string
+  version: string
+  kind: string
+  enabled: boolean
+  error: string | null
+}
+
+export interface BuiltinModule {
+  name: string
+  version: string
+  description: string
+}
+
+export function listPlugins(): Promise<PluginInfo[]> {
+  return call<PluginInfo[]>('plugin_list')
+}
+
+export function enablePlugin(name: string): Promise<string> {
+  return call<string>('plugin_enable', { name })
+}
+
+export function disablePlugin(name: string): Promise<string> {
+  return call<string>('plugin_disable', { name })
+}
+
+export function listBuiltinModules(): Promise<BuiltinModule[]> {
+  return call<BuiltinModule[]>('plugin_builtin_modules')
+}

@@ -2,6 +2,7 @@
 import { reactive, ref, watch } from 'vue'
 import { useSettingsStore, type ThemeMode } from '@/stores/settings'
 import { useProgStore } from '@/stores/prog'
+import PluginManagerDialog from '@/components/PluginManagerDialog.vue'
 import type { Locale } from '@/i18n'
 import { t } from '@/i18n'
 
@@ -10,6 +11,7 @@ const store = useProgStore()
 const open = defineModel<boolean>('open', { default: false })
 
 const showVccConfirm = ref(false)
+const pluginManagerOpen = ref(false)
 
 // 对话框内先编辑草稿，点击“确定”后才写入 settings store；
 // 点取消 / 点击遮罩关闭则丢弃本次修改。
@@ -62,11 +64,13 @@ function applyDraft() {
 
 function confirm() {
   applyDraft()
+  pluginManagerOpen.value = false
   open.value = false
 }
 
 function cancel() {
   showVccConfirm.value = false
+  pluginManagerOpen.value = false
   open.value = false
 }
 
@@ -178,6 +182,12 @@ function cancelVccControl() {
               </label>
             </div>
           </div>
+
+          <div class="settings-section">
+            <button class="btn btn-secondary" style="width: 100%" @click="pluginManagerOpen = true">
+              {{ t('pluginManager.open') }}
+            </button>
+          </div>
         </div>
 
         <div class="modal-actions">
@@ -187,6 +197,8 @@ function cancelVccControl() {
       </div>
     </div>
   </Transition>
+
+  <PluginManagerDialog v-model:open="pluginManagerOpen" />
 
   <!-- 电压控制总开关确认（黄色，无需输入） -->
   <Transition name="fade">
