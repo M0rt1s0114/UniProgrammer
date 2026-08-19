@@ -5,7 +5,6 @@ mod core;
 mod dialogs;
 mod operations;
 pub mod plugin_install;
-mod protocols;
 pub mod script_plugin;
 mod settings;
 pub mod spi_bus_impl;
@@ -25,7 +24,7 @@ use uni_devices::{ch34x, serprog};
 use uni_hal::hal_router::{HalRouter, SidecarSelection};
 use uni_hal::sidecar_nor::SidecarNor;
 use uni_plugin::{self as plugin, BootCheck, BuiltinModule, PluginManager};
-use uni_proto::{firmware, sfdp};
+use uni_proto::{firmware, protocols, sfdp};
 
 #[derive(Clone, Serialize)]
 struct ReadProgressEvent {

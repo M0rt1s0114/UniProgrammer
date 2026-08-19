@@ -3956,6 +3956,11 @@ dependencies = [
 [[package]]
 name = "uni-proto"
 version = "0.1.0"
+dependencies = [
+ "serde",
+ "uni-chipdb",
+ "uni-devices",
+]
 
 [[package]]
 name = "unic-char-property"

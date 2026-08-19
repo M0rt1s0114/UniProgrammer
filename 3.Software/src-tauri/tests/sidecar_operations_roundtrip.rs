@@ -11,9 +11,7 @@ mod autodetect;
 #[allow(dead_code)] // pulled in by operations; only the sidecar path is exercised
 mod core;
 
-#[path = "../src/protocols.rs"]
-#[allow(dead_code)] // pulled in by operations; only the sidecar path is exercised
-mod protocols;
+use uni_proto::protocols;
 
 #[path = "../src/operations.rs"]
 #[allow(dead_code)] // reusing the full module exposes more public API than this test needs

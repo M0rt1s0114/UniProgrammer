@@ -5,3 +5,6 @@ edition = "2021"
 license = "GPL-3.0-or-later"
 
 [dependencies]
+serde = { version = "1", features = ["derive"] }
+uni-chipdb = { path = "../uni-chipdb" }
+uni-devices = { path = "../uni-devices" }

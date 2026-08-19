@@ -11,10 +11,10 @@ use crate::core::{
     spi_unprotect, spi_wait_ready, spi_write_disable, spi_write_enable, AppState, NorParams,
     NOR_BP_MASK_SR1,
 };
-use crate::protocols;
 use uni_devices::ch34x::Ch34xDevice;
 use uni_hal::hal_router::{HalRouter, SidecarSelection};
 use uni_hal::sidecar_nor::SidecarNor;
+use uni_proto::protocols;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct EraseProgress {

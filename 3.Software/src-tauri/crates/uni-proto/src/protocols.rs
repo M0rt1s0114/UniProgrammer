@@ -4,9 +4,9 @@
 //! (see `bus_mode_for_protocol`). CS/START/STOP are driven manually exactly
 //! like IMSProg. The device is opened and closed per operation by the caller.
 
-use crate::chiplib::ChipInfo;
 use serde::Serialize;
 use std::time::{Duration, Instant};
+use uni_chipdb::ChipInfo;
 use uni_devices::ch34x::{Ch34xDevice, DeviceMode};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
