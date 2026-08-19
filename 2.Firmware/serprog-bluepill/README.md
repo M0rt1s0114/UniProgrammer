@@ -58,7 +58,7 @@ USB-TTL 串口模块只能通信，**不能**烧录 STM32；烧录用 ST-Link SW
 
 1. 插上 USB-TTL，在 PC 上确认出现串口（Linux `/dev/ttyUSB0`，Windows `COMx`）
 2. UniProgrammer → Programmer 选择 `Serprog (Serial)` → 填串口 → 连接
-3. 日志应出现 `serprog 接口版本 1.0`、固件名 `uni-serprog`
+3. 日志应出现 `serprog 接口版本 1.0`、固件名 `upt-serprog`
 4. 芯片座放 SPI NOR Flash 后点“检测芯片”
 
 ## 实现说明

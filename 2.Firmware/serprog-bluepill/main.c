@@ -288,7 +288,7 @@ static void serprog_loop(void)
         }
 
         case 0x03: { /* Q_PGMNAME */
-            static const char name[16] = "uni-serprog";
+            static const char name[16] = "upt-serprog";
             ack_write((const uint8_t *)name, 16);
             break;
         }
