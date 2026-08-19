@@ -3,6 +3,7 @@ import { computed, ref, onMounted, watch } from 'vue'
 import { useProgStore, formatBytes } from '@/stores/prog'
 import { useSettingsStore } from '@/stores/settings'
 import { useSpiNor } from '@/services/spiNor'
+import { listSidecarAdapters, readSidecarId, type SidecarAdapterEntry } from '@/services/plugins'
 import { t } from '@/i18n'
 import UiSelect, { type UiOption } from '@/components/UiSelect.vue'
 
@@ -23,6 +24,47 @@ const serialPort = computed({
   },
 })
 const selectedCandidateId = ref('')
+
+const SIDECAR_SEP = '\u0000'
+const sidecarAdapters = ref<SidecarAdapterEntry[]>([])
+const sidecarSelected = ref('')
+const sidecarBusy = ref(false)
+
+function parseSidecarSelection(value: string): { adapter: string; device: string } | null {
+  const sep = value.indexOf(SIDECAR_SEP)
+  if (!value || sep <= 0) return null
+  return { adapter: value.slice(0, sep), device: value.slice(sep + SIDECAR_SEP.length) }
+}
+
+async function refreshSidecarAdapters() {
+  sidecarBusy.value = true
+  try {
+    sidecarAdapters.value = await listSidecarAdapters()
+    sidecarSelected.value = ''
+    store.addLog(`Sidecar 适配器已刷新，共 ${sidecarAdapters.value.length} 个适配器`)
+  } catch (error) {
+    store.addLog(`刷新 Sidecar 适配器失败: ${String(error)}`, 'error')
+  } finally {
+    sidecarBusy.value = false
+  }
+}
+
+async function sidecarReadId() {
+  const selection = parseSidecarSelection(sidecarSelected.value)
+  if (!selection) {
+    store.addLog('未选择 Sidecar 设备', 'warn')
+    return
+  }
+  sidecarBusy.value = true
+  try {
+    const msg = await readSidecarId(selection.adapter, selection.device)
+    store.addLog(msg, 'success')
+  } catch (error) {
+    store.addLog(`读取 Sidecar 芯片 ID 失败: ${String(error)}`, 'error')
+  } finally {
+    sidecarBusy.value = false
+  }
+}
 
 type ExperimentalRequest = {
   title: string
@@ -522,6 +564,47 @@ onMounted(async () => {
           </div>
         </div>
       </div>
+    </section>
+
+    <div class="divider" />
+
+    <!-- ── Sidecar 插件（实验性） ── -->
+    <section class="panel-section">
+      <div class="section-label">{{ t('sidecar.title') }}</div>
+
+      <button
+        class="btn btn-ghost btn-sm w-full"
+        :disabled="sidecarBusy"
+        @click="refreshSidecarAdapters"
+      >
+        {{ t('sidecar.refresh') }}
+      </button>
+
+      <select
+        v-model="sidecarSelected"
+        class="input"
+        style="margin-top: 6px"
+        :disabled="sidecarBusy"
+      >
+        <template v-for="adapter in sidecarAdapters" :key="adapter.name">
+          <option
+            v-for="device in adapter.devices"
+            :key="`${adapter.name}\u0000${device.id}`"
+            :value="`${adapter.name}\u0000${device.id}`"
+          >
+            {{ adapter.name }} · {{ device.id }} ({{ device.detail }})
+          </option>
+        </template>
+      </select>
+
+      <button
+        class="btn btn-secondary w-full"
+        style="margin-top: 6px"
+        :disabled="sidecarBusy || !sidecarSelected"
+        @click="sidecarReadId"
+      >
+        {{ t('sidecar.readId') }}
+      </button>
     </section>
 
     <div v-if="store.selectedType === 'SPI_NAND'" class="divider" />

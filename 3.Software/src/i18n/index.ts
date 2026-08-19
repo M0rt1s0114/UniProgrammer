@@ -74,6 +74,11 @@ const zh: MessageRecord = {
   'option.serprog': 'Serprog (串口)',
   'option.hidprog': 'HIDProg (预留)',
 
+  // Sidecar plugins
+  'sidecar.title': 'Sidecar 插件（实验性）',
+  'sidecar.refresh': '刷新适配器',
+  'sidecar.readId': '读取芯片 ID',
+
   // Programmer auto detection
   'programmer.autoMode': '自动识别',
   'programmer.manualMode': '手动选择',
@@ -342,6 +347,11 @@ const en: MessageRecord = {
   // Options
   'option.serprog': 'Serprog (Serial)',
   'option.hidprog': 'HIDProg (Reserved)',
+
+  // Sidecar plugins
+  'sidecar.title': 'Sidecar Plugins (Experimental)',
+  'sidecar.refresh': 'Refresh Adapters',
+  'sidecar.readId': 'Read Chip ID',
 
   // Programmer auto detection
   'programmer.autoMode': 'Auto Detect',
