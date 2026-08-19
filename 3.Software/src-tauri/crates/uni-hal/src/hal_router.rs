@@ -1,14 +1,14 @@
 //! HAL routing layer over sidecar adapter plugins.
 //!
 //! This module is intentionally Tauri-free. It turns the in-memory plugin
-//! registry ([`crate::plugin::PluginManager`]) into live sidecar adapter
+//! registry ([`uni_plugin::PluginManager`]) into live sidecar adapter
 //! sessions and routes HAL operations such as SPI transactions to the
 //! matching adapter.
 
-use crate::plugin::{PluginKind, PluginManager};
 use crate::uni_hal::{self, SidecarClient, SidecarDevice};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use uni_plugin::{PluginKind, PluginManager};
 
 /// A successfully spawned and probed sidecar adapter plugin.
 pub struct LoadedAdapter {

@@ -5,34 +5,29 @@ mod ch34x;
 mod core;
 mod dialogs;
 mod firmware;
-pub mod hal_router;
-pub mod nor_ops;
 mod operations;
-mod plugin;
 pub mod plugin_install;
 mod protocols;
 pub mod script_plugin;
 mod serprog;
 mod settings;
 mod sfdp;
-pub mod sidecar_nor;
-pub mod spi_bus;
-pub mod uni_hal;
+pub mod spi_bus_impl;
 
 use ch34x::{Ch34xDevice, Ch34xSettings, ChipKind};
 use core::{
     chip_info_to_detect, get_lib, spi_read_jedec, AppState, At45PageModeResult, BadBlockScanResult,
     BbmLutResult, ChipDetectInfo, ChipDetectResult, NorWriteProtectStatus, RawBytesResult,
 };
-use hal_router::{HalRouter, SidecarSelection};
 use operations::BlankCheckResult;
-use plugin::{BootCheck, BuiltinModule, PluginManager};
 use serde::Serialize;
-use sidecar_nor::SidecarNor;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use tauri::{Emitter, Manager, State, WindowEvent};
 use uni_chipdb as chiplib;
+use uni_hal::hal_router::{HalRouter, SidecarSelection};
+use uni_hal::sidecar_nor::SidecarNor;
+use uni_plugin::{self as plugin, BootCheck, BuiltinModule, PluginManager};
 
 #[derive(Clone, Serialize)]
 struct ReadProgressEvent {

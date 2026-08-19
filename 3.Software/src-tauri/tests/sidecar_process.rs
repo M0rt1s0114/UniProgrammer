@@ -2,16 +2,8 @@
 //! sidecar binary as a real child process and drives a full SPI session over
 //! the framed stdio protocol.
 
-#[path = "../src/uni_hal.rs"]
-#[allow(dead_code)] // only the child-process path is exercised by this integration test
-mod uni_hal;
-
-#[path = "../src/plugin.rs"]
-#[allow(dead_code)] // reusing the full module exposes more public API than this test needs
-mod plugin;
-
-use plugin::{CapabilitySet, SpiCapability};
 use serde_json::json;
+use uni_plugin::{CapabilitySet, SpiCapability};
 
 fn spi_capabilities() -> CapabilitySet {
     CapabilitySet {

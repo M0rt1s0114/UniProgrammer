@@ -3,28 +3,16 @@
 //! router and runs the `examples/script-protocol-plugin.js` script plugin
 //! against the real child-process HAL path.
 
-#[path = "../src/uni_hal.rs"]
-#[allow(dead_code)] // only the child-process path is exercised by this integration test
-mod uni_hal;
-
-#[path = "../src/plugin.rs"]
-#[allow(dead_code)] // reusing the full module exposes more public API than this test needs
-mod plugin;
-
-#[path = "../src/hal_router.rs"]
-#[allow(dead_code)] // reusing the full module exposes more public API than this test needs
-mod hal_router;
-
 #[path = "../src/script_plugin.rs"]
 #[allow(dead_code)] // reusing the full module exposes more public API than this test needs
 mod script_plugin;
 
-use hal_router::HalRouter;
-use plugin::PluginManager;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
+use uni_hal::hal_router::HalRouter;
+use uni_plugin::{self as plugin, PluginManager};
 
 static TMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 

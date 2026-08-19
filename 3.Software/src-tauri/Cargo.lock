@@ -3926,6 +3926,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "uni-hal"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "serde",
+ "serde_json",
+ "uni-plugin",
+]
+
+[[package]]
+name = "uni-plugin"
+version = "0.1.0"
+dependencies = [
+ "semver",
+ "serde",
+ "toml 0.8.23",
+]
+
+[[package]]
 name = "unic-char-property"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3995,6 +4014,8 @@ dependencies = [
  "tauri-build",
  "toml 0.8.23",
  "uni-chipdb",
+ "uni-hal",
+ "uni-plugin",
  "ureq",
  "windows 0.58.0",
  "zip",

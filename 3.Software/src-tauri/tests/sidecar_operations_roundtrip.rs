@@ -3,26 +3,6 @@
 //! starts the HAL router and drives erase / write / verify / read through
 //! `operations::sidecar_*` over the real child-process protocol.
 
-#[path = "../src/uni_hal.rs"]
-#[allow(dead_code)] // only the child-process path is exercised by this integration test
-mod uni_hal;
-
-#[path = "../src/plugin.rs"]
-#[allow(dead_code)] // reusing the full module exposes more public API than this test needs
-mod plugin;
-
-#[path = "../src/hal_router.rs"]
-#[allow(dead_code)] // reusing the full module exposes more public API than this test needs
-mod hal_router;
-
-#[path = "../src/sidecar_nor.rs"]
-#[allow(dead_code)] // reusing the full module exposes more public API than this test needs
-mod sidecar_nor;
-
-#[path = "../src/nor_ops.rs"]
-#[allow(dead_code)]
-mod nor_ops;
-
 #[path = "../src/ch34x.rs"]
 #[allow(dead_code)] // pulled in by operations; only the sidecar path is exercised
 mod ch34x;
@@ -34,10 +14,6 @@ mod autodetect;
 #[path = "../src/serprog.rs"]
 #[allow(dead_code)] // pulled in by core; only the sidecar path is exercised
 mod serprog;
-
-#[path = "../src/spi_bus.rs"]
-#[allow(dead_code)] // required by `sidecar_nor`'s normal path; only the sidecar path is exercised
-mod spi_bus;
 
 #[path = "../src/sfdp.rs"]
 #[allow(dead_code)] // pulled in by core; only the sidecar path is exercised
@@ -55,13 +31,13 @@ mod protocols;
 #[allow(dead_code)] // reusing the full module exposes more public API than this test needs
 mod operations;
 
-use hal_router::{HalRouter, SidecarSelection};
-use plugin::PluginManager;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 use uni_chipdb as chiplib;
+use uni_hal::hal_router::{HalRouter, SidecarSelection};
+use uni_plugin::PluginManager;
 
 static TMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 

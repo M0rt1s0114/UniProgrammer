@@ -5,12 +5,12 @@
 //! `<plugins_root>/plugins/<name>`. Both package formats use `unipkg.toml`
 //! (preferred) or the legacy `manifest.toml` at the package root.
 
-use crate::plugin::{manifest_candidates, PluginManifest};
 use serde::Serialize;
 use std::fs;
 use std::io::{self, Read};
 use std::path::{Component, Path, PathBuf};
 use std::time::Duration;
+use uni_plugin::{manifest_candidates, PluginManifest};
 
 /// Result of a successful plugin package install.
 #[derive(Debug, Clone, Serialize)]

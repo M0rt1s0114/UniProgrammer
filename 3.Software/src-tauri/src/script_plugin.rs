@@ -18,8 +18,8 @@ use std::time::{Duration, Instant};
 use rquickjs::{Array, Context, Ctx, Exception, Function, Null, Object, Runtime, Value};
 use serde::Serialize;
 
-use crate::hal_router::HalRouter;
-use crate::plugin::{PluginKind, PluginManifest};
+use uni_hal::hal_router::HalRouter;
+use uni_plugin::{PluginKind, PluginManifest};
 
 /// A single log line emitted by a script plugin.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]

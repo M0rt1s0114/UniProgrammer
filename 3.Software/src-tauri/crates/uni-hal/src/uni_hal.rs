@@ -61,12 +61,12 @@ impl SidecarClient {
         &mut self,
         name: &str,
         version: &str,
-        capabilities: &crate::plugin::CapabilitySet,
+        capabilities: &uni_plugin::CapabilitySet,
     ) -> Result<(), String> {
         let params = json!({
             "name": name,
             "version": version,
-            "plugin_api": crate::plugin::PLUGIN_API_VERSION,
+            "plugin_api": uni_plugin::PLUGIN_API_VERSION,
             "capabilities": capabilities,
         });
         let result = self.request("handshake", params)?;
@@ -252,7 +252,7 @@ pub fn spawn_sidecar(
     args: &[String],
     name: &str,
     version: &str,
-    capabilities: &crate::plugin::CapabilitySet,
+    capabilities: &uni_plugin::CapabilitySet,
 ) -> Result<SidecarClient, String> {
     let transport = ChildTransport::spawn_child(program, args)?;
     let mut client = SidecarClient::new(Box::new(transport));
@@ -381,8 +381,8 @@ pub mod testing {
 mod tests {
     use super::testing::PairedTransport;
     use super::*;
-    use crate::plugin::{CapabilitySet, SpiCapability};
     use std::thread;
+    use uni_plugin::{CapabilitySet, SpiCapability};
 
     const JEDEC_ID: [u8; 3] = [0xEF, 0x40, 0x18];
 
