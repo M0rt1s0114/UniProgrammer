@@ -40,7 +40,11 @@ try {
 
   Push-Location $root
   try {
-    npm run tauri build
+    if ($Profile -eq 'libusb') {
+      npx tauri build --features hal-libusb
+    } else {
+      npx tauri build
+    }
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
   } finally {
     Pop-Location
