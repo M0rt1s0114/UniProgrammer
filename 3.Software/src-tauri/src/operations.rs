@@ -12,7 +12,9 @@ use crate::core::{
     spi_unprotect, spi_wait_ready, spi_write_disable, spi_write_enable, AppState, NorParams,
     NOR_BP_MASK_SR1,
 };
+use crate::hal_router::{HalRouter, SidecarSelection};
 use crate::protocols;
+use crate::sidecar_nor::SidecarNor;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct EraseProgress {
@@ -1113,6 +1115,115 @@ pub fn verify_chip(
     }
 
     Ok("校验通过".to_string())
+}
+
+/// Open a [`SidecarNor`], run `f`, and always close the session once before
+/// returning. A failed close is deliberately ignored so it can never mask the
+/// operation's own result.
+#[allow(dead_code)] // not wired into a Tauri command yet; exercised by tests
+fn with_sidecar_nor<'a, T>(
+    router: &'a mut HalRouter,
+    selection: &SidecarSelection,
+    f: impl FnOnce(&mut SidecarNor<'a>) -> Result<T, String>,
+) -> Result<T, String> {
+    let mut nor = SidecarNor::open(router, &selection.adapter, &selection.device_id)?;
+    let result = f(&mut nor);
+    let _ = nor.close();
+    result
+}
+
+#[allow(dead_code)] // not wired into a Tauri command yet; exercised by tests
+pub fn sidecar_erase_chip(
+    router: &mut HalRouter,
+    selection: &SidecarSelection,
+) -> Result<String, String> {
+    with_sidecar_nor(router, selection, |nor| {
+        nor.erase_chip()?;
+        Ok("全片擦除完成（sidecar）".to_string())
+    })
+}
+
+#[allow(dead_code)] // not wired into a Tauri command yet; exercised by tests
+pub fn sidecar_read_chip(
+    router: &mut HalRouter,
+    selection: &SidecarSelection,
+    size: u64,
+    progress: &mut dyn FnMut(u64, u64),
+) -> Result<Vec<u8>, String> {
+    with_sidecar_nor(router, selection, |nor| {
+        let total = size;
+        let mut out = Vec::with_capacity(total as usize);
+        let mut offset: u64 = 0;
+        while offset < total {
+            let chunk = (total - offset).min(4096) as usize;
+            let data = nor.read(offset as usize, chunk)?;
+            out.extend_from_slice(&data);
+            offset += chunk as u64;
+            progress(offset, total);
+        }
+        Ok(out)
+    })
+}
+
+#[allow(dead_code)] // not wired into a Tauri command yet; exercised by tests
+pub fn sidecar_write_chip(
+    router: &mut HalRouter,
+    selection: &SidecarSelection,
+    data: &[u8],
+    start_addr: u64,
+    progress: &mut dyn FnMut(u64, u64),
+) -> Result<String, String> {
+    with_sidecar_nor(router, selection, |nor| {
+        let total = data.len();
+        let mut offset: usize = 0;
+        while offset < total {
+            let chunk = 256.min(total - offset);
+            let addr = start_addr + offset as u64;
+
+            // Program full pages: the final partial page is padded with 0xFF
+            // so the AND-program semantics leave the untouched tail unchanged.
+            let mut page = [0xFFu8; 256];
+            page[..chunk].copy_from_slice(&data[offset..offset + chunk]);
+            nor.program_page(addr as usize, &page)?;
+
+            offset += chunk;
+            progress(offset as u64, total as u64);
+        }
+        Ok(format!("写入完成（sidecar），共 {} 字节", total))
+    })
+}
+
+#[allow(dead_code)] // not wired into a Tauri command yet; exercised by tests
+pub fn sidecar_verify_chip(
+    router: &mut HalRouter,
+    selection: &SidecarSelection,
+    data: &[u8],
+    start_addr: u64,
+    progress: &mut dyn FnMut(u64, u64),
+) -> Result<String, String> {
+    with_sidecar_nor(router, selection, |nor| {
+        let total = data.len() as u64;
+        let mut offset: u64 = 0;
+        while offset < total {
+            let chunk = (total - offset).min(4096) as usize;
+            let addr = start_addr + offset;
+            let actual = nor.read(addr as usize, chunk)?;
+            for (i, &read_byte) in actual.iter().enumerate() {
+                let expected = data[offset as usize + i];
+                if expected != read_byte {
+                    return Err(format!(
+                        "校验失败 @ 0x{:08X}: 期望 0x{:02X}, 读到 0x{:02X}",
+                        addr + i as u64,
+                        expected,
+                        read_byte
+                    ));
+                }
+            }
+            offset += chunk as u64;
+            progress(offset, total);
+        }
+        Ok("校验通过（sidecar）".to_string())
+    })
 }
 
 /// Same as `spi_wait_ready`, but reports elapsed time through the erase
