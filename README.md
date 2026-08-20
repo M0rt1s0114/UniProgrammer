@@ -1,3 +1,11 @@
+# UniProgrammer 已迁移 → [SR-Laboratory/uniprog-tool](https://github.com/SR-Laboratory/uniprog-tool)
+
+> **本仓库自 2026-08-20 起停止开发，仅保留历史归档。**
+> 迁移断点：`archive/pre-migration`（commit `184cdc3`）。
+> 所有后续开发、Issues、Releases 请前往新仓库。
+
+---
+
 # UniProgrammer
 
 > A cross-platform NAND/NOR SPI flash programmer with a pluggable hardware abstraction layer.

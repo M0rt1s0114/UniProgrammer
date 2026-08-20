@@ -1,3 +1,11 @@
+# UniProgrammer 已迁移 → [SR-Laboratory/uniprog-tool](https://github.com/SR-Laboratory/uniprog-tool)
+
+> **本仓库自 2026-08-20 起停止开发，仅保留历史归档。**
+> 迁移断点：`archive/pre-migration`（commit `184cdc3`）。
+> 所有后续开发、Issues、Releases 请前往新仓库。
+
+---
+
 # UniProgrammer
 
 > 一款跨平台 NAND/NOR SPI Flash 编程器，具备可插拔的硬件抽象层（HAL）。
