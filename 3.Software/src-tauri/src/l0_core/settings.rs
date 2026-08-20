@@ -114,6 +114,14 @@ pub fn save(content: &str) -> Result<String, String> {
     Ok(path.display().to_string())
 }
 
+/// `upt.log` 文件路径。便携版跟随 exe 同级目录，安装版跟随
+/// `~/UniProgrammer/`，保证日志文件落在可写位置。
+pub fn log_file() -> PathBuf {
+    let base = settings_file();
+    let dir = base.parent().unwrap_or_else(|| Path::new("."));
+    dir.join("logs").join("uniprog.log")
+}
+
 /// 启动早期读取 `[general] debugConsole`，决定是否显示调试控制台。
 /// 设置文件缺失或解析失败时按 false 处理（正式版不弹窗）。
 pub fn startup_debug_console() -> bool {

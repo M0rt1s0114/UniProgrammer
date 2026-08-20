@@ -3975,6 +3975,7 @@ name = "uniprog"
 version = "0.4.0-alpha.12"
 dependencies = [
  "base64 0.22.1",
+ "chrono",
  "open",
  "quick-xml 0.31.0",
  "rquickjs",

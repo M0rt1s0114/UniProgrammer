@@ -21,6 +21,7 @@ open = "5"
 toml = "0.8"
 semver = "1"
 base64 = "0.22"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
 rquickjs = "0.12.2"
 zip = "2.4"
 ureq = "2.12"

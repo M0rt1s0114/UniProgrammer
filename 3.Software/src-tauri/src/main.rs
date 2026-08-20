@@ -5,7 +5,7 @@ pub mod l0_core;
 pub mod ui_tauri;
 
 use app_ops::{autodetect, core, operations};
-use l0_core::{console, settings, unipkg_protocol};
+use l0_core::{console, settings, unipkg_protocol, upt_log};
 use ui_tauri::dialogs;
 
 use ch34x::{Ch34xDevice, Ch34xSettings, ChipKind};
@@ -98,8 +98,9 @@ fn exe_dir() -> PathBuf {
 
 /// 调试控制台日志。正常发布版没有控制台时该输出被丢弃；用户开启
 /// “调试控制台”后，启动早期会 AllocConsole，随后的后端操作日志都会显示。
+/// 全部消息同时经过 `upt.log` 写入文本日志。
 fn backend_log(message: &str) {
-    eprintln!("[uniprog] {message}");
+    upt_log::info(message);
 }
 
 /// Write a readable Chinese boot-error report next to the executable and stop
@@ -1139,7 +1140,21 @@ fn sidecar_verify(
 }
 
 fn main() {
-    if settings::startup_debug_console() {
+    let debug_console = settings::startup_debug_console();
+    let log_level = if debug_console {
+        upt_log::Level::Debug
+    } else {
+        upt_log::Level::Info
+    };
+    // 先初始化文本日志，再分配控制台；文件 sink 始终开启。调试构建或
+    // 用户开启“调试控制台”时，同样把日志写到 stderr。
+    let _ = upt_log::init(
+        log_level,
+        debug_console || cfg!(debug_assertions),
+        Some(settings::log_file()),
+    );
+
+    if debug_console {
         // 必须在任何 eprintln!/侧车进程启动之前完成，这样后端日志和
         // CH34X 侧车的 stderr 都会进入同一个控制台窗口。
         console::attach();
