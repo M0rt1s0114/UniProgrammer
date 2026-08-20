@@ -2,6 +2,7 @@
 //! `upt-core` module in the assembled source tree.
 
 pub mod console;
+pub mod host;
 pub mod plugin_install;
 pub mod runtime;
 pub mod script_plugin;

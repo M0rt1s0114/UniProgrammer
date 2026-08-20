@@ -5,6 +5,7 @@ pub mod l0_core;
 pub mod ui_tauri;
 
 use app_ops::core;
+use l0_core::host::{HostApi, HostContext};
 use l0_core::{console, runtime, settings, unipkg_protocol, upt_log};
 use std::path::Path;
 use std::sync::Mutex;
@@ -64,20 +65,27 @@ fn main() {
         runtime::log_info("调试控制台已启用");
     }
 
-    let exe = runtime::exe_dir();
-    runtime::log_info(&format!("UniProgrammer 启动，根目录: {}", exe.display()));
+    let host = HostContext::new(runtime::exe_dir());
+    let exe = host.root_dir();
+    host.log(
+        upt_log::Level::Info,
+        &format!("UniProgrammer 启动，根目录: {}", exe.display()),
+    );
     let mut plugin_manager = PluginManager::load(&exe);
     let boot = plugin_manager.boot_check();
     if !boot.missing.is_empty() || !boot.invalid.is_empty() {
-        runtime::log_info("启动失败：L1 必需插件缺失或无效");
+        host.log(upt_log::Level::Info, "启动失败：L1 必需插件缺失或无效");
         write_boot_error(&exe, &boot);
         std::process::exit(1);
     }
-    runtime::log_info(&format!(
-        "插件扫描完成：{} 个插件，{} 个错误",
-        plugin_manager.plugins.len(),
-        plugin_manager.errors.len()
-    ));
+    host.log(
+        upt_log::Level::Info,
+        &format!(
+            "插件扫描完成：{} 个插件，{} 个错误",
+            plugin_manager.plugins.len(),
+            plugin_manager.errors.len()
+        ),
+    );
     let hal_router = HalRouter::start(&mut plugin_manager, &exe);
     let plugin_assets = unipkg_protocol::UnipkgProtocol::from_manager(&plugin_manager);
     let builder = tauri::Builder::default()
