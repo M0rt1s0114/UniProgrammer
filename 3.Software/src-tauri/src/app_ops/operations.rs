@@ -5,7 +5,7 @@
 use serde::Serialize;
 use std::time::{Duration, Instant};
 
-use crate::core::{
+use super::core::{
     nor_params, open_ch34x, open_ch34x_mode, parse_nand_bad_block_mode, prepare_bypass_if_needed,
     scan_nand_bad_blocks_for_mode, serprog_wait_ready, spi_4byte_mode, spi_read_status,
     spi_unprotect, spi_wait_ready, spi_write_disable, spi_write_enable, AppState, NorParams,
@@ -1283,7 +1283,7 @@ fn spi_wait_ready_with_progress_cb(
     let start = Instant::now();
     let mut last_report = start;
     loop {
-        let status = crate::core::spi_read_status(dev)?;
+        let status = super::core::spi_read_status(dev)?;
         if (status & 0x01 | status & 0x20 | status & 0x02) == 0 {
             return Ok(());
         }

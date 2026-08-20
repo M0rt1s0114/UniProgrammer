@@ -3,17 +3,17 @@
 //! starts the HAL router and drives erase / write / verify / read through
 //! `operations::sidecar_*` over the real child-process protocol.
 
-#[path = "../src/autodetect.rs"]
+#[path = "../src/app_ops/autodetect.rs"]
 #[allow(dead_code)] // pulled in by core; only the sidecar path is exercised
 mod autodetect;
 
-#[path = "../src/core.rs"]
+#[path = "../src/app_ops/core.rs"]
 #[allow(dead_code)] // pulled in by operations; only the sidecar path is exercised
 mod core;
 
 use upt_proto::protocols;
 
-#[path = "../src/operations.rs"]
+#[path = "../src/app_ops/operations.rs"]
 #[allow(dead_code)] // reusing the full module exposes more public API than this test needs
 mod operations;
 

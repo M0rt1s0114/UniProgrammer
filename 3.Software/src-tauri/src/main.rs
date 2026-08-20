@@ -1,15 +1,12 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod autodetect;
-mod console;
-mod core;
-mod dialogs;
-mod operations;
-pub mod plugin_install;
-pub mod script_plugin;
-mod settings;
-pub mod spi_bus_impl;
-pub mod unipkg_protocol;
+pub mod app_ops;
+pub mod l0_core;
+pub mod ui_tauri;
+
+use app_ops::{autodetect, core, operations};
+use l0_core::{console, settings, unipkg_protocol};
+use ui_tauri::dialogs;
 
 use ch34x::{Ch34xDevice, Ch34xSettings, ChipKind};
 use core::{

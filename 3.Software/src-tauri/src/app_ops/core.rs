@@ -57,7 +57,7 @@ pub struct AppState {
     /// list changes, so the hotplug poll never chats with every COM port.
     pub last_serial_ports: Vec<String>,
     /// Last serprog probe result, reused while the port list is unchanged.
-    pub cached_serprog: Vec<crate::autodetect::ProgrammerCandidate>,
+    pub cached_serprog: Vec<super::autodetect::ProgrammerCandidate>,
     /// Mirrored from the frontend: true while read/write/erase/verify/auto
     /// flow is executing. Used by the Rust close-requested handler.
     pub operation_running: bool,

@@ -3,7 +3,7 @@
 //! router and runs the `examples/script-protocol-plugin.js` script plugin
 //! against the real child-process HAL path.
 
-#[path = "../src/script_plugin.rs"]
+#[path = "../src/l0_core/script_plugin.rs"]
 #[allow(dead_code)] // reusing the full module exposes more public API than this test needs
 mod script_plugin;
 
