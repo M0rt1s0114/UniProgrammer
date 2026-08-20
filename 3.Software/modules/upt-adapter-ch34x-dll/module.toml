@@ -2,5 +2,5 @@
 name = "upt-adapter-ch34x-dll"
 layer = "l2"
 kind = "package"
-source = "src-tauri/plugins/builtin/upt.hal.ch34x_dll"
+source = "modules/upt-adapter-ch34x-dll/package"
 target = "plugins/builtin/upt.hal.ch34x_dll"

@@ -2,5 +2,5 @@
 name = "upt-hal-runtime"
 layer = "l1"
 kind = "code"
-source = "src-tauri/crates/upt-hal"
+source = "modules/upt-hal-runtime/crate"
 target = "crates/upt-hal"

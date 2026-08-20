@@ -1,3 +1,4 @@
+/* global process, console */
 import fs from 'node:fs'
 import path from 'node:path'
 import { parse as parseToml } from 'smol-toml'
@@ -14,7 +15,6 @@ import { parse as parseToml } from 'smol-toml'
 const root = path.resolve(import.meta.dirname, '..')
 const profilesDir = path.join(root, 'profiles')
 const modulesDir = path.join(root, 'modules')
-const legacySrcTauri = path.join(root, 'src-tauri')
 
 function fail(message) {
   console.error(`[assemble] ${message}`)
@@ -60,35 +60,12 @@ const requiredTargets = Array.isArray(profile.required) ? profile.required : []
 const buildDir = path.join(root, 'build', profile.name, 'src-tauri')
 cleanDir(buildDir)
 
-// Static pieces of the current Tauri app crate. Modules own the rest.
-const staticDirs = ['.cargo', 'capabilities', 'examples', 'gen', 'icons', 'src/bin', 'tests']
-for (const dir of staticDirs) {
-  const source = path.join(legacySrcTauri, dir)
-  if (fs.existsSync(source)) copyDir(source, path.join(buildDir, dir))
-}
-
-const staticFiles = [
-  'build.rs',
-  'Cargo.lock',
-  'Cargo.toml',
-  'tauri.conf.json',
-  'tauri.libusb.conf.json',
-  'tauri.linux.conf.json',
-  'app-icon.png',
-  'app-icon.svg',
-  'chiplib.bin',
-  'chiplib.xml',
-  'src/main.rs',
-]
-for (const file of staticFiles) {
-  const source = path.join(legacySrcTauri, file)
-  if (fs.existsSync(source)) copyFile(source, path.join(buildDir, file))
-}
-
-// Proprietary vendor DLL only belongs to the local dll profile.
+// Proprietary vendor DLL only belongs to the local dll profile. It lives in
+// `vendor/` (gitignored) and is copied into the generated workspace here.
 if (profile.backend === 'dll') {
-  const dll = path.join(legacySrcTauri, 'CH34X.DLL')
-  if (fs.existsSync(dll)) copyFile(dll, path.join(buildDir, 'CH34X.DLL'))
+  const dll = path.join(root, 'vendor', 'CH34X.DLL')
+  if (!fs.existsSync(dll)) fail(`vendor DLL not found: ${dll}`)
+  copyFile(dll, path.join(buildDir, 'CH34X.DLL'))
 }
 
 // Resolve and copy selected modules.
@@ -110,20 +87,46 @@ for (const name of profile.modules) {
   console.log(`[assemble] ${name} -> ${module.target}`)
 }
 
-const missingRequired = requiredTargets.filter((target) => !fs.existsSync(path.join(buildDir, target)))
+const missingRequired = requiredTargets.filter(
+  (target) => !fs.existsSync(path.join(buildDir, target)),
+)
 if (missingRequired.length > 0) {
   fail(`profile requires missing targets: ${missingRequired.join(', ')}`)
 }
-
-// The plugin resource root is assembled entirely from module packages.
-copyFile(
-  path.join(legacySrcTauri, 'plugins', 'README.md'),
-  path.join(buildDir, 'plugins', 'README.md'),
-)
 
 fs.writeFileSync(
   path.join(buildDir, 'build-manifest.json'),
   `${JSON.stringify({ profile: profileName, backend: profile.backend, modules: copied }, null, 2)}\n`,
 )
+
+// Generate a minimal npm shim so `npx tauri build` can run from the profile
+// root. Frontend compilation delegates to the repository root; the beforeBundle
+// hook is rewritten to the repository's parameterized prepare-bundle script.
+const profileRoot = path.join(root, 'build', profile.name)
+fs.mkdirSync(profileRoot, { recursive: true })
+fs.writeFileSync(
+  path.join(profileRoot, 'package.json'),
+  `${JSON.stringify(
+    {
+      private: true,
+      type: 'module',
+      scripts: {
+        build: 'npm --prefix ../../ run build',
+        dev: `node ../../scripts/dev-all.cjs --profile ${profile.name}`,
+        tauri: 'node ../../node_modules/@tauri-apps/cli/tauri.js',
+      },
+    },
+    null,
+    2,
+  )}\n`,
+)
+
+const tauriConfPath = path.join(buildDir, 'tauri.conf.json')
+const tauriConf = JSON.parse(fs.readFileSync(tauriConfPath, 'utf8'))
+tauriConf.build.beforeDevCommand = `node ../../scripts/dev-all.cjs --profile ${profile.name}`
+tauriConf.build.beforeBuildCommand = 'npm run build'
+tauriConf.build.beforeBundleCommand =
+  'node ../../scripts/prepare-bundle.cjs --release --src-tauri src-tauri'
+fs.writeFileSync(tauriConfPath, `${JSON.stringify(tauriConf, null, 2)}\n`)
 
 console.log(`[assemble] generated ${buildDir}`)

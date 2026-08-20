@@ -1,3 +1,4 @@
+/* global process, console */
 import fs from 'node:fs'
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -27,7 +28,11 @@ const profileIndex = args.indexOf('--profile')
 const profile = profileIndex >= 0 ? args[profileIndex + 1] : null
 if (!profile) fail('missing --profile <name>')
 
-const assemble = run(process.execPath, [path.join(root, 'tools', 'assemble.mjs'), '--profile', profile], root)
+const assemble = run(
+  process.execPath,
+  [path.join(root, 'tools', 'assemble.mjs'), '--profile', profile],
+  root,
+)
 if (assemble !== 0) fail('assembler failed')
 
 const srcTauri = path.join(root, 'build', profile, 'src-tauri')

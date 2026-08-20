@@ -2,6 +2,7 @@
 name = "desktop-tauri-dll"
 backend = "dll"
 modules = [
+  "upt-bootstrap",
   "upt-core",
   "upt-plugin-runtime",
   "upt-hal-runtime",

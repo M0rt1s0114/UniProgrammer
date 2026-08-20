@@ -28,9 +28,9 @@ Setting.set
 # 插件启用状态与构建时复制进插件包的 sidecar 二进制（本地生成）
 plugin-state.toml
 **/plugin-state.toml
-3.Software/src-tauri/plugins/builtin/upt.hal.ch34x_dll/upt_ch34x_sidecar_dll*
-3.Software/src-tauri/plugins/builtin/upt.hal.ch34x_libusb/upt_ch34x_sidecar_libusb*
-3.Software/src-tauri/plugins/builtin/upt.chipdb/upt_chipdb_sidecar*
+3.Software/modules/upt-adapter-ch34x-dll/package/upt_ch34x_sidecar_dll*
+3.Software/modules/upt-adapter-ch34x-libusb/package/upt_ch34x_sidecar_libusb*
+3.Software/modules/upt-chipdb-package/package/upt_chipdb_sidecar*
 
 # 编辑器 / 系统
 .vscode/

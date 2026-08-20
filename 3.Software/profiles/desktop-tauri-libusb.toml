@@ -2,6 +2,7 @@
 name = "desktop-tauri-libusb"
 backend = "libusb"
 modules = [
+  "upt-bootstrap",
   "upt-core",
   "upt-plugin-runtime",
   "upt-hal-runtime",

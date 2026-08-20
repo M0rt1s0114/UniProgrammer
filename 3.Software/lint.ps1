@@ -10,15 +10,9 @@ try {
     npm run format:check
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-    Push-Location (Join-Path $root 'src-tauri')
-    try {
-        cargo fmt --check
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-        cargo lint
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    } finally {
-        Pop-Location
-    }
+    # Assemble the GPL profile and run fmt/check/clippy/test there.
+    node tools/verify.mjs --profile desktop-tauri-libusb
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 } finally {
     Pop-Location
 }

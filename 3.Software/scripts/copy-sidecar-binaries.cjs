@@ -11,7 +11,11 @@ const fs = require('node:fs')
 const path = require('node:path')
 
 const profile = process.argv.includes('--release') ? 'release' : 'debug'
-const srcTauri = path.resolve(__dirname, '..', 'src-tauri')
+const srcTauriArgIndex = process.argv.indexOf('--src-tauri')
+const srcTauri =
+  srcTauriArgIndex >= 0
+    ? path.resolve(process.argv[srcTauriArgIndex + 1])
+    : path.resolve(__dirname, '..', 'src-tauri')
 const targetDir = path.join(srcTauri, 'target', profile)
 const pluginsDir = path.join(srcTauri, 'plugins', 'builtin')
 

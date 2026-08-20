@@ -2,5 +2,5 @@
 name = "upt-chipdb-runtime"
 layer = "l1"
 kind = "code"
-source = "src-tauri/crates/upt-chipdb"
+source = "modules/upt-chipdb-runtime/crate"
 target = "crates/upt-chipdb"

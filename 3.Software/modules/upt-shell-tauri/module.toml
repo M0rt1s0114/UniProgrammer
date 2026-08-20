@@ -2,5 +2,5 @@
 name = "upt-shell-tauri"
 layer = "l1"
 kind = "package"
-source = "src-tauri/plugins/builtin/upt.tauri"
+source = "modules/upt-shell-tauri/package"
 target = "plugins/builtin/upt.tauri"

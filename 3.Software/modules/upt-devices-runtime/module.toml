@@ -2,5 +2,5 @@
 name = "upt-devices-runtime"
 layer = "l1"
 kind = "code"
-source = "src-tauri/crates/upt-devices"
+source = "modules/upt-devices-runtime/crate"
 target = "crates/upt-devices"

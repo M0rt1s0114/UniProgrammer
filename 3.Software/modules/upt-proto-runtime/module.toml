@@ -2,5 +2,5 @@
 name = "upt-proto-runtime"
 layer = "l1"
 kind = "code"
-source = "src-tauri/crates/upt-proto"
+source = "modules/upt-proto-runtime/crate"
 target = "crates/upt-proto"

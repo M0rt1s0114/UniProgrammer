@@ -7,6 +7,9 @@
 //
 // The real main binary built by Cargo lives at:
 //   target/release/deps/uniprog[.exe]
+//
+// Usage:
+//   node scripts/fix-main-binary.cjs [--src-tauri <path>]
 
 const fs = require('fs')
 const path = require('path')
@@ -14,11 +17,13 @@ const path = require('path')
 const exeName = process.platform === 'win32' ? 'uniprog.exe' : 'uniprog'
 const mainName = process.platform === 'win32' ? 'uniprog.exe' : 'uniprog'
 
-const roots = [
-  path.resolve(process.cwd()),
-  path.resolve(__dirname, '..'),
-  path.resolve(__dirname, '..', 'src-tauri'),
-]
+const argIndex = process.argv.indexOf('--src-tauri')
+const srcTauri =
+  argIndex >= 0
+    ? path.resolve(process.argv[argIndex + 1])
+    : path.resolve(__dirname, '..', 'src-tauri')
+
+const roots = [srcTauri, path.resolve(srcTauri, '..')]
 
 function firstExisting(...partsList) {
   for (const p of partsList) {
@@ -27,15 +32,8 @@ function firstExisting(...partsList) {
   return null
 }
 
-const src = firstExisting(
-  ...roots.map((r) => path.join(r, 'target', 'release', 'deps', exeName)),
-  ...roots.map((r) => path.join(r, 'src-tauri', 'target', 'release', 'deps', exeName)),
-)
-
-const dst = firstExisting(
-  ...roots.map((r) => path.join(r, 'target', 'release', mainName)),
-  ...roots.map((r) => path.join(r, 'src-tauri', 'target', 'release', mainName)),
-)
+const src = firstExisting(...roots.map((r) => path.join(r, 'target', 'release', 'deps', exeName)))
+const dst = firstExisting(...roots.map((r) => path.join(r, 'target', 'release', mainName)))
 
 if (!src) {
   console.error('[fix-main-binary] real cargo binary not found:', exeName)

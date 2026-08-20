@@ -5,14 +5,21 @@
 //
 // 1. Builds both CH34X sidecar backends (vendor DLL + libusb).
 // 2. Restores the real main binary (see fix-main-binary.cjs).
-// 3. Copies sidecar binaries into their plugin packages so `plugins/` can be
-//    bundled as one self-contained resource tree.
+// 3. Copies sidecar binaries into the plugin packages that are about to be
+//    bundled.
+//
+// Usage:
+//   node scripts/prepare-bundle.cjs --release [--src-tauri <path>]
 
 const { spawnSync } = require('node:child_process')
 const path = require('node:path')
 
 const root = path.resolve(__dirname, '..')
-const cargoManifest = path.join(root, 'src-tauri', 'Cargo.toml')
+const argIndex = process.argv.indexOf('--src-tauri')
+const srcTauri =
+  argIndex >= 0 ? path.resolve(process.argv[argIndex + 1]) : path.resolve(root, 'src-tauri')
+const cargoManifest = path.join(srcTauri, 'Cargo.toml')
+const release = process.argv.includes('--release')
 
 const cargoTargets = [
   { feature: 'hal-dll', bin: 'upt_ch34x_sidecar_dll' },
@@ -24,7 +31,7 @@ for (const { feature, bin } of cargoTargets) {
     'cargo',
     [
       'build',
-      '--release',
+      ...(release ? ['--release'] : []),
       '--manifest-path',
       cargoManifest,
       '-p',
@@ -34,7 +41,7 @@ for (const { feature, bin } of cargoTargets) {
       '--bin',
       bin,
     ],
-    { cwd: root, stdio: 'inherit' },
+    { cwd: srcTauri, stdio: 'inherit' },
   )
   if (result.error) {
     console.error(`[prepare-bundle] failed to run cargo for ${bin}:`, result.error)
@@ -46,8 +53,16 @@ for (const { feature, bin } of cargoTargets) {
 }
 
 const scripts = [
-  [process.execPath, [path.join(__dirname, 'fix-main-binary.cjs')]],
-  [process.execPath, [path.join(__dirname, 'copy-sidecar-binaries.cjs'), '--release']],
+  [process.execPath, [path.join(__dirname, 'fix-main-binary.cjs'), '--src-tauri', srcTauri]],
+  [
+    process.execPath,
+    [
+      path.join(__dirname, 'copy-sidecar-binaries.cjs'),
+      '--src-tauri',
+      srcTauri,
+      ...(release ? ['--release'] : []),
+    ],
+  ],
 ]
 
 for (const [command, args] of scripts) {

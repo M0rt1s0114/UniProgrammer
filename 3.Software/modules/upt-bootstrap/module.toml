@@ -1,0 +1,6 @@
+[module]
+name = "upt-bootstrap"
+layer = "l0"
+kind = "bootstrap"
+source = "modules/upt-bootstrap/root"
+target = "."

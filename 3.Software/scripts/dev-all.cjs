@@ -9,11 +9,27 @@ const path = require('node:path')
 
 const root = path.resolve(__dirname, '..')
 const viteCli = path.join(root, 'node_modules', 'vite', 'bin', 'vite.js')
-const pluginsDir = path.join(root, 'src-tauri', 'plugins', 'builtin')
+const profileArgIndex = process.argv.indexOf('--profile')
+const profile =
+  profileArgIndex >= 0
+    ? process.argv[profileArgIndex + 1]
+    : process.platform === 'win32'
+      ? 'desktop-tauri-dll'
+      : 'desktop-tauri-libusb'
+const srcTauri = path.join(root, 'build', profile, 'src-tauri')
+
+// Generate the development workspace first; Vite and sidecars are then
+// resolved from the assembled tree / module sources.
+const assemble = spawnSync(
+  process.execPath,
+  [path.join(root, 'tools', 'assemble.mjs'), '--profile', profile],
+  { cwd: root, stdio: 'inherit' },
+)
+if (assemble.status !== 0) process.exit(assemble.status ?? 1)
 
 // Build and stage the built-in sidecar plugins first. HalRouter looks for the
-// executables in their package directories when `npm run dev` is used.
-const cargoManifest = path.join(root, 'src-tauri', 'Cargo.toml')
+// executables in their package directories when `tauri dev` is used.
+const cargoManifest = path.join(srcTauri, 'Cargo.toml')
 const sidecarTargets = [
   { feature: 'hal-dll', bin: 'upt_ch34x_sidecar_dll' },
   { feature: 'hal-libusb', bin: 'upt_ch34x_sidecar_libusb' },
@@ -44,7 +60,7 @@ for (const { feature, bin } of sidecarTargets) {
 }
 const copySidecars = spawnSync(
   process.execPath,
-  [path.join(root, 'scripts', 'copy-sidecar-binaries.cjs')],
+  [path.join(root, 'scripts', 'copy-sidecar-binaries.cjs'), '--src-tauri', srcTauri],
   { cwd: root, stdio: 'inherit' },
 )
 if (copySidecars.status !== 0) {
@@ -52,20 +68,16 @@ if (copySidecars.status !== 0) {
 }
 
 const targets = [
-  { name: 'upt.tauri', config: 'upt.tauri/vite.config.js' },
-  { name: 'upt.tauri.hexview', config: 'upt.tauri.hexview/vite.config.js' },
+  { name: 'upt.tauri', config: 'modules/upt-shell-tauri/package/vite.config.js' },
+  { name: 'upt.tauri.hexview', config: 'modules/upt-shell-tauri-hexview/package/vite.config.js' },
 ]
 
 const children = targets.map((target) => {
-  const child = spawn(
-    process.execPath,
-    [viteCli, '--config', path.join(pluginsDir, target.config)],
-    {
-      cwd: root,
-      stdio: 'inherit',
-      env: { ...process.env, FORCE_COLOR: '1' },
-    },
-  )
+  const child = spawn(process.execPath, [viteCli, '--config', path.join(root, target.config)], {
+    cwd: root,
+    stdio: 'inherit',
+    env: { ...process.env, FORCE_COLOR: '1' },
+  })
   child.on('exit', (code, signal) => {
     if (signal) {
       console.log(`[dev-all] ${target.name} stopped (${signal})`)

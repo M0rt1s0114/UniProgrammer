@@ -2,5 +2,5 @@
 name = "upt-proto-package"
 layer = "l1"
 kind = "package"
-source = "src-tauri/plugins/builtin/upt.proto"
+source = "modules/upt-proto-package/package"
 target = "plugins/builtin/upt.proto"
