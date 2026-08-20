@@ -1,0 +1,6 @@
+[module]
+name = "upt-devices-runtime"
+layer = "l1"
+kind = "code"
+source = "src-tauri/crates/upt-devices"
+target = "crates/upt-devices"

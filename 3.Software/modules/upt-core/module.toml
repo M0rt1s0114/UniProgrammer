@@ -1,0 +1,6 @@
+[module]
+name = "upt-core"
+layer = "l0"
+kind = "code"
+source = "src-tauri/src/l0_core"
+target = "src/l0_core"

@@ -1,0 +1,6 @@
+[module]
+name = "upt-hal-runtime"
+layer = "l1"
+kind = "code"
+source = "src-tauri/crates/upt-hal"
+target = "crates/upt-hal"

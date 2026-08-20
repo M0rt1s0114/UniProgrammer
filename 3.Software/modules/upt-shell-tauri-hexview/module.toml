@@ -1,0 +1,6 @@
+[module]
+name = "upt-shell-tauri-hexview"
+layer = "l1"
+kind = "package"
+source = "src-tauri/plugins/builtin/upt.tauri.hexview"
+target = "plugins/builtin/upt.tauri.hexview"

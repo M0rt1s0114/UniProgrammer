@@ -1,0 +1,6 @@
+[module]
+name = "upt-app-ops"
+layer = "l1"
+kind = "code"
+source = "src-tauri/src/app_ops"
+target = "src/app_ops"

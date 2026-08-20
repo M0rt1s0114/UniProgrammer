@@ -1,0 +1,6 @@
+[module]
+name = "upt-chipdb-package"
+layer = "l1"
+kind = "package"
+source = "src-tauri/plugins/builtin/upt.chipdb"
+target = "plugins/builtin/upt.chipdb"

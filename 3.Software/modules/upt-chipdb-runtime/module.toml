@@ -1,0 +1,6 @@
+[module]
+name = "upt-chipdb-runtime"
+layer = "l1"
+kind = "code"
+source = "src-tauri/crates/upt-chipdb"
+target = "crates/upt-chipdb"

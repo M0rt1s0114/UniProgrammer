@@ -1,0 +1,6 @@
+[module]
+name = "upt-adapter-ch34x-libusb"
+layer = "l2"
+kind = "package"
+source = "src-tauri/plugins/builtin/upt.hal.ch34x_libusb"
+target = "plugins/builtin/upt.hal.ch34x_libusb"

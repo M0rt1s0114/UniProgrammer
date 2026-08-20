@@ -1,0 +1,19 @@
+[build]
+name = "desktop-tauri-libusb"
+backend = "libusb"
+modules = [
+  "upt-core",
+  "upt-plugin-runtime",
+  "upt-hal-runtime",
+  "upt-chipdb-runtime",
+  "upt-proto-runtime",
+  "upt-devices-runtime",
+  "upt-ui-tauri",
+  "upt-app-ops",
+  "upt-shell-tauri",
+  "upt-shell-tauri-hexview",
+  "upt-hal-package",
+  "upt-proto-package",
+  "upt-chipdb-package",
+  "upt-adapter-ch34x-libusb",
+]

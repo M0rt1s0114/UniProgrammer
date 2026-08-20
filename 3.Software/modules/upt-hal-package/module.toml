@@ -1,0 +1,6 @@
+[module]
+name = "upt-hal-package"
+layer = "l1"
+kind = "package"
+source = "src-tauri/plugins/builtin/upt.hal"
+target = "plugins/builtin/upt.hal"

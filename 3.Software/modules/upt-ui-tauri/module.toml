@@ -1,0 +1,6 @@
+[module]
+name = "upt-ui-tauri"
+layer = "l1"
+kind = "code"
+source = "src-tauri/src/ui_tauri"
+target = "src/ui_tauri"

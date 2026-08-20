@@ -1,0 +1,6 @@
+[module]
+name = "upt-plugin-runtime"
+layer = "l0"
+kind = "code"
+source = "src-tauri/crates/upt-plugin"
+target = "crates/upt-plugin"

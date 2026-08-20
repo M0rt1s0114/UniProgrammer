@@ -9,6 +9,7 @@ CH34X.DLL
 
 # Rust / Tauri 构建产物
 3.Software/src-tauri/target/
+3.Software/build/
 
 # 环境文件
 .env
