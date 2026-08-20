@@ -22,3 +22,8 @@ enabled = true
 pins = { cs = "CS0", sck = "SCK", mosi = "MOSI", miso = "MISO" }
 max_frame = 4092
 max_freq_khz = 60000
+
+# 可独立分发：manifest + 侧车二进制 + 厂商 CH34X.DLL。
+# 该包只用于本地/朋友间分发，绝不进入 GitHub Release。
+[packaging]
+include = ["upt_ch34x_sidecar_dll", "CH34X.DLL"]

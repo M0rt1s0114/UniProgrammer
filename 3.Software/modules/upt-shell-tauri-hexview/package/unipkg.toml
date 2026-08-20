@@ -16,3 +16,7 @@ provider = "builtin"
 [permissions]
 
 [capabilities]
+
+# 分发包只携带编译后的 dist/，不带 src/ 等开发源文件。
+[packaging]
+include = ["dist"]

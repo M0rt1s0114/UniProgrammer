@@ -22,3 +22,7 @@ enabled = true
 pins = { cs = "CS0", sck = "SCK", mosi = "MOSI", miso = "MISO" }
 max_frame = 4092
 max_freq_khz = 60000
+
+# 可独立分发：manifest + 侧车二进制（libusb 后端不携带闭源 DLL）。
+[packaging]
+include = ["upt_ch34x_sidecar_libusb"]

@@ -21,6 +21,11 @@
     "assemble:dll": "node tools/assemble.mjs --profile desktop-tauri-dll",
     "verify:libusb": "node tools/verify.mjs --profile desktop-tauri-libusb",
     "verify:dll": "node tools/verify.mjs --profile desktop-tauri-dll",
+    "package": "node tools/package.mjs",
+    "package:libusb": "node tools/package.mjs --profile desktop-tauri-libusb",
+    "package:dll": "node tools/package.mjs --profile desktop-tauri-dll",
+    "dist:libusb": "node tools/build.mjs --profile desktop-tauri-libusb",
+    "dist:dll": "node tools/build.mjs --profile desktop-tauri-dll",
     "tauri": "node tools/tauri.mjs"
   },
   "dependencies": {

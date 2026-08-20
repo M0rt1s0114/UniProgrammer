@@ -82,4 +82,15 @@ const tauriArgs = [
 ]
 if (run(process.execPath, tauriArgs, profileRoot) !== 0) fail('tauri bundle failed')
 
+// 5. Stage 6: collect the finished build into `dist/<profile>/`.
+if (
+  run(
+    process.execPath,
+    [path.join(root, 'tools', 'package.mjs'), '--profile', profileName],
+    root,
+  ) !== 0
+) {
+  fail('packaging failed')
+}
+
 console.log(`[build] profile ${profileName} finished in ${profileRoot}`)

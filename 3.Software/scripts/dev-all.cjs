@@ -18,14 +18,22 @@ const profile =
       : 'desktop-tauri-libusb'
 const srcTauri = path.join(root, 'build', profile, 'src-tauri')
 
-// Generate the development workspace first; Vite and sidecars are then
-// resolved from the assembled tree / module sources.
-const assemble = spawnSync(
-  process.execPath,
-  [path.join(root, 'tools', 'assemble.mjs'), '--profile', profile],
-  { cwd: root, stdio: 'inherit' },
-)
-if (assemble.status !== 0) process.exit(assemble.status ?? 1)
+// When invoked by `tauri dev` the workspace was already assembled by
+// `tools/tauri.mjs` (the CLI needs the generated tauri.conf.json before it
+// can run beforeDevCommand). Re-assembling here would delete the directory
+// the CLI made its working directory, so the generated config passes
+// `--skip-assemble`. The standalone `npm run dev` path still assembles first.
+const skipAssemble = process.argv.includes('--skip-assemble')
+if (skipAssemble) {
+  console.log(`[dev-all] workspace already assembled (${profile})`)
+} else {
+  const assemble = spawnSync(
+    process.execPath,
+    [path.join(root, 'tools', 'assemble.mjs'), '--profile', profile],
+    { cwd: root, stdio: 'inherit' },
+  )
+  if (assemble.status !== 0) process.exit(assemble.status ?? 1)
+}
 
 // Build and stage the built-in sidecar plugins first. HalRouter looks for the
 // executables in their package directories when `tauri dev` is used.

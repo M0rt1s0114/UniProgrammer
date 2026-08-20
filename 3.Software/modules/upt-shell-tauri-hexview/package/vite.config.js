@@ -6,7 +6,7 @@ export default defineConfig(({ command }) => ({
   root: fileURLToPath(new URL('.', import.meta.url)),
   // Same reason as upt.tauri: the iframe page is served at
   // `unipkg://localhost/upt.tauri.hexview/` and its files live in `<package>/dist/`.
-  base: command === 'build' ? 'upt.tauri.hexview/dist/' : '/',
+  base: command === 'build' ? '/upt.tauri.hexview/dist/' : '/',
   plugins: [vue()],
   resolve: {
     alias: {

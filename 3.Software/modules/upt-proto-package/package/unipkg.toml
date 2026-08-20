@@ -14,3 +14,7 @@ provider = "builtin"
 [permissions]
 
 [capabilities]
+
+# 编译期内置模块，当前没有可独立安装的运行时，不生成 .unipkg。
+[packaging]
+distributable = false

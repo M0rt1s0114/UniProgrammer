@@ -8,7 +8,7 @@ export default defineConfig(({ command }) => ({
   // its files live in `<package>/dist/`. The base therefore includes the
   // plugin path segment so the browser requests
   // `/upt.tauri/dist/assets/...`; the dev server keeps serving `/`.
-  base: command === 'build' ? 'upt.tauri/dist/' : '/',
+  base: command === 'build' ? '/upt.tauri/dist/' : '/',
   plugins: [vue()],
   resolve: {
     alias: {

@@ -10,7 +10,8 @@
 #           shipped for friends who use the vendor driver.
 #
 # The whole build happens inside `build/<profile>/`; the repository source is
-# never modified.
+# never modified. Final artifacts land in `dist/<profile>/` (installer,
+# portable zip, .unipkg packages and manifest.json).
 
 param(
   [ValidateSet('dll', 'libusb')]

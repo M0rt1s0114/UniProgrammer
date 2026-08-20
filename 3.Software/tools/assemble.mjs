@@ -123,7 +123,7 @@ fs.writeFileSync(
 
 const tauriConfPath = path.join(buildDir, 'tauri.conf.json')
 const tauriConf = JSON.parse(fs.readFileSync(tauriConfPath, 'utf8'))
-tauriConf.build.beforeDevCommand = `node ../../scripts/dev-all.cjs --profile ${profile.name}`
+tauriConf.build.beforeDevCommand = `node ../../scripts/dev-all.cjs --profile ${profile.name} --skip-assemble`
 tauriConf.build.beforeBuildCommand = 'npm run build'
 tauriConf.build.beforeBundleCommand =
   'node ../../scripts/prepare-bundle.cjs --release --src-tauri src-tauri'

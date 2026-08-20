@@ -48,7 +48,8 @@ if (
   fail('assembler failed')
 }
 
-const cliArgs = [cli, sub, '--ci']
+const cliArgs = [cli, sub]
+if (sub === 'build') cliArgs.push('--ci')
 if (backend === 'libusb') {
   cliArgs.push('--config', 'src-tauri/tauri.libusb.conf.json', '--features', 'hal-libusb')
 }
