@@ -17,3 +17,13 @@ modules = [
   "upt-chipdb-package",
   "upt-adapter-ch34x-libusb",
 ]
+required = [
+  "src/l0_core",
+  "src/ui_tauri",
+  "src/app_ops",
+  "plugins/builtin/upt.tauri",
+  "plugins/builtin/upt.tauri.hexview",
+  "plugins/builtin/upt.hal",
+  "plugins/builtin/upt.proto",
+  "plugins/builtin/upt.chipdb",
+]

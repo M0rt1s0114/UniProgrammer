@@ -16,6 +16,11 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "assemble": "node tools/assemble.mjs",
+    "assemble:libusb": "node tools/assemble.mjs --profile desktop-tauri-libusb",
+    "assemble:dll": "node tools/assemble.mjs --profile desktop-tauri-dll",
+    "verify:libusb": "node tools/verify.mjs --profile desktop-tauri-libusb",
+    "verify:dll": "node tools/verify.mjs --profile desktop-tauri-dll",
     "tauri": "tauri"
   },
   "dependencies": {

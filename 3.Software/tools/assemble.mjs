@@ -55,6 +55,7 @@ const profileFile = path.join(profilesDir, `${profileName}.toml`)
 if (!fs.existsSync(profileFile)) fail(`profile not found: ${profileFile}`)
 const profile = parseToml(fs.readFileSync(profileFile, 'utf8')).build
 if (!profile?.name || !Array.isArray(profile.modules)) fail(`invalid profile: ${profileFile}`)
+const requiredTargets = Array.isArray(profile.required) ? profile.required : []
 
 const buildDir = path.join(root, 'build', profile.name, 'src-tauri')
 cleanDir(buildDir)
@@ -92,10 +93,13 @@ if (profile.backend === 'dll') {
 
 // Resolve and copy selected modules.
 const copied = []
+const seenTargets = new Set()
 for (const name of profile.modules) {
   const module = readModule(name)
   const source = path.join(root, module.source)
   const target = path.join(buildDir, module.target)
+  if (seenTargets.has(module.target)) fail(`duplicate module target: ${module.target}`)
+  seenTargets.add(module.target)
   if (!fs.existsSync(source)) fail(`module source not found for ${name}: ${source}`)
   if (fs.statSync(source).isDirectory()) {
     copyDir(source, target)
@@ -104,6 +108,11 @@ for (const name of profile.modules) {
   }
   copied.push({ name, source: module.source, target: module.target })
   console.log(`[assemble] ${name} -> ${module.target}`)
+}
+
+const missingRequired = requiredTargets.filter((target) => !fs.existsSync(path.join(buildDir, target)))
+if (missingRequired.length > 0) {
+  fail(`profile requires missing targets: ${missingRequired.join(', ')}`)
 }
 
 // The plugin resource root is assembled entirely from module packages.
