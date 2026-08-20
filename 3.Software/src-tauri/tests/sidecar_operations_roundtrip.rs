@@ -11,8 +11,6 @@ mod autodetect;
 #[allow(dead_code)] // pulled in by operations; only the sidecar path is exercised
 mod core;
 
-use upt_proto::protocols;
-
 #[path = "../src/app_ops/operations.rs"]
 #[allow(dead_code)] // reusing the full module exposes more public API than this test needs
 mod operations;
@@ -24,10 +22,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
-use upt_chipdb as chiplib;
 use upt_hal::hal_router::{HalRouter, SidecarSelection};
 use upt_plugin::PluginManager;
-use upt_proto::sfdp;
 
 static TMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 

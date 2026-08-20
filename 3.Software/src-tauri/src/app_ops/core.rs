@@ -9,7 +9,8 @@ use std::time::{Duration, Instant};
 use upt_devices::ch34x::{self, Ch34xDevice, DeviceMode};
 use upt_devices::serprog;
 
-use crate::{chiplib, protocols, sfdp};
+use upt_chipdb as chiplib;
+use upt_proto::{protocols, sfdp};
 
 #[derive(Serialize)]
 pub struct ChipDetectResult {

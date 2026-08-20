@@ -3,6 +3,7 @@
 
 pub mod console;
 pub mod plugin_install;
+pub mod runtime;
 pub mod script_plugin;
 pub mod settings;
 pub mod unipkg_protocol;
